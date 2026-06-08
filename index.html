@@ -746,7 +746,6 @@
                 battery.addEventListener('levelchange', () => updateBatteryDisplay(battery));
                 battery.addEventListener('chargingchange', () => updateBatteryDisplay(battery));
             } catch (e) {
-                // 电池API不可用，保留默认显示
                 addLog('warn', '电池状态API不可用');
             }
         }
@@ -984,7 +983,7 @@
 
             if (latDisp) latDisp.value = (lat != null && !isNaN(lat)) ? lat.toFixed(4) : '';
             if (lonDisp) lonDisp.value = (lon != null && !isNaN(lon)) ? lon.toFixed(4) : '';
-            if (cityInput && cityInput.value !== (apiSettings.weatherCity || '')) {
+            if (cityInput && cityInput.value !== (apiSettings.weatherCity || '') && cityInput !== document.activeElement) {
                 cityInput.value = apiSettings.weatherCity || '';
             }
 
