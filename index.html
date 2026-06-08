@@ -1626,7 +1626,39 @@
         function saveAsNewConversation() { if(chatMessages.length===0){alert('当前没有消息');return;} const timestamp=new Date().toISOString().replace(/[:.]/g,'-').slice(0,19); const newConv={id:Date.now().toString(36)+Math.random().toString(36).substr(2,5), name:`手动存档 ${timestamp}`, timestamp:new Date().toISOString(), messages:chatMessages.slice(), history:messageHistory.slice()}; conversations.push(newConv); save('conversations',conversations); saveGlobalsToActiveChar(); renderConversations(); alert('已保存到历史聊天'); }
         function switchConversation(id) { if(activeConvId===id) return; if(chatMessages.length>0||activeConvId) saveCurrentConversation(); const conv=conversations.find(c=>c.id===id); if(!conv) return; chatMessages=conv.messages.slice(); messageHistory=conv.history.slice(); activeConvId=id; chatMessages.forEach(ensureMsgId); chatMessages.forEach(ensureMsgTimestamp); save('chatMessages',chatMessages); save('messageHistory',messageHistory); save('activeConversationId',activeConvId); saveGlobalsToActiveChar(); pendingUserMessages=[]; updateSendHint(); reloadChatUI(); manageModal.classList.remove('show'); }
         function deleteConversation(id) { if(!confirm('确定要删除这个对话吗？')) return; conversations=conversations.filter(c=>c.id!==id); if(activeConvId===id) { chatMessages=[]; messageHistory=[]; activeConvId=null; save('chatMessages',chatMessages); save('messageHistory',messageHistory); save('activeConversationId',activeConvId); saveGlobalsToActiveChar(); pendingUserMessages=[]; updateSendHint(); reloadChatUI(); } save('conversations',conversations); saveGlobalsToActiveChar(); renderConversations(); }
-        function startRenameConversation(id) { const container=document.getElementById('historyList'); const item=container.querySelector(`[data-conv-id="${id}"]`); if(!item) return; const nameSpan=item.querySelector('.item-name'), editGroup=item.querySelector('.edit-name-group'), input=editGroup.querySelector('input'); const conv=conversations.find(c=>c.id===id); input.value=conv.name; nameSpan.style.display='none'; editGroup.style.display='flex'; input.focus(); const save=()=>{ const n=input.value.trim(); if(n){conv.name=n; nameSpan.textContent=n; save('conversations',conversations); saveGlobalsToActiveChar();} nameSpan.style.display=''; editGroup.style.display='none'; }; const cancel=()=>{ nameSpan.style.display=''; editGroup.style.display='none'; }; editGroup.querySelector('.save-name-btn').onclick=save; editGroup.querySelector('.cancel-name-btn').onclick=cancel; input.onkeydown=e=>{ if(e.key==='Enter') save(); if(e.key==='Escape') cancel(); }; }
+        function startRenameConversation(id) {
+            const container=document.getElementById('historyList');
+            const item=container.querySelector(`[data-conv-id="${id}"]`);
+            if(!item) return;
+            const nameSpan=item.querySelector('.item-name'), editGroup=item.querySelector('.edit-name-group'), input=editGroup.querySelector('input');
+            const conv=conversations.find(c=>c.id===id);
+            input.value=conv.name;
+            nameSpan.style.display='none';
+            editGroup.style.display='flex';
+            input.focus();
+            const saveAndClose=()=>{
+                const n=input.value.trim();
+                if(n){
+                    conv.name=n;
+                    nameSpan.textContent=n;
+                    save('conversations',conversations);
+                    saveGlobalsToActiveChar();
+                }
+                nameSpan.style.display='';
+                editGroup.style.display='none';
+            };
+            const confirmBtn = editGroup.querySelector('.cancel-name-btn');
+            if(confirmBtn) {
+                confirmBtn.textContent = '确认';
+                confirmBtn.onclick = saveAndClose;
+            }
+            const saveBtn = editGroup.querySelector('.save-name-btn');
+            if(saveBtn) saveBtn.style.display = 'none';
+            input.onkeydown = e => {
+                if(e.key==='Enter') saveAndClose();
+                if(e.key==='Escape') { nameSpan.style.display=''; editGroup.style.display='none'; }
+            };
+        }
         function renderConversations() { const container=document.getElementById('historyList'); if(!container) return; if(conversations.length===0){container.innerHTML='<div style="text-align:center;color:#999;padding:10px;">暂无历史对话</div>';return;} container.innerHTML=conversations.map(c=>`<div class="history-item" data-conv-id="${escapeHtml(c.id)}"><div class="item-info" data-id="${escapeHtml(c.id)}"><div class="item-name">${escapeHtml(c.name)}</div><div class="item-time">${new Date(c.timestamp).toLocaleString()}</div><div class="edit-name-group"><input type="text" /><button class="save-name-btn">保存</button><button class="cancel-name-btn">取消</button></div></div><div class="item-actions"><button class="item-rename" data-id="${escapeHtml(c.id)}">✎</button><button class="item-delete" data-id="${escapeHtml(c.id)}">✕</button></div></div>`).join(''); container.querySelectorAll('.item-info').forEach(el=>el.addEventListener('click',function(e){if(e.target.closest('.edit-name-group')||e.target.closest('.item-rename')) return;switchConversation(this.dataset.id);})); container.querySelectorAll('.item-rename').forEach(btn=>btn.addEventListener('click',function(e){e.stopPropagation();startRenameConversation(this.dataset.id);})); container.querySelectorAll('.item-delete').forEach(btn=>btn.addEventListener('click',function(e){e.stopPropagation();deleteConversation(this.dataset.id);})); }
         function openDeleteModal() { const modal=document.getElementById('deleteModal'), list=document.getElementById('deleteList'); const roleName = remarkVal || '月'; list.innerHTML=chatMessages.map(m=>`<div class="entry-item"><label><input type="checkbox" value="${escapeHtml(m.id)}" class="delete-check"> ${escapeHtml(m.role==='user'?'我':roleName)}: ${escapeHtml((m.text||'').substring(0,30))}${(m.text||'').length>30?'...':''}</label></div>`).join(''); modal.classList.add('show'); document.getElementById('deleteConfirmBtn').onclick=()=>{ const checked=Array.from(list.querySelectorAll('.delete-check:checked')).map(cb=>cb.value); if(checked.length===0){alert('请至少选择一条消息');return;} chatMessages=chatMessages.filter(m=>!checked.includes(m.id)); syncHistoryFromChat(); saveChatHistory(); reloadChatUI(); modal.classList.remove('show'); }; document.getElementById('deleteCancelBtn').onclick=()=>modal.classList.remove('show'); modal.addEventListener('click',e=>{if(e.target===modal) modal.classList.remove('show');}); }
 
