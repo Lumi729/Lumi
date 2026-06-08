@@ -318,7 +318,7 @@
         </div>
     </div>
 
-    <div class="status-bar"><span id="statusTime">10:24</span><span>📶 🔋 91%</span></div>
+    <div class="status-bar"><span id="statusTime">10:24</span><span id="statusBattery">📶 🔋 91%</span></div>
 
     <div class="chat-view-wrap" id="chatViewWrap">
         <div class="nav-bar">
@@ -721,12 +721,39 @@
         }
 
         const statusTime = document.getElementById('statusTime');
+        const statusBattery = document.getElementById('statusBattery');
+
         function updateStatusTime() {
             const now = new Date();
             statusTime.textContent = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
         }
+
+        function updateBatteryDisplay(battery) {
+            if (!statusBattery) return;
+            const level = Math.round(battery.level * 100);
+            const charging = battery.charging;
+            let icon = '🔋';
+            if (charging) icon = '⚡';
+            if (level <= 15) icon = '🪫';
+            statusBattery.textContent = `📶 ${icon} ${level}%`;
+        }
+
+        async function initBattery() {
+            if (!navigator.getBattery || !statusBattery) return;
+            try {
+                const battery = await navigator.getBattery();
+                updateBatteryDisplay(battery);
+                battery.addEventListener('levelchange', () => updateBatteryDisplay(battery));
+                battery.addEventListener('chargingchange', () => updateBatteryDisplay(battery));
+            } catch (e) {
+                // 电池API不可用，保留默认显示
+                addLog('warn', '电池状态API不可用');
+            }
+        }
+
         updateStatusTime();
         setInterval(updateStatusTime, 1000);
+        initBattery();
 
         const logMessages = [];
         function addLog(type, msg) {
