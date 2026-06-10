@@ -482,6 +482,30 @@
   let autoSkipReason = null;
   let currentAutoReplyLog = null;
   let autoReplyLogs = [];
+
+  // ✅ 注册极简 Service Worker，专门用于支持 showNotification
+  if ('serviceWorker' in navigator) {
+    const swCode = `
+      self.addEventListener('notificationclick', event => {
+        event.notification.close();
+        event.waitUntil(
+          clients.matchAll({ type: 'window' }).then(windowClients => {
+            if (windowClients.length > 0) {
+              windowClients[0].focus();
+            } else {
+              clients.openWindow('/');
+            }
+          })
+        );
+      });
+    `;
+    const blob = new Blob([swCode], { type: 'application/javascript' });
+    const swUrl = URL.createObjectURL(blob);
+    navigator.serviceWorker.register(swUrl)
+      .then(reg => console.log('Service Worker 已注册'))
+      .catch(err => console.warn('Service Worker 注册失败:', err));
+  }
+
   /* ---------- 通知功能（兼容 ServiceWorker） ---------- */
   function getNotificationIconUrl() {
     const dog = avatarState.dog;
@@ -507,33 +531,33 @@
     const title = 'TA想对你说的是...';
     const iconUrl = getNotificationIconUrl();
     async function showOne(body, tag) {
-      const options = { body, icon: iconUrl, tag, requireInteraction: false };
-      try {
-        const n = new Notification(title, options);
-        n.onclick = () => { window.focus(); if (!chatViewWrap.classList.contains('active')) openCharacterChat(activeCharacterId); };
-      } catch (e) {
-        if (e.message && e.message.includes('ServiceWorkerRegistration')) {
-          addLog('warn', 'new Notification 不支持，尝试 Service Worker 通知');
-          if (navigator.serviceWorker && navigator.serviceWorker.ready) {
-            try {
-              const reg = await navigator.serviceWorker.ready;
-              await reg.showNotification(title, options);
-            } catch (e2) {
-              addLog('warn', 'ServiceWorker 通知也失败: ' + e2.message);
+        const options = { body, icon: iconUrl, tag, requireInteraction: false };
+        // 优先尝试普通 Notification
+        try {
+            const n = new Notification(title, options);
+            n.onclick = () => { window.focus(); if (!chatViewWrap.classList.contains('active')) openCharacterChat(activeCharacterId); };
+            return;
+        } catch (e) {
+            // 如果普通 Notification 不可用，则尝试 Service Worker（已注册）
+            if (navigator.serviceWorker && navigator.serviceWorker.ready) {
+                try {
+                    const reg = await navigator.serviceWorker.ready;
+                    await reg.showNotification(title, options);
+                } catch (e2) {
+                    addLog('warn', 'ServiceWorker 通知也失败: ' + e2.message);
+                }
+            } else {
+                addLog('warn', '无法发送通知: ' + e.message);
             }
-          }
-        } else {
-          addLog('warn', '发送通知失败: ' + e.message);
         }
-      }
     }
     if (segments.length <= 3) {
-      segments.forEach((seg, idx) => {
-        showOne(seg.trim().substring(0, 120), 'auto-reply-' + Date.now() + '-' + idx);
-      });
+        segments.forEach((seg, idx) => {
+            showOne(seg.trim().substring(0, 120), 'auto-reply-' + Date.now() + '-' + idx);
+        });
     } else {
-      const previews = segments.slice(0, 3).map(s => s.trim().substring(0, 30)).join('；');
-      showOne(`（共${segments.length}条新消息）${previews}...`, 'auto-reply-' + Date.now());
+        const previews = segments.slice(0, 3).map(s => s.trim().substring(0, 30)).join('；');
+        showOne(`（共${segments.length}条新消息）${previews}...`, 'auto-reply-' + Date.now());
     }
   }
   async function requestNotificationPermission() {
