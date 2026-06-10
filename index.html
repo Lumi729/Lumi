@@ -1,4 +1,3 @@
-<!-- 第一部分：从 <!DOCTYPE html> 到 <script> 开头（接第二部分） -->
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -204,6 +203,8 @@
         .delete-actions .btn-confirm:disabled{opacity:.5}
         @keyframes highlightFlash{0%{background-color:rgba(7,193,96,.15)}100%{background-color:transparent}}
         .msg-wrapper.flash-highlight{animation:highlightFlash 1.5s ease-out}
+        .recall-system-hint{text-align:center;margin:8px 0;color:#666;font-size:12px;cursor:pointer;transition:opacity 0.5s;}
+        .recall-system-hint:active{background:rgba(0,0,0,.03)}
         .message-list-view{display:flex;flex-direction:column;flex:1;background:#ededed}
         .search-bar-row{display:flex;align-items:center;padding:8px 12px;gap:8px;background:#ededed;border-bottom:.5px solid rgba(0,0,0,.08)}
         .search-input-wrap{flex:1;background:#fff;border-radius:6px;display:flex;align-items:center;padding:6px 10px;gap:6px}
@@ -479,23 +480,19 @@
   let currentAutoReplyLog = null;
   let autoReplyLogs = [];
 
-  // ✅ 注册您的 /Lumi/sw.js
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/Lumi/sw.js')
       .then(reg => console.log('Service Worker 已注册: /Lumi/sw.js'))
       .catch(err => console.warn('Service Worker 注册失败:', err));
   }
 
-  /* ---------- 通知功能（兼容 ServiceWorker） ---------- */
   function getNotificationIconUrl() {
     const dog = avatarState.dog;
     if (dog.type === 'image' && dog.src) return dog.src;
     if (dog.type === 'text' && dog.text) {
       try {
-        const canvas = document.createElement('canvas');
-        canvas.width = 96; canvas.height = 96;
-        const ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#56ab2f';
+        const canvas = document.createElement('canvas'); canvas.width = 96; canvas.height = 96;
+        const ctx = canvas.getContext('2d'); ctx.fillStyle = '#56ab2f';
         ctx.beginPath(); ctx.arc(48, 48, 48, 0, Math.PI*2); ctx.fill();
         ctx.font = '52px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillStyle = '#fff'; ctx.fillText(dog.text, 48, 48);
@@ -515,39 +512,17 @@
         try {
             const n = new Notification(title, options);
             n.onclick = () => { window.focus(); if (!chatViewWrap.classList.contains('active')) openCharacterChat(activeCharacterId); };
-            return;
         } catch (e) {
             if (navigator.serviceWorker && navigator.serviceWorker.ready) {
-                try {
-                    const reg = await navigator.serviceWorker.ready;
-                    await reg.showNotification(title, options);
-                } catch (e2) {
-                    addLog('warn', 'ServiceWorker 通知也失败: ' + e2.message);
-                }
-            } else {
-                addLog('warn', '无法发送通知: ' + e.message);
+                try { const reg = await navigator.serviceWorker.ready; await reg.showNotification(title, options); } catch(e2) { addLog('warn','通知失败'); }
             }
         }
     }
-    if (segments.length <= 3) {
-        segments.forEach((seg, idx) => {
-            showOne(seg.trim().substring(0, 120), 'auto-reply-' + Date.now() + '-' + idx);
-        });
-    } else {
-        const previews = segments.slice(0, 3).map(s => s.trim().substring(0, 30)).join('；');
-        showOne(`（共${segments.length}条新消息）${previews}...`, 'auto-reply-' + Date.now());
-    }
+    if (segments.length <= 3) { segments.forEach((seg,idx)=> showOne(seg.trim().substring(0,120), 'auto-reply-'+Date.now()+'-'+idx)); }
+    else { const previews = segments.slice(0,3).map(s=>s.trim().substring(0,30)).join('；'); showOne(`（共${segments.length}条新消息）${previews}...`, 'auto-reply-'+Date.now()); }
   }
-  async function requestNotificationPermission() {
-    if (!('Notification' in window)) return false;
-    if (Notification.permission === 'granted') return true;
-    if (Notification.permission === 'denied') return false;
-    const result = await Notification.requestPermission();
-    return result === 'granted';
-  }
-  /* ---------- 通知功能结束 ---------- */
+  async function requestNotificationPermission() { if (!('Notification' in window)) return false; if (Notification.permission === 'granted') return true; if (Notification.permission === 'denied') return false; const result = await Notification.requestPermission(); return result === 'granted'; }
 
-  // 以下为原有所有功能代码（完整，未省略）
   function getWeatherEmojiAndDesc(code){ const map={0:{emoji:'☀️',desc:'晴天'},1:{emoji:'🌤️',desc:'大部晴'},2:{emoji:'⛅',desc:'部分多云'},3:{emoji:'☁️',desc:'多云'},45:{emoji:'🌫️',desc:'雾'},48:{emoji:'🌫️',desc:'雾凇'},51:{emoji:'🌧️',desc:'小雨'},53:{emoji:'🌧️',desc:'中雨'},55:{emoji:'🌧️',desc:'大雨'},61:{emoji:'🌧️',desc:'小雨'},63:{emoji:'🌧️',desc:'中雨'},65:{emoji:'🌧️',desc:'大雨'},71:{emoji:'❄️',desc:'小雪'},73:{emoji:'❄️',desc:'中雪'},75:{emoji:'❄️',desc:'大雪'},80:{emoji:'🌦️',desc:'阵雨'},81:{emoji:'🌦️',desc:'中阵雨'},82:{emoji:'🌦️',desc:'大阵雨'},95:{emoji:'⛈️',desc:'雷暴'},96:{emoji:'⛈️',desc:'雷暴冰雹'},99:{emoji:'⛈️',desc:'强雷暴'} }; return map[code] || {emoji:'🌡️',desc:'未知'} }
   async function fetchWeatherData(lat,lon){ const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&timezone=auto`; const response = await fetch(url,{signal:AbortSignal.timeout(8000)}); if(!response.ok) throw new Error(`天气API返回状态 ${response.status}`); const data = await response.json(); if(!data.current_weather) throw new Error('天气数据不可用'); return data }
   async function reverseGeocodeCity(lat,lon){ try{ const url = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=zh`; const response = await fetch(url,{signal:AbortSignal.timeout(6000)}); if(!response.ok) throw new Error('反向地理编码失败'); const data = await response.json(); let cityName = data.city || data.locality || data.principalSubdivision || ''; if(!cityName && data.countryName) cityName = data.countryName; if(!cityName) cityName = `${lat.toFixed(2)},${lon.toFixed(2)}`; return cityName; } catch(e){ addLog('warn','反向地理编码失败: '+e.message); return `${lat.toFixed(2)},${lon.toFixed(2)}`; } }
@@ -563,21 +538,12 @@
       const wInfo = getWeatherEmojiAndDesc(cw.weathercode);
       const cityName = apiSettings.weatherCity || apiSettings.autoWeatherCity || fetchedCityName || '';
       const fetchTime = new Date().toLocaleTimeString();
-      const result = {
-        city:cityName||'未知地址', temperature:cw.temperature, windspeed:cw.windspeed,
-        weathercode:cw.weathercode, emoji:wInfo.emoji, desc:wInfo.desc, time:cw.time,
-        fetchTime: fetchTime
-      };
-      cachedWeatherData=result;
-      cachedWeatherTime=now;
+      const result = { city:cityName||'未知地址', temperature:cw.temperature, windspeed:cw.windspeed, weathercode:cw.weathercode, emoji:wInfo.emoji, desc:wInfo.desc, time:cw.time, fetchTime: fetchTime };
+      cachedWeatherData=result; cachedWeatherTime=now;
       updateWeatherStatusUI();
       addLog('info', `天气自动获取成功: ${result.city} ${result.desc} ${result.temperature}°C，获取时间 ${fetchTime}`);
       return result;
-    } catch(e){
-      addLog('error','获取天气失败: '+e.message);
-      if(cachedWeatherData) return cachedWeatherData;
-      return null;
-    }
+    } catch(e){ addLog('error','获取天气失败: '+e.message); if(cachedWeatherData) return cachedWeatherData; return null; }
   }
   function getWeatherString(weatherInfo){ if(!weatherInfo) return ''; let locStr = weatherInfo.city || '未知地址'; return `[天气] ${locStr}：${weatherInfo.emoji} ${weatherInfo.desc}，温度${weatherInfo.temperature}°C，风速${weatherInfo.windspeed}km/h` }
   function updateWeatherStatusUI(){
@@ -586,63 +552,16 @@
     const lat=apiSettings.weatherLat, lon=apiSettings.weatherLon;
     if(latDisp) latDisp.value = (lat!=null&&!isNaN(lat))?lat.toFixed(4):'';
     if(lonDisp) lonDisp.value = (lon!=null&&!isNaN(lon))?lon.toFixed(4):'';
-    if(lat==null||lon==null||isNaN(lat)||isNaN(lon)){
-      iconEl.textContent='📍'; cityEl.textContent='未获取位置'; detailEl.textContent='请先获取位置信息'; badgeEl.textContent='待获取'; badgeEl.className='weather-status-badge idle';
-      return;
-    }
+    if(lat==null||lon==null||isNaN(lat)||isNaN(lon)){ iconEl.textContent='📍'; cityEl.textContent='未获取位置'; detailEl.textContent='请先获取位置信息'; badgeEl.textContent='待获取'; badgeEl.className='weather-status-badge idle'; return; }
     if(cachedWeatherData && (Date.now()-cachedWeatherTime)<WEATHER_CACHE_DURATION){
-      const w=cachedWeatherData;
-      iconEl.textContent=w.emoji; cityEl.textContent=w.city||'未知地址';
-      detailEl.textContent=`${w.desc} · ${w.temperature}°C · 风速${w.windspeed}km/h · 获取于 ${w.fetchTime||''}`;
-      badgeEl.textContent='已更新'; badgeEl.className='weather-status-badge success';
-    } else if(cachedWeatherData){
-      const w=cachedWeatherData;
-      iconEl.textContent=w.emoji; cityEl.textContent=w.city||'未知地址';
-      detailEl.textContent=`${w.desc} · ${w.temperature}°C · 风速${w.windspeed}km/h（需刷新）`;
-      badgeEl.textContent='待刷新'; badgeEl.className='weather-status-badge loading';
-    } else {
-      iconEl.textContent='📍'; cityEl.textContent=(apiSettings.weatherCity||apiSettings.autoWeatherCity||fetchedCityName)||'未知地址';
-      detailEl.textContent='点击刷新获取天气'; badgeEl.textContent='加载中'; badgeEl.className='weather-status-badge loading';
-    }
+      const w=cachedWeatherData; iconEl.textContent=w.emoji; cityEl.textContent=w.city||'未知地址'; detailEl.textContent=`${w.desc} · ${w.temperature}°C · 风速${w.windspeed}km/h · 获取于 ${w.fetchTime||''}`; badgeEl.textContent='已更新'; badgeEl.className='weather-status-badge success';
+    } else if(cachedWeatherData){ const w=cachedWeatherData; iconEl.textContent=w.emoji; cityEl.textContent=w.city||'未知地址'; detailEl.textContent=`${w.desc} · ${w.temperature}°C · 风速${w.windspeed}km/h（需刷新）`; badgeEl.textContent='待刷新'; badgeEl.className='weather-status-badge loading'; }
+    else { iconEl.textContent='📍'; cityEl.textContent=(apiSettings.weatherCity||apiSettings.autoWeatherCity||fetchedCityName)||'未知地址'; detailEl.textContent='点击刷新获取天气'; badgeEl.textContent='加载中'; badgeEl.className='weather-status-badge loading'; }
   }
-  async function fetchLocationAndWeather(){
-    if(!navigator.geolocation){ addLog('error','浏览器不支持地理定位'); return }
-    try{
-      const position = await new Promise((resolve,reject)=>{ navigator.geolocation.getCurrentPosition(resolve,reject,{enableHighAccuracy:false,timeout:15000,maximumAge:0}) });
-      const lat=position.coords.latitude, lon=position.coords.longitude;
-      apiSettings.weatherLat=lat; apiSettings.weatherLon=lon;
-      const cityName = await reverseGeocodeCity(lat,lon);
-      fetchedCityName=cityName;
-      apiSettings.autoWeatherCity=cityName;
-      if(!apiSettings.weatherCity) apiSettings.weatherCity=cityName;
-      const cityInput=document.getElementById('weatherCityInput');
-      if(cityInput && !cityInput.value) cityInput.value=cityName;
-      cachedWeatherData=null; cachedWeatherTime=0;
-      saveGlobalsToActiveChar();
-      updateWeatherStatusUI();
-      await getWeatherInfo();
-    } catch(e){
-      addLog('warn','自动获取天气失败: '+e.message);
-    }
-  }
-  function startWeatherAutoRefresh(){
-    stopWeatherAutoRefresh();
-    if(!apiSettings.weatherEnabled) return;
-    if(apiSettings.weatherLat!=null && apiSettings.weatherLon!=null && !isNaN(apiSettings.weatherLat) && !isNaN(apiSettings.weatherLon)){
-      getWeatherInfo().then(()=>updateWeatherStatusUI());
-    } else {
-      fetchLocationAndWeather();
-    }
-    weatherTimer = setInterval(async ()=>{
-      if(!apiSettings.weatherEnabled) return;
-      if(apiSettings.weatherLat!=null && apiSettings.weatherLon!=null && !isNaN(apiSettings.weatherLat) && !isNaN(apiSettings.weatherLon)){
-        await getWeatherInfo();
-      } else {
-        await fetchLocationAndWeather();
-      }
-    }, 30*60*1000);
-  }
+  async function fetchLocationAndWeather(){ if(!navigator.geolocation){ addLog('error','浏览器不支持地理定位'); return } try{ const position = await new Promise((resolve,reject)=>{ navigator.geolocation.getCurrentPosition(resolve,reject,{enableHighAccuracy:false,timeout:15000,maximumAge:0}) }); const lat=position.coords.latitude, lon=position.coords.longitude; apiSettings.weatherLat=lat; apiSettings.weatherLon=lon; const cityName = await reverseGeocodeCity(lat,lon); fetchedCityName=cityName; apiSettings.autoWeatherCity=cityName; if(!apiSettings.weatherCity) apiSettings.weatherCity=cityName; const cityInput=document.getElementById('weatherCityInput'); if(cityInput && !cityInput.value) cityInput.value=cityName; cachedWeatherData=null; cachedWeatherTime=0; saveGlobalsToActiveChar(); updateWeatherStatusUI(); await getWeatherInfo(); } catch(e){ addLog('warn','自动获取天气失败: '+e.message); } }
+  function startWeatherAutoRefresh(){ stopWeatherAutoRefresh(); if(!apiSettings.weatherEnabled) return; if(apiSettings.weatherLat!=null && apiSettings.weatherLon!=null && !isNaN(apiSettings.weatherLat) && !isNaN(apiSettings.weatherLon)){ getWeatherInfo().then(()=>updateWeatherStatusUI()); } else { fetchLocationAndWeather(); } weatherTimer = setInterval(async ()=>{ if(!apiSettings.weatherEnabled) return; if(apiSettings.weatherLat!=null && apiSettings.weatherLon!=null && !isNaN(apiSettings.weatherLat) && !isNaN(apiSettings.weatherLon)){ await getWeatherInfo(); } else { await fetchLocationAndWeather(); } }, 30*60*1000); }
   function stopWeatherAutoRefresh(){ if(weatherTimer){ clearInterval(weatherTimer); weatherTimer = null; } }
+
   function loadActiveCharToGlobals(){
     const ac = getActiveCharacter(); if(!ac) return;
     presets = ac.presets || []; worlds = ac.worlds || []; enabledPresetIds = ac.enabledPresetIds || []; enabledWorldIds = ac.enabledWorldIds || [];
@@ -668,27 +587,21 @@
     if(apiSettings.userPerson===undefined) apiSettings.userPerson = 'second';
     if(apiSettings.autoSkipLogs===undefined) apiSettings.autoSkipLogs = [];
     if(apiSettings.notificationsEnabled===undefined) apiSettings.notificationsEnabled = false;
-    unreadCount = ac.unreadCount || 0;
-    fetchedCityName = apiSettings.autoWeatherCity || '';
+    unreadCount = ac.unreadCount || 0; fetchedCityName = apiSettings.autoWeatherCity || '';
     remarkVal = ac.name || '月'; signatureVal = ac.signature || '月夜雪纷纷';
     avatarState.dog = { type: ac.avatarType==='image'?'image':'text', text: ac.avatarEmoji||'🌙', src: ac.avatarSrc||'' };
     const activePersona = getActiveUserPersona();
     if(activePersona && activePersona.avatar){ avatarState.user = {...activePersona.avatar} } else { avatarState.user = load('avatarUser',{type:'text',text:'我',src:''}) }
     chatMessages.forEach(ensureMsgId); chatMessages.forEach(ensureMsgTimestamp);
-    ensureId(presets); ensureId(worlds);
-    cachedWeatherData = null; cachedWeatherTime = 0;
+    ensureId(presets); ensureId(worlds); cachedWeatherData = null; cachedWeatherTime = 0;
   }
   function saveGlobalsToActiveChar(){
     const ac = getActiveCharacter(); if(!ac) return;
     ac.presets = presets; ac.worlds = worlds; ac.enabledPresetIds = enabledPresetIds; ac.enabledWorldIds = enabledWorldIds;
     ac.chatMessages = chatMessages; ac.messageHistory = messageHistory; ac.conversations = conversations; ac.activeConversationId = activeConvId;
-    ac.charSettings = charSettings; ac.apiSettings = apiSettings;
-    ac.name = remarkVal; ac.signature = signatureVal;
-    ac.avatarEmoji = avatarState.dog.type==='text' ? avatarState.dog.text : '🌙';
-    ac.avatarType = avatarState.dog.type; ac.avatarSrc = avatarState.dog.src || '';
-    ac.unreadCount = unreadCount;
-    ac.lastActive = new Date().toISOString();
-    saveAllData();
+    ac.charSettings = charSettings; ac.apiSettings = apiSettings; ac.name = remarkVal; ac.signature = signatureVal;
+    ac.avatarEmoji = avatarState.dog.type==='text' ? avatarState.dog.text : '🌙'; ac.avatarType = avatarState.dog.type; ac.avatarSrc = avatarState.dog.src || '';
+    ac.unreadCount = unreadCount; ac.lastActive = new Date().toISOString(); saveAllData();
     const activePersona = getActiveUserPersona(); if(activePersona){ activePersona.avatar = {...avatarState.user}; saveUserPersonas() }
   }
   function ensureMsgId(msg){ if(!msg.id) msg.id = 'msg_'+Date.now().toString(36)+Math.random().toString(36).substring(2,7) }
@@ -703,11 +616,8 @@
   const apiEnableCheck = document.getElementById('apiEnableCheck'), apiFields = document.getElementById('apiFields'), apiUrlInput = document.getElementById('apiUrlInput'), apiKeyInput = document.getElementById('apiKeyInput'), apiModelInput = document.getElementById('apiModelInput'), fetchModelsBtn = document.getElementById('fetchModelsBtn'), modelSelectContainer = document.getElementById('modelSelectContainer'), modelSelect = document.getElementById('modelSelect'), chatModeCheck = document.getElementById('chatModeCheck'), chatModeSubContainer = document.getElementById('chatModeSubContainer'), chatModeSubtypeRadios = document.getElementsByName('chatModeSubtype'), contextLayersInput = document.getElementById('contextLayersInput'), minMsgsInput = document.getElementById('minMsgsInput'), maxMsgsInput = document.getElementById('maxMsgsInput');
   const aiPersonSelect = document.getElementById('aiPersonSelect'), userPersonSelect = document.getElementById('userPersonSelect');
   const autoReplyEnabledCheck = document.getElementById('autoReplyEnabledCheck'), autoReplyContainer = document.getElementById('autoReplyContainer'), autoReplyDelayInput = document.getElementById('autoReplyDelayInput'), autoReplyMsgCountInput = document.getElementById('autoReplyMsgCountInput'), autoReplyDailyMinInput = document.getElementById('autoReplyDailyMinInput'), autoReplyDailyMaxInput = document.getElementById('autoReplyDailyMaxInput');
-  const autoReplyContextLayersInput = document.getElementById('autoReplyContextLayersInput');
-  const notificationsEnabledCheck = document.getElementById('notificationsEnabledCheck');
-  const autoSkipHintEl = document.getElementById('autoSkipHint');
-  const showAutoReplyLogBtn = document.getElementById('showAutoReplyLogBtn'), autoReplyLogContainer = document.getElementById('autoReplyLogContainer');
-  const skipLogList = document.getElementById('skipLogList');
+  const autoReplyContextLayersInput = document.getElementById('autoReplyContextLayersInput'), notificationsEnabledCheck = document.getElementById('notificationsEnabledCheck');
+  const autoSkipHintEl = document.getElementById('autoSkipHint'), showAutoReplyLogBtn = document.getElementById('showAutoReplyLogBtn'), autoReplyLogContainer = document.getElementById('autoReplyLogContainer'), skipLogList = document.getElementById('skipLogList');
   const manageModal = document.getElementById('manageModal'), cropModal = document.getElementById('cropModal'), cropImage = document.getElementById('cropImage'), cropFrame = document.getElementById('cropFrame'), cropImageWrapper = document.getElementById('cropImageWrapper'), cropCancelBtn = document.getElementById('cropCancelBtn'), cropConfirmBtn = document.getElementById('cropConfirmBtn'), cropSizeSlider = document.getElementById('cropSizeSlider'), cropSizeLabel = document.getElementById('cropSizeLabel'), cropHint = cropFrame.querySelector('.crop-hint'), cropTitle = document.getElementById('cropTitle');
   const deleteModal = document.getElementById('deleteModal'), confirmDialogOverlay = document.getElementById('confirmDialogOverlay'), confirmDialogMsg = document.getElementById('confirmDialogMsg'), confirmDialogCancel = document.getElementById('confirmDialogCancel'), confirmDialogOk = document.getElementById('confirmDialogOk');
   const weatherEnableCheck = document.getElementById('weatherEnableCheck'), weatherSettingsContainer = document.getElementById('weatherSettingsContainer'), weatherCityInput = document.getElementById('weatherCityInput'), fetchLocationBtn = document.getElementById('fetchLocationBtn'), refreshWeatherBtn = document.getElementById('refreshWeatherBtn'), weatherLatDisplay = document.getElementById('weatherLatDisplay'), weatherLonDisplay = document.getElementById('weatherLonDisplay');
@@ -718,8 +628,7 @@
   let editingPersonaId = null;
   let waiting = false, currentQuote = null, pendingUserMessages = [], clickCount = 0, clickTimer = null;
   let ccType = 'dog', cNat = {w:0,h:0}, cDisp = {w:0,h:0,left:0,top:0}, draggingF = false, draggingH = false, actHandle = null, dStart = {x:0,y:0}, fStart = {left:0,top:0,size:0};
-  const MIN_CROP = 50;
-  const BG_ASPECT = 9/16;
+  const MIN_CROP = 50; const BG_ASPECT = 9/16;
   let confirmDialogResolve = null;
   function showConfirmDialog(msg){ return new Promise(resolve=>{ confirmDialogMsg.textContent = msg; confirmDialogOverlay.classList.add('show'); confirmDialogResolve = resolve }) }
   confirmDialogOk.addEventListener('click',()=>{ confirmDialogOverlay.classList.remove('show'); if(confirmDialogResolve){ confirmDialogResolve(true); confirmDialogResolve = null } });
@@ -739,28 +648,8 @@
   document.querySelectorAll('.bottom-tab-bar').forEach(bar=>{ bar.addEventListener('click',function(e){ const tabItem = e.target.closest('.bottom-tab-item'); if(!tabItem) return; const tab = tabItem.dataset.tab; if(chatHistoryPushed && chatViewWrap.classList.contains('active') && tab!=='chat'){ chatHistoryPushed = false; history.back() } if(tab==='messages') showView('messages'); else if(tab==='library') showView('library'); else if(tab==='profile') showView('profile') }) });
   chatBackBtn.addEventListener('click',()=>{ if(chatHistoryPushed && chatViewWrap.classList.contains('active')){ history.back() } else { saveGlobalsToActiveChar(); showView('messages') } });
   function getLastMessagePreview(character){ const msgs = character.chatMessages || []; if(msgs.length===0) return '暂无消息'; const last = msgs[msgs.length-1]; const who = last.role==='user'?'我':(character.name||'角色'); const txt = (last.text||'').substring(0,30); return who+': '+txt+(last.text && last.text.length>30?'...':'') }
-  function renderCharacterList(filterText){
-    if(!characterList) return;
-    let filtered = characters;
-    if(filterText && filterText.trim()){ const q = filterText.trim().toLowerCase(); filtered = characters.filter(c=>c.name.toLowerCase().includes(q)) }
-    filtered.sort((a,b)=> new Date(b.lastActive||b.createdAt||0) - new Date(a.lastActive||a.createdAt||0));
-    const now = Date.now();
-    characterList.innerHTML = filtered.map(c=>{
-      const avatarHtml = c.avatarType==='image' && c.avatarSrc ? `<div class="char-card-avatar" style="background-image:url(${escapeHtml(c.avatarSrc)});background-size:cover;"></div>` : `<div class="char-card-avatar" style="background:linear-gradient(135deg,#a8e063,#56ab2f);">${escapeHtml(c.avatarEmoji||'🌙')}</div>`;
-      const msgs = c.chatMessages || []; const lastMsg = msgs.length>0?msgs[msgs.length-1]:null; const lastTs = lastMsg?(lastMsg.timestamp||0):0; const timeStr = lastTs?formatRelativeTime(lastTs,now):'';
-      const unread = c.unreadCount || 0;
-      return `<div class="char-card" data-char-id="${escapeHtml(c.id)}" data-char-name="${escapeHtml(c.name)}">${avatarHtml}<div class="char-card-info"><div class="char-card-name">${escapeHtml(c.name)}</div><div class="char-card-preview">${escapeHtml(getLastMessagePreview(c))}</div></div><div class="char-card-time" data-timestamp="${lastTs}">${timeStr}</div><div class="char-card-unread" data-char-id="${escapeHtml(c.id)}" style="display:${unread>0?'flex':'none'}"><span class="unread-count">${unread>99?'99+':unread}</span></div></div>`;
-    }).join('');
-    characterList.querySelectorAll('.char-card').forEach(card=>{ card.addEventListener('click',function(){ openCharacterChat(this.dataset.charId) }); let longPressTimer; card.addEventListener('touchstart',function(e){ longPressTimer = setTimeout(async()=>{ const ok = await showConfirmDialog('确定要删除角色「'+this.dataset.charName+'」吗？'); if(ok) deleteCharacter(this.dataset.charId) },600) },{passive:true}); card.addEventListener('touchend',()=>clearTimeout(longPressTimer)); card.addEventListener('touchmove',()=>clearTimeout(longPressTimer)); card.addEventListener('mousedown',function(e){ longPressTimer = setTimeout(async()=>{ const ok = await showConfirmDialog('确定要删除角色「'+this.dataset.charName+'」吗？'); if(ok) deleteCharacter(this.dataset.charId) },600) }); card.addEventListener('mouseup',()=>clearTimeout(longPressTimer)); card.addEventListener('mouseleave',()=>clearTimeout(longPressTimer)) });
-  }
-  function openCharacterChat(charId){
-    saveGlobalsToActiveChar();
-    activeCharacterId = charId; save('activeCharacterId',activeCharacterId); loadActiveCharToGlobals();
-    unreadCount = 0; saveGlobalsToActiveChar(); updateUnreadDisplay();
-    refreshAllUIForActiveChar();
-    if(!chatHistoryPushed){ history.pushState({chatView:true},'',location.href); chatHistoryPushed = true }
-    showView('chat'); reloadChatUI(); chatArea.scrollTop = chatArea.scrollHeight;
-  }
+  function renderCharacterList(filterText){ if(!characterList) return; let filtered = characters; if(filterText && filterText.trim()){ const q = filterText.trim().toLowerCase(); filtered = characters.filter(c=>c.name.toLowerCase().includes(q)) } filtered.sort((a,b)=> new Date(b.lastActive||b.createdAt||0) - new Date(a.lastActive||a.createdAt||0)); const now = Date.now(); characterList.innerHTML = filtered.map(c=>{ const avatarHtml = c.avatarType==='image' && c.avatarSrc ? `<div class="char-card-avatar" style="background-image:url(${escapeHtml(c.avatarSrc)});background-size:cover;"></div>` : `<div class="char-card-avatar" style="background:linear-gradient(135deg,#a8e063,#56ab2f);">${escapeHtml(c.avatarEmoji||'🌙')}</div>`; const msgs = c.chatMessages || []; const lastMsg = msgs.length>0?msgs[msgs.length-1]:null; const lastTs = lastMsg?(lastMsg.timestamp||0):0; const timeStr = lastTs?formatRelativeTime(lastTs,now):''; const unread = c.unreadCount || 0; return `<div class="char-card" data-char-id="${escapeHtml(c.id)}" data-char-name="${escapeHtml(c.name)}">${avatarHtml}<div class="char-card-info"><div class="char-card-name">${escapeHtml(c.name)}</div><div class="char-card-preview">${escapeHtml(getLastMessagePreview(c))}</div></div><div class="char-card-time" data-timestamp="${lastTs}">${timeStr}</div><div class="char-card-unread" data-char-id="${escapeHtml(c.id)}" style="display:${unread>0?'flex':'none'}"><span class="unread-count">${unread>99?'99+':unread}</span></div></div>`; }).join(''); characterList.querySelectorAll('.char-card').forEach(card=>{ card.addEventListener('click',function(){ openCharacterChat(this.dataset.charId) }); let longPressTimer; card.addEventListener('touchstart',function(e){ longPressTimer = setTimeout(async()=>{ const ok = await showConfirmDialog('确定要删除角色「'+this.dataset.charName+'」吗？'); if(ok) deleteCharacter(this.dataset.charId) },600) },{passive:true}); card.addEventListener('touchend',()=>clearTimeout(longPressTimer)); card.addEventListener('touchmove',()=>clearTimeout(longPressTimer)); card.addEventListener('mousedown',function(e){ longPressTimer = setTimeout(async()=>{ const ok = await showConfirmDialog('确定要删除角色「'+this.dataset.charName+'」吗？'); if(ok) deleteCharacter(this.dataset.charId) },600) }); card.addEventListener('mouseup',()=>clearTimeout(longPressTimer)); card.addEventListener('mouseleave',()=>clearTimeout(longPressTimer)) }); }
+  function openCharacterChat(charId){ saveGlobalsToActiveChar(); activeCharacterId = charId; save('activeCharacterId',activeCharacterId); loadActiveCharToGlobals(); unreadCount = 0; saveGlobalsToActiveChar(); updateUnreadDisplay(); refreshAllUIForActiveChar(); if(!chatHistoryPushed){ history.pushState({chatView:true},'',location.href); chatHistoryPushed = true } showView('chat'); reloadChatUI(); chatArea.scrollTop = chatArea.scrollHeight; }
   function deleteCharacter(charId){ characters = characters.filter(c=>c.id!==charId); if(activeCharacterId===charId){ activeCharacterId = characters.length>0?characters[0].id:null; save('activeCharacterId',activeCharacterId); loadActiveCharToGlobals(); refreshAllUIForActiveChar(); reloadChatUI() } saveAllData(); renderCharacterList(charSearchInput?.value||'') }
   function refreshAllUIForActiveChar(){
     remarkInput.value = remarkVal; signatureInput.value = signatureVal;
@@ -789,18 +678,7 @@
     [charDetailsInput, charPromptInput].forEach(autoResizeTextarea);
     if(autoSkipReason) { autoSkipHintEl.style.display = 'flex'; autoSkipHintEl.title = '屏幕那端传来了消息，是TA憋在心里的...：' + autoSkipReason; } else { autoSkipHintEl.style.display = 'none'; }
   }
-  function showAutoSkipHint(reason) {
-    autoSkipReason = reason;
-    const now = new Date().toISOString();
-    apiSettings.autoSkipLogs.unshift({ time: now, reason: reason });
-    if(apiSettings.autoSkipLogs.length > 100) apiSettings.autoSkipLogs.pop();
-    saveGlobalsToActiveChar();
-    if(autoSkipHintEl) {
-      autoSkipHintEl.style.display = 'flex';
-      autoSkipHintEl.title = '屏幕那端传来了消息，是TA憋在心里的...：' + reason;
-      autoSkipHintEl.onclick = () => { alert('屏幕那端传来了消息，是TA憋在心里的...：\n' + reason); hideAutoSkipHint(); };
-    }
-  }
+  function showAutoSkipHint(reason) { autoSkipReason = reason; const now = new Date().toISOString(); apiSettings.autoSkipLogs.unshift({ time: now, reason: reason }); if(apiSettings.autoSkipLogs.length > 100) apiSettings.autoSkipLogs.pop(); saveGlobalsToActiveChar(); if(autoSkipHintEl) { autoSkipHintEl.style.display = 'flex'; autoSkipHintEl.title = '屏幕那端传来了消息，是TA憋在心里的...：' + reason; autoSkipHintEl.onclick = () => { alert('屏幕那端传来了消息，是TA憋在心里的...：\n' + reason); hideAutoSkipHint(); }; } }
   function hideAutoSkipHint() { autoSkipReason = null; if(autoSkipHintEl) autoSkipHintEl.style.display = 'none'; }
   function updatePersonaDisplay(){ const activePersona = getActiveUserPersona(); if(activePersona){ myPersonaNameLabel.textContent = activePersona.name||'我'; activePersonaInfo.textContent = '当前人设：'+(activePersona.name||'我')+' | '+(activePersona.persona||'无设定'); activePersonaInfo.style.display='block'; if(activePersona.avatar){ avatarState.user = {...activePersona.avatar} } } else { myPersonaNameLabel.textContent='我'; activePersonaInfo.style.display='none' } refreshAvatars('user') }
   createCharBtn.addEventListener('click',()=>{ const newChar = createDefaultCharacter('新角色'); characters.push(newChar); saveAllData(); renderCharacterList(charSearchInput?.value||''); openCharacterChat(newChar.id) });
@@ -820,8 +698,7 @@
   globalResetBtn.addEventListener('click',async()=>{ const ok = await showConfirmDialog('确定要恢复默认设置吗？将清除所有数据，建议先导出备份。'); if(!ok) return; clearAllSettings(); location.reload() });
   function updateRemark(name){ const n = name.trim()||'月'; chatTitle.textContent = n; tipText.textContent = `你收到了${n}的讯息`; dogNameLabel.textContent = n; remarkVal = n }
   function updateSignature(sig){ chatSignature.textContent = sig.trim()||'月夜雪纷纷'; signatureVal = sig.trim() }
-  remarkInput.addEventListener('input',()=> updateRemark(remarkInput.value));
-  signatureInput.addEventListener('input',()=> updateSignature(signatureInput.value));
+  remarkInput.addEventListener('input',()=> updateRemark(remarkInput.value)); signatureInput.addEventListener('input',()=> updateSignature(signatureInput.value));
   const localReplies = ["月光洒在你身上…","静静地听着你的心事。","夜晚很安静，有我陪着你。","雪落无声，如我的思念。","愿这月光永远温柔。","我们曾在盛夏许下约定。","星河滚烫，你是人间理想。","不要忘记那些闪耀的日子。","揉揉你的头发，晚安。","风把思念带给你。"];
   function getRandomReply(){ return localReplies[Math.floor(Math.random()*localReplies.length)] }
   function buildMsgActions(role,msgId){ let html = `<button class="action-edit" data-msg-id="${msgId}">修改</button><button class="action-copy" data-msg-id="${msgId}">复制</button><button class="action-quote" data-msg-id="${msgId}">引用</button>`; if(role==='dog') html += `<button class="action-regenerate" data-msg-id="${msgId}">重说</button>`; else html += `<button class="action-recall" data-msg-id="${msgId}">撤回</button>`; html += `<button class="action-branch" data-msg-id="${msgId}">分支</button><button class="action-delete" data-msg-id="${msgId}">删除</button>`; return html }
@@ -830,12 +707,12 @@
   function applyAvatar(el,s){ el.innerHTML=''; el.style.background=''; el.style.color='#fff'; el.style.backgroundImage=''; if(s.type==='image' && s.src) el.style.background = `url(${s.src}) center/cover no-repeat`; else { el.textContent = s.text; if(el.classList.contains('avatar-dog')||el.id==='dogPreview') el.style.background = 'linear-gradient(135deg,#a8e063,#56ab2f)'; else if(el.classList.contains('avatar-me')||el.id==='myPreview'||el.id==='personaAvatarPreview') el.style.background = '#2a7bf6' } }
   function refreshAvatars(type){ const cls = type==='dog'?'avatar-dog':'avatar-me'; document.querySelectorAll(`.${cls}`).forEach(e=> applyAvatar(e,avatarState[type])); const p = document.getElementById(type==='dog'?'dogPreview':'myPreview'); if(p) applyAvatar(p,avatarState[type]); if(type==='user'){ const pp = document.getElementById('personaAvatarPreview'); if(pp && !editingPersonaId) applyAvatar(pp,avatarState[type]) } save('avatar'+type.charAt(0).toUpperCase()+type.slice(1),avatarState[type]) }
   function createAvatar(type){ const d = document.createElement('div'); d.className = `avatar avatar-${type}`; applyAvatar(d,avatarState[type]); return d }
-  function createDogMsg(text,reasoning,showReasoning,msgId,quoteText,quoteRole,quoteId){ const wrapper = document.createElement('div'); wrapper.className='msg-wrapper msg-wrapper-left'; wrapper.id = 'msg-'+msgId; if(quoteText) wrapper.appendChild(createCitationBlock(quoteText,quoteRole,quoteId)); const row = document.createElement('div'); row.className='message-row message-left'; row.appendChild(createAvatar('dog')); const bubble = document.createElement('div'); bubble.className='bubble bubble-left'; const msgText = document.createElement('div'); msgText.className='msg-text'; msgText.appendChild(document.createTextNode(text)); if(reasoning && showReasoning){ const btn = document.createElement('span'); btn.className='reasoning-btn'; btn.textContent='💭'; btn.addEventListener('click',function(e){ e.stopPropagation(); let box = bubble.querySelector('.reasoning-box'); if(box) box.remove(); else { box = document.createElement('div'); box.className='reasoning-box'; box.textContent = reasoning; msgText.appendChild(box) } }); msgText.appendChild(btn) } bubble.appendChild(msgText); const meta = document.createElement('div'); meta.className='msg-meta'; meta.innerHTML = '<span class="read-tag">已读</span>'; bubble.appendChild(meta); const actions = document.createElement('div'); actions.className='message-actions'; actions.innerHTML = buildMsgActions('dog',msgId); bubble.appendChild(actions); row.appendChild(bubble); wrapper.appendChild(row); return wrapper }
+  function createDogMsg(text,reasoning,showReasoning,msgId,quoteText,quoteRole,quoteId,recalled=false,recalledText=''){ const wrapper = document.createElement('div'); wrapper.className='msg-wrapper msg-wrapper-left'; wrapper.id = 'msg-'+msgId; if(quoteText) wrapper.appendChild(createCitationBlock(quoteText,quoteRole,quoteId)); const row = document.createElement('div'); row.className='message-row message-left'; row.appendChild(createAvatar('dog')); const bubble = document.createElement('div'); bubble.className='bubble bubble-left'; if(recalled){ bubble.classList.add('recalled-bubble'); bubble.style.cursor = 'pointer'; bubble.innerHTML = `<div class="msg-text">对方撤回了一条消息</div>`; bubble.addEventListener('click',(e)=>{ e.stopPropagation(); if(recalledText) alert('被撤回的内容：\n' + recalledText); }); } else { const msgText = document.createElement('div'); msgText.className='msg-text'; msgText.appendChild(document.createTextNode(text)); if(reasoning && showReasoning){ const btn = document.createElement('span'); btn.className='reasoning-btn'; btn.textContent='💭'; btn.addEventListener('click',function(e){ e.stopPropagation(); let box = bubble.querySelector('.reasoning-box'); if(box) box.remove(); else { box = document.createElement('div'); box.className='reasoning-box'; box.textContent = reasoning; msgText.appendChild(box) } }); msgText.appendChild(btn) } bubble.appendChild(msgText); const meta = document.createElement('div'); meta.className='msg-meta'; meta.innerHTML = '<span class="read-tag">已读</span>'; bubble.appendChild(meta); const actions = document.createElement('div'); actions.className='message-actions'; actions.innerHTML = buildMsgActions('dog',msgId); bubble.appendChild(actions); } row.appendChild(bubble); wrapper.appendChild(row); return wrapper }
   function createUserMsg(text,msgId,quoteText,quoteRole,quoteId,recalled=false){ const wrapper = document.createElement('div'); wrapper.className='msg-wrapper msg-wrapper-right'; wrapper.id = 'msg-'+msgId; if(quoteText) wrapper.appendChild(createCitationBlock(quoteText,quoteRole,quoteId)); const row = document.createElement('div'); row.className='message-row message-right'; row.appendChild(createAvatar('user')); const bubble = document.createElement('div'); bubble.className='bubble bubble-right'; if(recalled){ bubble.classList.add('recalled-bubble'); bubble.innerHTML = '<div class="msg-text">你撤回了一条消息</div>' } else { const msgText = document.createElement('div'); msgText.className='msg-text'; msgText.textContent = text; bubble.appendChild(msgText); const meta = document.createElement('div'); meta.className='msg-meta'; meta.innerHTML = '<span class="read-tag">已读</span>'; bubble.appendChild(meta); const actions = document.createElement('div'); actions.className='message-actions'; actions.innerHTML = buildMsgActions('user',msgId); bubble.appendChild(actions) } row.appendChild(bubble); wrapper.appendChild(row); return wrapper }
   function saveChatHistory(){ save('messageHistory',messageHistory); save('chatMessages',chatMessages); saveGlobalsToActiveChar() }
-  function syncHistoryFromChat(){ messageHistory = chatMessages.map(m=>{ if(m.recalled) return {role:'user', content:'[用户撤回了一条消息]'}; return {role: m.role==='user'?'user':'assistant', content: m.text} }); save('messageHistory',messageHistory) }
+  function syncHistoryFromChat(){ messageHistory = chatMessages.map(m=>{ if(m.role==='user' && m.recalled) return {role:'user', content:'[用户撤回了一条消息]'}; if(m.role==='dog' && m.recalled) return {role:'assistant', content:'[AI撤回了一条消息]'}; return {role: m.role==='user'?'user':'assistant', content: m.text} }); save('messageHistory',messageHistory) }
   function createTimeStampDiv(ts){ const div = document.createElement('div'); div.className='time-stamp'; div.dataset.timestamp = ts; div.textContent = formatTimeDivider(ts,Date.now()); return div }
-  function reloadChatUI(){ const children = chatArea.children; while(children.length>1) chatArea.removeChild(children[1]); let lastTs = null; chatMessages.forEach(msg=>{ ensureMsgTimestamp(msg); const ts = msg.timestamp; if(lastTs===null || (ts-lastTs)>=300000){ chatArea.appendChild(createTimeStampDiv(ts)); lastTs = ts } else { lastTs = Math.max(lastTs,ts) } if(msg.role==='user') chatArea.appendChild(createUserMsg(msg.text,msg.id,msg.quoteText,msg.quoteRole,msg.quoteId,msg.recalled)); else chatArea.appendChild(createDogMsg(msg.text,msg.reasoning,true,msg.id,msg.quoteText,msg.quoteRole,msg.quoteId)) }); chatArea.scrollTop = chatArea.scrollHeight }
+  function reloadChatUI(){ const children = chatArea.children; while(children.length>1) chatArea.removeChild(children[1]); let lastTs = null; chatMessages.forEach(msg=>{ ensureMsgTimestamp(msg); const ts = msg.timestamp; if(lastTs===null || (ts-lastTs)>=300000){ chatArea.appendChild(createTimeStampDiv(ts)); lastTs = ts } else { lastTs = Math.max(lastTs,ts) } if(msg.role==='user') chatArea.appendChild(createUserMsg(msg.text,msg.id,msg.quoteText,msg.quoteRole,msg.quoteId,msg.recalled)); else chatArea.appendChild(createDogMsg(msg.text,msg.reasoning,true,msg.id,msg.quoteText,msg.quoteRole,msg.quoteId,msg.recalled,msg.recalledText)) }); chatArea.scrollTop = chatArea.scrollHeight }
   function updateQuoteHint(){ if(currentQuote){ const who = currentQuote.role==='user'?'我':remarkVal||'月'; quoteTextSpan.textContent = `引用 ${who}: ${currentQuote.text.substring(0,30)}`; quoteHint.style.display = 'flex' } else quoteHint.style.display = 'none' }
   function updateSendHint(){ if(pendingUserMessages.length>0){ sendHint.style.display='flex'; sendHintText.textContent = `积${pendingUserMessages.length}条·三击回复` } else { sendHint.style.display='none' } }
   clearPendingBtn.addEventListener('click',()=>{ pendingUserMessages=[]; updateSendHint(); clickCount=0; if(clickTimer) clearTimeout(clickTimer) });
@@ -843,10 +720,8 @@
   function getFormattedUserContent(text,quoteText){ if(quoteText){ const who = currentQuote?.role==='user'?'我':remarkVal||'月'; return `[用户引用了来自"${who}"的消息：\n"${quoteText}"\n---]\n${text}` } return text }
   function startInlineEdit(msgId){ const wrapper = document.getElementById('msg-'+msgId); if(!wrapper) return; const bubble = wrapper.querySelector('.bubble-left, .bubble-right'); const msgText = bubble.querySelector('.msg-text'); if(!msgText || bubble.querySelector('.msg-edit-container')) return; const originalText = msgText.childNodes[0]?.textContent||''; const editContainer = document.createElement('div'); editContainer.className='msg-edit-container'; const textarea = document.createElement('textarea'); textarea.className='msg-edit-textarea'; textarea.value = originalText; textarea.rows = 1; const actions = document.createElement('div'); actions.className='msg-edit-actions'; const saveBtn = document.createElement('button'); saveBtn.className='msg-edit-save'; saveBtn.textContent='保存'; const cancelBtn = document.createElement('button'); cancelBtn.className='msg-edit-cancel'; cancelBtn.textContent='取消'; actions.appendChild(saveBtn); actions.appendChild(cancelBtn); editContainer.appendChild(textarea); editContainer.appendChild(actions); msgText.style.display='none'; bubble.insertBefore(editContainer, msgText.nextSibling); autoResizeTextarea(textarea); textarea.focus(); const cleanup = ()=>{ if(editContainer.parentNode) editContainer.parentNode.removeChild(editContainer); msgText.style.display='' }; saveBtn.addEventListener('click',()=>{ const newText = textarea.value.trim(); if(newText){ const msg = chatMessages.find(m=>m.id===msgId); if(msg){ msg.text = newText; saveChatHistory(); reloadChatUI() } } cleanup() }); cancelBtn.addEventListener('click',()=>{ cleanup() }) }
   function getPersonInstruction(){
-    const aiPerson = apiSettings.aiPerson || 'first';
-    const userPerson = apiSettings.userPerson || 'second';
-    const characterName = charSettings.name || remarkVal || '角色';
-    const userName = (getActiveUserPersona()?.name) || '用户';
+    const aiPerson = apiSettings.aiPerson || 'first'; const userPerson = apiSettings.userPerson || 'second';
+    const characterName = charSettings.name || remarkVal || '角色'; const userName = (getActiveUserPersona()?.name) || '用户';
     let instruction = '\n\n[人称设定]\n';
     if(aiPerson==='first') instruction += `请使用第一人称"我"来代表你自己（${characterName}）。`;
     else if(aiPerson==='second') instruction += `请使用第二人称"你"来代表你自己（${characterName}）。`;
@@ -857,75 +732,100 @@
     return instruction;
   }
   function buildHistoryString(includeAutoReplyTags = false){
-    const activePersona = getActiveUserPersona();
-    const userName = activePersona?.name || '用户';
-    const charName = remarkVal || '角色';
-    let historyStr = '';
-    const layers = apiSettings.contextLayers;
-    const slicedMessages = chatMessages.slice(-layers * 2);
-    for(const msg of slicedMessages){
-      const sender = msg.role === 'user' ? userName : charName;
-      let tag = '';
-      if(includeAutoReplyTags && msg.role === 'dog' && msg.isAutoReply){ tag = ' [自动回复]'; }
-      historyStr += `${sender}: ${msg.text}${tag}\n`;
-    }
+    const activePersona = getActiveUserPersona(); const userName = activePersona?.name || '用户'; const charName = remarkVal || '角色';
+    let historyStr = ''; const layers = apiSettings.contextLayers; const slicedMessages = chatMessages.slice(-layers * 2);
+    for(const msg of slicedMessages){ const sender = msg.role === 'user' ? userName : charName; let tag = ''; if(includeAutoReplyTags && msg.role === 'dog' && msg.isAutoReply){ tag = ' [自动回复]'; } historyStr += `${sender}: ${msg.text}${tag}\n`; }
     return historyStr.trim();
+  }
+  /* --- 撤回函数 --- */
+  function recallDogMessageById(msgId) { const msg = chatMessages.find(m => m.id === msgId && m.role === 'dog'); if (!msg || msg.recalled) return false; msg.recalled = true; msg.recalledText = msg.text; msg.text = ''; return true; }
+  function updateDogMsgBubble(msgId) {
+    const wrapper = document.getElementById('msg-' + msgId); if (!wrapper) return; const bubble = wrapper.querySelector('.bubble-left'); if (!bubble) return;
+    bubble.classList.add('recalled-bubble'); bubble.style.cursor = 'pointer'; bubble.innerHTML = `<div class="msg-text">对方撤回了一条消息</div>`;
+    const msg = chatMessages.find(m => m.id === msgId); bubble.addEventListener('click', (e) => { e.stopPropagation(); if (msg && msg.recalledText) alert('被撤回的内容：\n' + msg.recalledText); });
+  }
+  function recallDogMessage(n) { if (n < 1) return null; const dogMsgs = chatMessages.filter(m => m.role === 'dog' && !m.recalled); if (dogMsgs.length === 0) return null; const index = dogMsgs.length - n; if (index < 0) return null; const msg = dogMsgs[index]; if (!recallDogMessageById(msg.id)) return null; updateDogMsgBubble(msg.id); syncHistoryFromChat(); saveChatHistory(); return msg.id; }
+  function showRecallHint(recalledIds) {
+    if (!recalledIds || recalledIds.length === 0) return;
+    const count = recalledIds.length;
+    const hint = document.createElement('div'); hint.className = 'recall-system-hint'; hint.textContent = `对方撤回了 ${count} 条消息`; hint.style.cursor = 'pointer';
+    const firstId = recalledIds[0];
+    hint.addEventListener('click', () => { if (hint.parentNode) hint.parentNode.removeChild(hint); if (firstId) scrollToMessage(firstId); });
+    chatArea.appendChild(hint);
+    // 不再自动消失，仅点击关闭
+  }
+  function processAiRecall(content, newSegments) {
+    const regex = /\[RECALL:(-?\d+)\]/g;
+    let match; let cleanContent = content; const recalledIds = [];
+    while ((match = regex.exec(content)) !== null) {
+      const n = parseInt(match[1]); cleanContent = cleanContent.replace(match[0], '');
+      if (isNaN(n)) continue;
+      if (n >= 1) { // 历史消息
+        const msgId = recallDogMessage(n); if (msgId) recalledIds.push(msgId);
+      } else if (n <= 0) { // 本轮消息：n=0为第一条，n=-1为第二条，以此类推
+        const idx = Math.abs(n); // 0->0, -1->1, -2->2 ...
+        if (idx < newSegments.length) {
+          const seg = newSegments[idx];
+          seg.recalled = true; seg.recalledText = seg.text; seg.text = '';
+          recalledIds.push(seg.id);
+        }
+      }
+    }
+    return { content: cleanContent.trim(), recalledIds };
   }
   async function triggerAiReply(isAutoReply=false, overrideMinMsgs=null, overrideMaxMsgs=null){
     if(!isAutoReply && waiting) return;
-    if(isAutoReply){
-      const lastMsg = chatMessages.length>0 ? chatMessages[chatMessages.length-1] : null;
-      if(lastMsg && lastMsg.isAutoReply){ apiSettings.autoReplyConsecutiveCount++; }
-      else { apiSettings.autoReplyConsecutiveCount = 1; }
-      saveGlobalsToActiveChar();
-    }
-    const globalPresetsEnabled = libraryPresets.filter(p=>p.globallyEnabled);
-    const globalWorldsEnabled = libraryWorlds.filter(w=>w.globallyEnabled);
-    let prefix = '';
-    const allPresets = [...globalPresetsEnabled, ...presets.filter(p=>enabledPresetIds.includes(p.id))];
-    if(allPresets.length>0) prefix = allPresets.map(p=>p.content).join('\n')+'\n';
+    if(isAutoReply){ const lastMsg = chatMessages.length>0 ? chatMessages[chatMessages.length-1] : null; if(lastMsg && lastMsg.isAutoReply){ apiSettings.autoReplyConsecutiveCount++; } else { apiSettings.autoReplyConsecutiveCount = 1; } saveGlobalsToActiveChar(); }
+    const globalPresetsEnabled = libraryPresets.filter(p=>p.globallyEnabled); const globalWorldsEnabled = libraryWorlds.filter(w=>w.globallyEnabled);
+    let prefix = ''; const allPresets = [...globalPresetsEnabled, ...presets.filter(p=>enabledPresetIds.includes(p.id))]; if(allPresets.length>0) prefix = allPresets.map(p=>p.content).join('\n')+'\n';
     let systemPrompt = charSettings.prompt || '你是一位名叫月的角色，性格神秘温柔，用简洁诗意的话语回复，带emoji，最多两句话。';
-    const allWorlds = [...globalWorldsEnabled, ...worlds.filter(w=>enabledWorldIds.includes(w.id))];
-    if(allWorlds.length>0) systemPrompt += '\n\n[世界设定]\n'+allWorlds.map(w=>`${w.key}: ${w.content}`).join('\n');
+    const allWorlds = [...globalWorldsEnabled, ...worlds.filter(w=>enabledWorldIds.includes(w.id))]; if(allWorlds.length>0) systemPrompt += '\n\n[世界设定]\n'+allWorlds.map(w=>`${w.key}: ${w.content}`).join('\n');
     systemPrompt = prefix + systemPrompt;
-    const activePersona = getActiveUserPersona();
-    const charName = remarkVal || '角色';
-    const userName = activePersona?.name || '用户';
+    const activePersona = getActiveUserPersona(); const charName = remarkVal || '角色'; const userName = activePersona?.name || '用户';
     systemPrompt += `\n\n[角色身份] 你的名字是${charName}，你正在与用户${userName}对话。请始终以${charName}的身份进行回复，不要混淆身份。`;
     if(activePersona && activePersona.persona && activePersona.persona.trim()){ systemPrompt += `\n\n[用户设定]\n用户${userName}的人设：${activePersona.persona}\n请根据用户的人设特点来调整你的回复风格和内容。` }
     const nowTime = new Date(); systemPrompt += `\n\n[当前时间] ${nowTime.toLocaleString('zh-CN',{hour12:false})}`;
     if(apiSettings.weatherEnabled && apiSettings.weatherLat!=null && apiSettings.weatherLon!=null && !isNaN(apiSettings.weatherLat) && !isNaN(apiSettings.weatherLon)){ try{ const weatherInfo = await getWeatherInfo(); if(weatherInfo){ const weatherStr = getWeatherString(weatherInfo); systemPrompt += `\n${weatherStr}` } } catch(e){ addLog('warn','获取天气信息失败，跳过: '+e.message) } }
-    if(apiSettings.chatMode){ const lengthHint = apiSettings.chatModeSubtype==='long'?'约100个汉字':'约20个汉字'; systemPrompt += '\n\n【对话模式】你现在正在进行线上文字聊天（例如在微信上）。你们不在同一空间，只能通过文字交流。请完全以角色第一人称视角回复，只输出角色本人说的话或打出的字。不要进行任何第三人称的动作、神态、心理活动或环境描写。'; systemPrompt += `\n每条消息的字数请控制在${lengthHint}左右。`; systemPrompt += '\n示例：\n用户：你好\n你：你好，今天感觉怎么样？\n请严格模仿示例格式，只输出纯文本对话内容。'; } else { systemPrompt += '\n\n【小说模式】请以小说叙述形式回复，可以包含动作、神态、心理和环境描写，也可以进行面对面交流。'; }
+    if(apiSettings.chatMode){ const lengthHint = apiSettings.chatModeSubtype==='long'?'约100个汉字':'约20个汉字'; systemPrompt += '\n\n【对话模式】你现在正在进行线上文字聊天...'; systemPrompt += `\n每条消息的字数请控制在${lengthHint}左右。`; } else { systemPrompt += '\n\n【小说模式】请以小说叙述形式回复...'; }
     systemPrompt += getPersonInstruction();
-    const min = overrideMinMsgs!==null ? overrideMinMsgs : apiSettings.minMsgs;
-    const max = overrideMaxMsgs!==null ? overrideMaxMsgs : apiSettings.maxMsgs;
+    const min = overrideMinMsgs!==null ? overrideMinMsgs : apiSettings.minMsgs; const max = overrideMaxMsgs!==null ? overrideMaxMsgs : apiSettings.maxMsgs;
     if(min===max) systemPrompt += `\n请发送恰好 ${min} 条消息，每条消息之间用双换行分隔。`; else systemPrompt += `\n请发送 ${min} 到 ${max} 条消息，每条消息之间用双换行分隔。`;
     systemPrompt += '\n\n当用户的消息以 [用户引用了来自...] 开头时，表示用户针对该引用内容进行了回复，请基于引用内容进行回应。';
-    systemPrompt += '\n\n【思维链指令】每次回复时，请在开头用"【思考过程】"和"【思考结束】"包裹你的内心思考过程，然后再给出实际回复内容。示例：\n【思考过程】\n（你的思考）\n【思考结束】\n（你的回复）';
+    systemPrompt += '\n\n【思维链指令】每次回复时，请在开头用"【思考过程】"和"【思考结束】"包裹你的内心思考过程...';
+    // 新的撤回说明
+    systemPrompt += `\n
+【撤回功能说明】
+你现在拥有撤回你之前发送的消息的能力，包括本轮回复中你刚发出的消息。
+
+索引规则：
+- 本轮输出的第一句话是第 0 条，往历史方向依次为 1, 2, 3…（1 是你上一轮回复的最后一条，2 是倒数第二条，依此类推）。
+- 往本轮后续方向为 -1, -2, -3…（-1 是本轮第二句，-2 是本轮第三句，依此类推）。
+
+使用方法：
+在你的回复内容中使用 [RECALL:n] 标记，n 为上述索引数字。
+例如：
+[RECALL:0] 撤回本轮第一句话。
+[RECALL:-1] 撤回本轮第二句话。
+[RECALL:1] 撤回你上一条历史消息。
+[RECALL:2] 撤回倒数第二条历史消息。
+
+你可以同时撤回多条，标记可以放在回复的任意位置，不会被显示给用户。
+被撤回的消息会变成“对方撤回了一条消息”，用户点击后可查看原始内容。
+
+完全由你基于你的人设性格决定是否使用，你拥有绝对自由。`;
     if(isAutoReply){
-      const lastMsg = chatMessages.length>0 ? chatMessages[chatMessages.length-1] : null;
-      const lastTs = lastMsg ? (lastMsg.timestamp || 0) : 0;
-      const minutesAgo = lastTs ? Math.floor((Date.now()-lastTs)/60000) : 0;
-      const sender = lastMsg ? (lastMsg.role==='user' ? userName : charName) : '未知';
-      const contentPreview = lastMsg ? (lastMsg.text||'').substring(0,50) : '';
-      const consecutive = apiSettings.autoReplyConsecutiveCount || 1;
-      if(apiSettings.chatMode){ systemPrompt += `\n\n[自动回复触发] 你们已经 ${minutesAgo} 分钟没有对话了。最后一条消息是 ${sender} 发送的："${contentPreview}"，在此之后用户没有发新信息。这是第 ${consecutive} 次发送自动回复，在此之前用户都没有回复。`; }
-      else { systemPrompt += `\n\n[自动回复触发] 你们已经 ${minutesAgo} 分钟没有见面了。最后一条消息是 ${sender} 发送的："${contentPreview}"，在此之后用户没有发新信息。这是第 ${consecutive} 次发送自动回复，在此之前用户都没有回复。`; }
-      systemPrompt += `\n\n【自动回复判断】请站在${charName}的角度，根据你的人设、当前上下文以及刚刚过去的时间，判断此时是否应该主动给用户发送一条消息。如果认为不应该发送，请在回复内容的最开头一行明确输出 [AUTO_SKIP] 并紧接着用一行说明你选择不回复的理由。如果认为应该发送，则正常回复。`;
+      const lastMsg = chatMessages.length>0 ? chatMessages[chatMessages.length-1] : null; const lastTs = lastMsg ? (lastMsg.timestamp || 0) : 0; const minutesAgo = lastTs ? Math.floor((Date.now()-lastTs)/60000) : 0;
+      const sender = lastMsg ? (lastMsg.role==='user' ? userName : charName) : '未知'; const contentPreview = lastMsg ? (lastMsg.text||'').substring(0,50) : '';
+      systemPrompt += `\n\n[自动回复触发] 你们已经 ${minutesAgo} 分钟没有对话了...`;
+      systemPrompt += `\n\n【自动回复判断】请站在${charName}的角度，如果认为不应该发送，请输出 [AUTO_SKIP] 并说明理由；否则正常回复。`;
     }
     const historyStr = buildHistoryString(true); systemPrompt += `\n\n[历史聊天记录]\n${historyStr}`;
     if(isAutoReply){ currentAutoReplyLog = { time: new Date().toISOString(), prompt: systemPrompt, response: null, skipped: false, reason: '' }; autoReplyLogs.unshift(currentAutoReplyLog); if(autoReplyLogs.length > 50) autoReplyLogs.pop(); }
     if(apiSettings.enabled && apiSettings.key && apiSettings.url){
       waiting=true; sendBtn.disabled=true; retryBtn.disabled=true;
-      const loadingWrapper = document.createElement('div'); loadingWrapper.className='msg-wrapper msg-wrapper-left';
-      const loadingRow = document.createElement('div'); loadingRow.className='message-row message-left';
-      loadingRow.innerHTML = '<div class="avatar avatar-dog"></div><div class="bubble bubble-left" style="color:#999;">🌙 思考中...</div>';
-      applyAvatar(loadingRow.querySelector('.avatar'),avatarState.dog);
-      loadingWrapper.appendChild(loadingRow); chatArea.appendChild(loadingWrapper); chatArea.scrollTop = chatArea.scrollHeight;
+      const loadingWrapper = document.createElement('div'); loadingWrapper.className='msg-wrapper msg-wrapper-left'; const loadingRow = document.createElement('div'); loadingRow.className='message-row message-left'; loadingRow.innerHTML = '<div class="avatar avatar-dog"></div><div class="bubble bubble-left" style="color:#999;">🌙 思考中...</div>'; applyAvatar(loadingRow.querySelector('.avatar'),avatarState.dog); loadingWrapper.appendChild(loadingRow); chatArea.appendChild(loadingWrapper); chatArea.scrollTop = chatArea.scrollHeight;
       try{
-        let messages = [{role:"system", content:systemPrompt}];
-        const layers = isAutoReply ? (apiSettings.autoReplyContextLayers || 5) : apiSettings.contextLayers;
-        if(layers>0) messages = messages.concat(messageHistory.slice(-layers*2));
+        let messages = [{role:"system", content:systemPrompt}]; const layers = isAutoReply ? (apiSettings.autoReplyContextLayers || 5) : apiSettings.contextLayers; if(layers>0) messages = messages.concat(messageHistory.slice(-layers*2));
         const res = await fetch(buildChatUrl(apiSettings.url),{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiSettings.key}`},body:JSON.stringify({model:apiSettings.model,messages,temperature:0.9,max_tokens:1024})});
         if(!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json(); const choice = data.choices?.[0]?.message; const content = choice?.content?.trim(), apiReasoning = choice?.reasoning_content?.trim();
@@ -936,28 +836,24 @@
         if(isAutoReply && finalContent.startsWith('[AUTO_SKIP]')){
           let reason = '未提供具体理由'; const reasonMatch = finalContent.match(/^\[AUTO_SKIP\]\s*\n(.*)/); if(reasonMatch) reason = reasonMatch[1].trim();
           if(currentAutoReplyLog){ currentAutoReplyLog.response = finalContent; currentAutoReplyLog.skipped = true; currentAutoReplyLog.reason = reason; currentAutoReplyLog = null; }
-          showAutoSkipHint(reason);
-          addLog('info',`自动回复判断跳过：${reason}`);
-          loadingWrapper.remove(); waiting=false; sendBtn.disabled=false; retryBtn.disabled=false; return;
+          showAutoSkipHint(reason); addLog('info',`自动回复判断跳过：${reason}`); loadingWrapper.remove(); waiting=false; sendBtn.disabled=false; retryBtn.disabled=false; return;
         }
-        let segments = finalContent ? finalContent.split(/\n{2,}/).filter(s=>s.trim()!=='') : [];
-        if(segments.length===0 && finalContent) segments = [finalContent];
+        const regexClean = /\[RECALL:-?\d+\]/g; const cleanText = finalContent.replace(regexClean, '').trim();
+        let segments = cleanText ? cleanText.split(/\n{2,}/).filter(s=>s.trim()!=='') : [];
+        if(segments.length===0 && cleanText) segments = [cleanText];
         if(segments.length===0 && finalReasoning) segments = ['（回复被屏蔽）'];
-        const now = Date.now(); const fragment = document.createDocumentFragment();
-        let lastTs = chatMessages.length>0 ? (chatMessages[chatMessages.length-1].timestamp||0) : 0;
-        segments.forEach((seg,idx)=>{ const showBtn = (idx===0) && !!finalReasoning; const msgId = 'msg_'+Date.now().toString(36)+Math.random().toString(36).substr(2,5); const ts = now+idx; chatMessages.push({id:msgId,role:'dog',text:seg.trim(),reasoning:(idx===0&&finalReasoning)?finalReasoning:null,timestamp:ts, isAutoReply: isAutoReply || false}); if(lastTs===0||(ts-lastTs)>=300000){ fragment.appendChild(createTimeStampDiv(ts)); lastTs=ts } else { lastTs=Math.max(lastTs,ts) } fragment.appendChild(createDogMsg(seg.trim(),finalReasoning,showBtn,msgId)) });
+        const newSegments = segments.map(seg => ({ id: 'msg_'+Date.now().toString(36)+Math.random().toString(36).substr(2,5), role:'dog', text: seg.trim(), reasoning: null, timestamp: Date.now(), isAutoReply: isAutoReply || false, recalled: false, recalledText: '' }));
+        const { recalledIds } = processAiRecall(finalContent, newSegments);
+        if (recalledIds.length > 0) showRecallHint(recalledIds);
+        const now = Date.now(); let lastTs = chatMessages.length>0 ? (chatMessages[chatMessages.length-1].timestamp||0) : 0; const fragment = document.createDocumentFragment();
+        newSegments.forEach((seg, idx) => { seg.timestamp = now + idx; seg.reasoning = (idx===0 && finalReasoning) ? finalReasoning : null; chatMessages.push(seg); if(lastTs===0||(seg.timestamp-lastTs)>=300000){ fragment.appendChild(createTimeStampDiv(seg.timestamp)); lastTs = seg.timestamp; } else { lastTs = Math.max(lastTs, seg.timestamp); } fragment.appendChild(createDogMsg(seg.text, seg.reasoning, (idx===0) && !!finalReasoning, seg.id, null, null, null, seg.recalled, seg.recalledText)); });
         messageHistory.push({role:'assistant',content:finalContent||''}); saveChatHistory(); loadingWrapper.replaceWith(fragment);
         if(currentAutoReplyLog){ currentAutoReplyLog.response = finalContent; currentAutoReplyLog.skipped = false; currentAutoReplyLog = null; }
-        if(isAutoReply && document.visibilityState !== 'visible'){
-          unreadCount += segments.length; saveGlobalsToActiveChar(); updateUnreadDisplay();
-          if(messageListViewWrap.classList.contains('active')) renderCharacterList();
-          sendAutoReplyNotifications(segments);
-        }
+        if(isAutoReply && document.visibilityState !== 'visible'){ unreadCount += segments.length; saveGlobalsToActiveChar(); updateUnreadDisplay(); if(messageListViewWrap.classList.contains('active')) renderCharacterList(); sendAutoReplyNotifications(segments.filter(s => !s.recalled)); }
       } catch(err){
         console.error(err); const errorMsg = `😢 AI 请求失败：${err.message}`; const msgId = 'msg_'+Date.now().toString(36)+Math.random().toString(36).substr(2,5); const ts = Date.now();
         messageHistory.push({role:'assistant',content:errorMsg}); chatMessages.push({id:msgId,role:'dog',text:errorMsg,reasoning:null,timestamp:ts, isAutoReply: false}); saveChatHistory();
-        const fragment = document.createDocumentFragment(); const prevLastTs = chatMessages.length>1?(chatMessages[chatMessages.length-2]?.timestamp||0):0;
-        if(prevLastTs===0||(ts-prevLastTs)>=300000) fragment.appendChild(createTimeStampDiv(ts));
+        const fragment = document.createDocumentFragment(); const prevLastTs = chatMessages.length>1?(chatMessages[chatMessages.length-2]?.timestamp||0):0; if(prevLastTs===0||(ts-prevLastTs)>=300000) fragment.appendChild(createTimeStampDiv(ts));
         fragment.appendChild(createDogMsg(errorMsg,null,false,msgId)); loadingWrapper.replaceWith(fragment);
         if(currentAutoReplyLog){ currentAutoReplyLog.response = errorMsg; currentAutoReplyLog.skipped = false; currentAutoReplyLog = null; }
       } finally { sendBtn.disabled=false; retryBtn.disabled=false; waiting=false; chatArea.scrollTop = chatArea.scrollHeight }
@@ -967,14 +863,13 @@
   }
   function sendMessageOnly(){ if(waiting) return; const text = messageInput.value.trim(); if(!text) return; apiSettings.autoReplyConsecutiveCount = 0; saveGlobalsToActiveChar(); const userMsgId = 'msg_'+Date.now().toString(36)+Math.random().toString(36).substr(2,5); const ts = Date.now(); const quote = currentQuote; chatMessages.push({id:userMsgId,role:'user',text,quoteText:quote?.text,quoteRole:quote?.role,quoteId:quote?.id,timestamp:ts, isAutoReply: false}); messageHistory.push({role:'user',content:getFormattedUserContent(text,quote?.text)}); pendingUserMessages.push(text); currentQuote=null; updateQuoteHint(); updateSendHint(); saveChatHistory(); const lastMsgEl = chatArea.querySelector('.msg-wrapper:last-child'); let lastTs=0; if(lastMsgEl){ const lastId = lastMsgEl.id.replace('msg-',''); const lastMsg = chatMessages.find(m=>m.id===lastId); if(lastMsg) lastTs=lastMsg.timestamp||0 } if(lastTs===0||(ts-lastTs)>=300000) chatArea.appendChild(createTimeStampDiv(ts)); chatArea.appendChild(createUserMsg(text,userMsgId,quote?.text,quote?.role,quote?.id)); chatArea.scrollTop = chatArea.scrollHeight; messageInput.value=''; messageInput.style.height='auto'; messageInput.style.height='38px'; autoResizeTextarea(messageInput) }
   function handleSendClick(){ if(waiting) return; sendMessageOnly(); clickCount++; if(clickCount===1) clickTimer = setTimeout(()=>{clickCount=0},600); if(clickCount===3){ clearTimeout(clickTimer); clickCount=0; if(pendingUserMessages.length>0){ triggerAiReply(false); pendingUserMessages=[]; updateSendHint() } } }
-  sendBtn.addEventListener('click',handleSendClick);
-  messageInput.addEventListener('keypress',e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendMessageOnly() } });
+  sendBtn.addEventListener('click',handleSendClick); messageInput.addEventListener('keypress',e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendMessageOnly() } });
   quoteCancelBtn.addEventListener('click',()=>{ currentQuote=null; updateQuoteHint() });
-  async function retryLastAiReply(){ const ok = await showConfirmDialog('确定要重说上次AI回复吗？这将会重新生成一条回复。'); if(!ok) return; if(waiting) return; let lastUserIdx=-1; for(let i=chatMessages.length-1;i>=0;i--){ if(chatMessages[i].role==='user' && !chatMessages[i].recalled){ lastUserIdx=i; break } } if(lastUserIdx===-1){ alert('没有用户消息，无法重说'); return } chatMessages = chatMessages.slice(0,lastUserIdx+1); syncHistoryFromChat(); saveChatHistory(); reloadChatUI(); pendingUserMessages=[]; updateSendHint(); triggerAiReply(false) }
+  async function retryLastAiReply(){ const ok = await showConfirmDialog('确定要重说上次AI回复吗？'); if(!ok) return; if(waiting) return; let lastUserIdx=-1; for(let i=chatMessages.length-1;i>=0;i--){ if(chatMessages[i].role==='user' && !chatMessages[i].recalled){ lastUserIdx=i; break } } if(lastUserIdx===-1){ alert('没有用户消息，无法重说'); return } chatMessages = chatMessages.slice(0,lastUserIdx+1); syncHistoryFromChat(); saveChatHistory(); reloadChatUI(); pendingUserMessages=[]; updateSendHint(); triggerAiReply(false) }
   retryBtn.addEventListener('click',retryLastAiReply);
   chatArea.addEventListener('click',function(e){ const target = e.target; if(!target.classList.contains('action-edit')&&!target.classList.contains('action-copy')&&!target.classList.contains('action-quote')&&!target.classList.contains('action-regenerate')&&!target.classList.contains('action-recall')&&!target.classList.contains('action-delete')&&!target.classList.contains('action-branch')) return; e.stopPropagation(); const msgId = target.dataset.msgId; const msg = chatMessages.find(m=>m.id===msgId); if(!msg||msg.recalled) return; if(target.classList.contains('action-edit')){ startInlineEdit(msgId) } else if(target.classList.contains('action-copy')){ navigator.clipboard.writeText(msg.text).then(()=>alert('已复制')).catch(()=>alert('复制失败')) } else if(target.classList.contains('action-quote')){ currentQuote = {id:msg.id,text:msg.text,role:msg.role}; updateQuoteHint() } else if(target.classList.contains('action-regenerate')){ const index = chatMessages.findIndex(m=>m.id===msgId); if(index===-1||chatMessages[index].role!=='dog') return; let lastUserIdx=-1; for(let i=index-1;i>=0;i--){ if(chatMessages[i].role==='user'&&!chatMessages[i].recalled){ lastUserIdx=i; break } } if(lastUserIdx===-1){ alert('前面没有用户消息'); return } if(!confirm('重说将重新生成这一轮AI回复，确定吗？')) return; chatMessages = chatMessages.slice(0,lastUserIdx+1); syncHistoryFromChat(); saveChatHistory(); reloadChatUI(); pendingUserMessages=[]; updateSendHint(); triggerAiReply(false) } else if(target.classList.contains('action-recall')){ const index = chatMessages.findIndex(m=>m.id===msgId); if(index===-1||chatMessages[index].role!=='user'||chatMessages[index].recalled) return; if(!confirm('确定要撤回这条消息吗？')) return; chatMessages[index].text = '你撤回了一条消息'; chatMessages[index].recalled = true; syncHistoryFromChat(); saveChatHistory(); reloadChatUI() } else if(target.classList.contains('action-branch')){ branchConversation(msgId) } else if(target.classList.contains('action-delete')){ openDeleteModal() } });
   chatArea.addEventListener('click',function(e){ const bubble = e.target.closest('.bubble-left, .bubble-right'); if(!bubble || bubble.classList.contains('recalled-bubble') || e.target.closest('.message-actions') || e.target.closest('.reasoning-btn')) return; document.querySelectorAll('.bubble-left.show-actions, .bubble-right.show-actions').forEach(b=>{ if(b!==bubble) b.classList.remove('show-actions') }); bubble.classList.toggle('show-actions') });
-  function branchConversation(msgId){ const index = chatMessages.findIndex(m=>m.id===msgId); if(index===-1) return; if(!confirm('分支将当前完整对话存档，并从此处截断，后续消息将被移除。确定分支吗？')) return; const timestamp = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19); const newConv = {id:Date.now().toString(36)+Math.random().toString(36).substr(2,5),name:`分支 ${timestamp}`,timestamp:new Date().toISOString(),messages:chatMessages.slice(),history:messageHistory.slice()}; conversations.push(newConv); save('conversations',conversations); chatMessages = chatMessages.slice(0,index+1); const newHistory = []; for(const msg of chatMessages){ if(msg.recalled) newHistory.push({role:'user',content:'[用户撤回了一条消息]'}); else newHistory.push({role:msg.role==='user'?'user':'assistant',content:msg.text}) } messageHistory = newHistory; pendingUserMessages=[]; updateSendHint(); saveChatHistory(); reloadChatUI(); if(manageModal.classList.contains('show')) renderConversations(); alert(`分支"${newConv.name}"已创建。`) }
+  function branchConversation(msgId){ const index = chatMessages.findIndex(m=>m.id===msgId); if(index===-1) return; if(!confirm('分支将当前完整对话存档，并从此处截断，后续消息将被移除。确定分支吗？')) return; const timestamp = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19); const newConv = {id:Date.now().toString(36)+Math.random().toString(36).substr(2,5),name:`分支 ${timestamp}`,timestamp:new Date().toISOString(),messages:chatMessages.slice(),history:messageHistory.slice()}; conversations.push(newConv); save('conversations',conversations); chatMessages = chatMessages.slice(0,index+1); const newHistory = []; for(const msg of chatMessages){ if(msg.recalled) newHistory.push({role:msg.role==='user'?'user':'assistant',content:`[${msg.role==='user'?'用户':'AI'}撤回了一条消息]`}); else newHistory.push({role:msg.role==='user'?'user':'assistant',content:msg.text}) } messageHistory = newHistory; pendingUserMessages=[]; updateSendHint(); saveChatHistory(); reloadChatUI(); if(manageModal.classList.contains('show')) renderConversations(); alert(`分支"${newConv.name}"已创建。`) }
   function saveCurrentConversation(){ if(chatMessages.length===0&&!activeConvId) return; const now = new Date().toISOString(); const conv = conversations.find(c=>c.id===activeConvId); if(conv){ conv.timestamp=now; conv.messages=chatMessages.slice(); conv.history=messageHistory.slice() } else if(activeConvId){ conversations.push({id:activeConvId,name:remarkVal||'未命名',timestamp:now,messages:chatMessages.slice(),history:messageHistory.slice()}) } else { const convId = Date.now().toString(36)+Math.random().toString(36).substr(2,5); conversations.push({id:convId,name:remarkVal||'未命名',timestamp:now,messages:chatMessages.slice(),history:messageHistory.slice()}); activeConvId = convId } save('conversations',conversations); save('activeConversationId',activeConvId); saveGlobalsToActiveChar() }
   function archiveCurrentConversation(){ if(chatMessages.length===0) return; const timestamp = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19); const newConv = {id:Date.now().toString(36)+Math.random().toString(36).substr(2,5),name:`自动存档 ${timestamp}`,timestamp:new Date().toISOString(),messages:chatMessages.slice(),history:messageHistory.slice()}; conversations.push(newConv); save('conversations',conversations); saveGlobalsToActiveChar() }
   function saveAsNewConversation(){ if(chatMessages.length===0){ alert('当前没有消息'); return } const timestamp = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19); const newConv = {id:Date.now().toString(36)+Math.random().toString(36).substr(2,5),name:`手动存档 ${timestamp}`,timestamp:new Date().toISOString(),messages:chatMessages.slice(),history:messageHistory.slice()}; conversations.push(newConv); save('conversations',conversations); saveGlobalsToActiveChar(); renderConversations(); alert('已保存到历史聊天') }
@@ -982,15 +877,7 @@
   function deleteConversation(id){ if(!confirm('确定要删除这个对话吗？')) return; conversations = conversations.filter(c=>c.id!==id); if(activeConvId===id){ chatMessages=[]; messageHistory=[]; activeConvId=null; save('chatMessages',chatMessages); save('messageHistory',messageHistory); save('activeConversationId',activeConvId); saveGlobalsToActiveChar(); pendingUserMessages=[]; updateSendHint(); reloadChatUI() } save('conversations',conversations); saveGlobalsToActiveChar(); renderConversations() }
   function startRenameConversation(id){ const container = document.getElementById('historyList'); const item = container.querySelector(`[data-conv-id="${id}"]`); if(!item) return; const nameSpan = item.querySelector('.item-name'), editGroup = item.querySelector('.edit-name-group'), input = editGroup.querySelector('input'); const conv = conversations.find(c=>c.id===id); input.value = conv.name; nameSpan.style.display='none'; editGroup.style.display='flex'; input.focus(); const saveAndClose = ()=>{ const n = input.value.trim(); if(n){ conv.name = n; nameSpan.textContent = n; save('conversations',conversations); saveGlobalsToActiveChar() } nameSpan.style.display=''; editGroup.style.display='none' }; const confirmBtn = editGroup.querySelector('.cancel-name-btn'); if(confirmBtn){ confirmBtn.textContent='确认'; confirmBtn.onclick = saveAndClose } const saveBtn = editGroup.querySelector('.save-name-btn'); if(saveBtn) saveBtn.style.display='none'; input.onkeydown = e=>{ if(e.key==='Enter') saveAndClose(); if(e.key==='Escape'){ nameSpan.style.display=''; editGroup.style.display='none' } } }
   function renderConversations(){ const container = document.getElementById('historyList'); if(!container) return; if(conversations.length===0){ container.innerHTML = '<div style="text-align:center;color:#999;padding:10px;">暂无历史对话</div>'; return } container.innerHTML = conversations.map(c=>`<div class="history-item" data-conv-id="${escapeHtml(c.id)}"><div class="item-info" data-id="${escapeHtml(c.id)}"><div class="item-name">${escapeHtml(c.name)}</div><div class="item-time">${new Date(c.timestamp).toLocaleString()}</div><div class="edit-name-group"><input type="text" /><button class="save-name-btn">保存</button><button class="cancel-name-btn">取消</button></div></div><div class="item-actions"><button class="item-rename" data-id="${escapeHtml(c.id)}">✎</button><button class="item-delete" data-id="${escapeHtml(c.id)}">✕</button></div></div>`).join(''); container.querySelectorAll('.item-info').forEach(el=> el.addEventListener('click',function(e){ if(e.target.closest('.edit-name-group')||e.target.closest('.item-rename')) return; switchConversation(this.dataset.id) })); container.querySelectorAll('.item-rename').forEach(btn=> btn.addEventListener('click',function(e){ e.stopPropagation(); startRenameConversation(this.dataset.id) })); container.querySelectorAll('.item-delete').forEach(btn=> btn.addEventListener('click',function(e){ e.stopPropagation(); deleteConversation(this.dataset.id) })) }
-  function renderSkipLogs(){
-    if(!skipLogList) return;
-    const logs = apiSettings.autoSkipLogs || [];
-    if(logs.length === 0){ skipLogList.innerHTML = '<div style="color:#999;padding:5px;font-size:12px;">暂无拒绝记录</div>'; return; }
-    skipLogList.innerHTML = logs.map(log=>{
-      const time = new Date(log.time).toLocaleString();
-      return `<div class="skip-log-item"><div class="skip-time">${time}</div><div class="skip-reason">屏幕那端传来了消息，是TA憋在心里的...：${escapeHtml(log.reason)}</div></div>`;
-    }).join('');
-  }
+  function renderSkipLogs(){ if(!skipLogList) return; const logs = apiSettings.autoSkipLogs || []; if(logs.length === 0){ skipLogList.innerHTML = '<div style="color:#999;padding:5px;font-size:12px;">暂无拒绝记录</div>'; return; } skipLogList.innerHTML = logs.map(log=>{ const time = new Date(log.time).toLocaleString(); return `<div class="skip-log-item"><div class="skip-time">${time}</div><div class="skip-reason">屏幕那端传来了消息，是TA憋在心里的...：${escapeHtml(log.reason)}</div></div>`; }).join(''); }
   if (changeBgBtn) { changeBgBtn.addEventListener('click', () => { if (bgFileInput) bgFileInput.click(); }); }
   if (bgFileInput) { bgFileInput.addEventListener('change', function(e) { const file = e.target.files[0]; if (!file) return; openCropModal('bg', file); this.value = ''; }); }
   if (clearBgBtn) { clearBgBtn.addEventListener('click', () => { charSettings.bgImage = ''; chatArea.style.backgroundImage = ''; saveGlobalsToActiveChar(); }); }
@@ -1002,25 +889,11 @@
   function showPreset(){ settingsPanel.classList.add('preset-panel'); settingsPanel.classList.remove('character-panel','world-panel','log-panel','persona-panel'); settingsMain.style.display='none'; settingsProfile.style.display='none'; settingsCharacter.style.display='none'; settingsApi.style.display='none'; settingsPreset.style.display='block'; settingsWorld.style.display='none'; settingsLog.style.display='none'; renderPresets(); setTimeout(()=>{ autoResizeTextarea(document.getElementById('presetNameInput')); autoResizeTextarea(document.getElementById('presetContentInput')) },10) }
   function showWorld(){ settingsPanel.classList.add('world-panel'); settingsPanel.classList.remove('character-panel','preset-panel','log-panel','persona-panel'); settingsMain.style.display='none'; settingsProfile.style.display='none'; settingsCharacter.style.display='none'; settingsApi.style.display='none'; settingsPreset.style.display='none'; settingsWorld.style.display='block'; settingsLog.style.display='none'; renderWorlds(); setTimeout(()=>{ autoResizeTextarea(document.getElementById('worldKeyInput')); autoResizeTextarea(document.getElementById('worldContentInput')) },10) }
   function showLog(){ settingsPanel.classList.add('log-panel'); settingsPanel.classList.remove('character-panel','preset-panel','world-panel','persona-panel'); settingsMain.style.display='none'; settingsProfile.style.display='none'; settingsCharacter.style.display='none'; settingsApi.style.display='none'; settingsPreset.style.display='none'; settingsWorld.style.display='none'; settingsLog.style.display='block'; autoReplyLogContainer.style.display='none'; }
-  document.getElementById('goProfile').addEventListener('click',showProfile);
-  document.getElementById('goCharacter').addEventListener('click',showCharacter);
-  document.getElementById('goApi').addEventListener('click',showApi);
-  document.getElementById('goPreset').addEventListener('click',showPreset);
-  document.getElementById('goWorld').addEventListener('click',showWorld);
-  document.getElementById('goLog').addEventListener('click',showLog);
-  document.getElementById('backFromProfile').addEventListener('click',showMain);
-  document.getElementById('backFromCharacter').addEventListener('click',showMain);
-  document.getElementById('backFromApi').addEventListener('click',showMain);
-  document.getElementById('backFromPreset').addEventListener('click',showMain);
-  document.getElementById('backFromWorld').addEventListener('click',showMain);
-  document.getElementById('backFromLog').addEventListener('click',showMain);
-  document.getElementById('settingsBtn').addEventListener('click',()=>{ showMain(); settingsModal.classList.add('show') });
-  settingsModal.addEventListener('click',e=>{ if(e.target===settingsModal) settingsModal.classList.remove('show') });
+  document.getElementById('goProfile').addEventListener('click',showProfile); document.getElementById('goCharacter').addEventListener('click',showCharacter); document.getElementById('goApi').addEventListener('click',showApi); document.getElementById('goPreset').addEventListener('click',showPreset); document.getElementById('goWorld').addEventListener('click',showWorld); document.getElementById('goLog').addEventListener('click',showLog);
+  document.getElementById('backFromProfile').addEventListener('click',showMain); document.getElementById('backFromCharacter').addEventListener('click',showMain); document.getElementById('backFromApi').addEventListener('click',showMain); document.getElementById('backFromPreset').addEventListener('click',showMain); document.getElementById('backFromWorld').addEventListener('click',showMain); document.getElementById('backFromLog').addEventListener('click',showMain);
+  document.getElementById('settingsBtn').addEventListener('click',()=>{ showMain(); settingsModal.classList.add('show') }); settingsModal.addEventListener('click',e=>{ if(e.target===settingsModal) settingsModal.classList.remove('show') });
   document.getElementById('copyLogBtn').addEventListener('click',()=>{ navigator.clipboard.writeText(document.getElementById('logTextarea').value).then(()=>alert('日志已复制')).catch(()=>alert('复制失败')) });
-  showAutoReplyLogBtn.addEventListener('click',()=>{
-    const container = autoReplyLogContainer;
-    if(container.style.display==='none' || container.style.display===''){ container.style.display='block'; container.innerHTML = autoReplyLogs.length===0 ? '<div style="color:#999;padding:5px;">暂无自动回复日志</div>' : autoReplyLogs.map(log=>{ const time = new Date(log.time).toLocaleString(); const skippedText = log.skipped ? `跳过：${log.reason}` : '已发送'; return `<div style="margin-bottom:12px;padding:10px;background:#f5f5f5;border-radius:6px;"><div><strong>${time}</strong> ${skippedText}</div><div style="font-size:11px;color:#666;white-space:pre-wrap;max-height:150px;overflow-y:auto;margin:4px 0;">提示词：\n${escapeHtml(log.prompt||'')}</div><div style="font-size:11px;color:#666;white-space:pre-wrap;max-height:150px;overflow-y:auto;">回复：\n${escapeHtml(log.response||'')}</div></div>`; }).join(''); } else { container.style.display='none'; }
-  });
+  showAutoReplyLogBtn.addEventListener('click',()=>{ const container = autoReplyLogContainer; if(container.style.display==='none' || container.style.display===''){ container.style.display='block'; container.innerHTML = autoReplyLogs.length===0 ? '<div style="color:#999;padding:5px;">暂无自动回复日志</div>' : autoReplyLogs.map(log=>{ const time = new Date(log.time).toLocaleString(); const skippedText = log.skipped ? `跳过：${log.reason}` : '已发送'; return `<div style="margin-bottom:12px;padding:10px;background:#f5f5f5;border-radius:6px;"><div><strong>${time}</strong> ${skippedText}</div><div style="font-size:11px;color:#666;white-space:pre-wrap;max-height:150px;overflow-y:auto;margin:4px 0;">提示词：\n${escapeHtml(log.prompt||'')}</div><div style="font-size:11px;color:#666;white-space:pre-wrap;max-height:150px;overflow-y:auto;">回复：\n${escapeHtml(log.response||'')}</div></div>`; }).join(''); } else { container.style.display='none'; } });
   document.getElementById('generatePromptBtn').addEventListener('click',()=>{ const n=charNameInput.value.trim()||'月', a=charAgeInput.value.trim(), p=charPersonalityInput.value.trim()||'神秘温柔', d=charDetailsInput.value.trim(); let t=`你是一个名叫${n}的角色，${a?a+'岁，':''}性格${p}。`; if(d) t+=` ${d}`; charPromptInput.value=t; autoResizeTextarea(charPromptInput) });
   document.getElementById('saveCharacterBtn').addEventListener('click',()=>{ charSettings.name=charNameInput.value.trim(); charSettings.age=charAgeInput.value.trim(); charSettings.personality=charPersonalityInput.value.trim(); charSettings.details=charDetailsInput.value.trim(); charSettings.prompt=charPromptInput.value.trim(); saveGlobalsToActiveChar(); alert('人设已保存') });
   apiEnableCheck.addEventListener('change',()=>{ apiSettings.enabled=apiEnableCheck.checked; apiFields.style.display=apiSettings.enabled?'block':'none'; saveGlobalsToActiveChar() });
@@ -1028,46 +901,27 @@
   chatModeCheck.addEventListener('change',()=>{ apiSettings.chatMode=chatModeCheck.checked; if(apiSettings.chatMode){ chatModeSubContainer.style.display='block'; chatModeSubtypeRadios.forEach(r=>{ if(r.value===apiSettings.chatModeSubtype) r.checked=true }) } else { chatModeSubContainer.style.display='none' } saveGlobalsToActiveChar() });
   chatModeSubtypeRadios.forEach(r=>r.addEventListener('change',function(){ if(this.checked){ apiSettings.chatModeSubtype=this.value; saveGlobalsToActiveChar() } }));
   contextLayersInput.addEventListener('change',()=>{ apiSettings.contextLayers=parseInt(contextLayersInput.value); saveGlobalsToActiveChar() });
-  const validateMsgRange = ()=>{ let min=parseInt(minMsgsInput.value), max=parseInt(maxMsgsInput.value); if(min>max) max=min; maxMsgsInput.value=max; apiSettings.minMsgs=min; apiSettings.maxMsgs=max; saveGlobalsToActiveChar() };
-  minMsgsInput.addEventListener('change',validateMsgRange); maxMsgsInput.addEventListener('change',validateMsgRange);
-  aiPersonSelect.addEventListener('change',()=>{ apiSettings.aiPerson=aiPersonSelect.value; saveGlobalsToActiveChar() });
-  userPersonSelect.addEventListener('change',()=>{ apiSettings.userPerson=userPersonSelect.value; saveGlobalsToActiveChar() });
+  const validateMsgRange = ()=>{ let min=parseInt(minMsgsInput.value), max=parseInt(maxMsgsInput.value); if(min>max) max=min; maxMsgsInput.value=max; apiSettings.minMsgs=min; apiSettings.maxMsgs=max; saveGlobalsToActiveChar() }; minMsgsInput.addEventListener('change',validateMsgRange); maxMsgsInput.addEventListener('change',validateMsgRange);
+  aiPersonSelect.addEventListener('change',()=>{ apiSettings.aiPerson=aiPersonSelect.value; saveGlobalsToActiveChar() }); userPersonSelect.addEventListener('change',()=>{ apiSettings.userPerson=userPersonSelect.value; saveGlobalsToActiveChar() });
   autoReplyEnabledCheck.addEventListener('change',()=>{ apiSettings.autoReplyEnabled=autoReplyEnabledCheck.checked; autoReplyContainer.style.display=apiSettings.autoReplyEnabled?'block':'none'; saveGlobalsToActiveChar(); if(apiSettings.autoReplyEnabled) startAutoReplyTimer(); else stopAutoReplyTimer() });
   autoReplyDelayInput.addEventListener('change',()=>{ apiSettings.autoReplyDelayMinutes=parseInt(autoReplyDelayInput.value)||5; saveGlobalsToActiveChar() });
   autoReplyMsgCountInput.addEventListener('change',()=>{ apiSettings.autoReplyMsgCount=parseInt(autoReplyMsgCountInput.value)||1; saveGlobalsToActiveChar() });
   autoReplyDailyMinInput.addEventListener('change',()=>{ apiSettings.autoReplyDailyMin=parseInt(autoReplyDailyMinInput.value)||1; saveGlobalsToActiveChar() });
   autoReplyDailyMaxInput.addEventListener('change',()=>{ apiSettings.autoReplyDailyMax=parseInt(autoReplyDailyMaxInput.value)||3; saveGlobalsToActiveChar() });
   autoReplyContextLayersInput.addEventListener('change',()=>{ apiSettings.autoReplyContextLayers=parseInt(autoReplyContextLayersInput.value)||5; saveGlobalsToActiveChar() });
-  if(notificationsEnabledCheck){
-    notificationsEnabledCheck.addEventListener('change', async function(){
-      if(this.checked){
-        const granted = await requestNotificationPermission();
-        if(!granted){
-          this.checked = false;
-          alert('需要通知权限才能开启此功能。请在浏览器设置中允许通知。');
-        }
-      }
-      apiSettings.notificationsEnabled = this.checked;
-      saveGlobalsToActiveChar();
-    });
-  }
+  if(notificationsEnabledCheck){ notificationsEnabledCheck.addEventListener('change', async function(){ if(this.checked){ const granted = await requestNotificationPermission(); if(!granted){ this.checked = false; alert('需要通知权限才能开启此功能。'); } } apiSettings.notificationsEnabled = this.checked; saveGlobalsToActiveChar(); }); }
   if(weatherEnableCheck){ weatherEnableCheck.addEventListener('change',()=>{ apiSettings.weatherEnabled=weatherEnableCheck.checked; if(weatherSettingsContainer) weatherSettingsContainer.style.display=apiSettings.weatherEnabled?'block':'none'; saveGlobalsToActiveChar(); if(apiSettings.weatherEnabled) startWeatherAutoRefresh(); else stopWeatherAutoRefresh(); }) }
   if(fetchLocationBtn) fetchLocationBtn.addEventListener('click',fetchLocationAndWeather);
-  if(refreshWeatherBtn){ refreshWeatherBtn.addEventListener('click',async()=>{ if(apiSettings.weatherLat==null||apiSettings.weatherLon==null||isNaN(apiSettings.weatherLat)||isNaN(apiSettings.weatherLon)){ alert('请先获取位置信息'); return } const btn=refreshWeatherBtn; btn.disabled=true; btn.textContent='刷新中...'; cachedWeatherData=null; cachedWeatherTime=0; updateWeatherStatusUI(); try{ const weatherInfo = await getWeatherInfo(); if(weatherInfo) addLog('info',`天气手动刷新成功: 温度${weatherInfo.temperature}°C ${weatherInfo.desc}`); else alert('天气刷新失败，请检查网络连接') } catch(e){ alert('天气刷新失败: '+e.message) } finally { btn.disabled=false; btn.textContent='🔄 手动刷新天气'; updateWeatherStatusUI() } }) }
+  if(refreshWeatherBtn){ refreshWeatherBtn.addEventListener('click',async()=>{ if(apiSettings.weatherLat==null||apiSettings.weatherLon==null||isNaN(apiSettings.weatherLat)||isNaN(apiSettings.weatherLon)){ alert('请先获取位置信息'); return } const btn=refreshWeatherBtn; btn.disabled=true; btn.textContent='刷新中...'; cachedWeatherData=null; cachedWeatherTime=0; updateWeatherStatusUI(); try{ const weatherInfo = await getWeatherInfo(); if(weatherInfo) addLog('info',`天气手动刷新成功`); else alert('天气刷新失败'); } catch(e){ alert('天气刷新失败: '+e.message) } finally { btn.disabled=false; btn.textContent='🔄 手动刷新天气'; updateWeatherStatusUI() } }) }
   if(weatherCityInput){ weatherCityInput.addEventListener('input',()=>{ apiSettings.weatherCity=weatherCityInput.value.trim(); saveGlobalsToActiveChar() }); weatherCityInput.addEventListener('blur',()=>{ const newVal=weatherCityInput.value.trim(); if(apiSettings.weatherCity!==newVal){ apiSettings.weatherCity=newVal; saveGlobalsToActiveChar() } if(!weatherCityInput.value.trim()){ const autoCity=apiSettings.autoWeatherCity||fetchedCityName; if(autoCity){ weatherCityInput.value=autoCity; apiSettings.weatherCity=autoCity; saveGlobalsToActiveChar() } } updateWeatherStatusUI() }) }
   function renderPresets(){ const c = document.getElementById('presetList'); c.innerHTML = presets.map(p=>`<div class="entry-item"><label><input type="checkbox" data-id="${escapeHtml(p.id)}" class="preset-check" ${enabledPresetIds.includes(p.id)?'checked':''}> ${escapeHtml(p.name||'未命名')}</label><div class="entry-actions"><button class="edit-preset" data-id="${escapeHtml(p.id)}">✎</button><button class="delete-preset" data-id="${escapeHtml(p.id)}">✕</button><button class="copy-preset" data-id="${escapeHtml(p.id)}">📋</button></div></div>`).join(''); c.querySelectorAll('.preset-check').forEach(cb=>cb.addEventListener('change',function(){ if(this.checked) enabledPresetIds.push(this.dataset.id); else enabledPresetIds = enabledPresetIds.filter(x=>x!==this.dataset.id); saveGlobalsToActiveChar() })); c.querySelectorAll('.edit-preset').forEach(btn=>btn.addEventListener('click',function(){ const p = presets.find(x=>x.id==this.dataset.id); if(!p) return; const nameInput=document.getElementById('presetNameInput'), contentInput=document.getElementById('presetContentInput'); nameInput.value=p.name; contentInput.value=p.content; document.getElementById('addPresetBtn').textContent='更新'; document.getElementById('addPresetBtn').dataset.editId=this.dataset.id; autoResizeTextarea(nameInput); autoResizeTextarea(contentInput) })); c.querySelectorAll('.delete-preset').forEach(btn=>btn.addEventListener('click',function(){ presets = presets.filter(p=>p.id!=this.dataset.id); enabledPresetIds = enabledPresetIds.filter(x=>x!==this.dataset.id); saveGlobalsToActiveChar(); renderPresets() })); c.querySelectorAll('.copy-preset').forEach(btn=>btn.addEventListener('click',function(){ const p = presets.find(x=>x.id==this.dataset.id); if(p) navigator.clipboard.writeText(p.content).then(()=>alert('内容已复制')) })) }
   document.getElementById('addPresetBtn').addEventListener('click',function(){ const e=this.dataset.editId; const nameInput=document.getElementById('presetNameInput'), contentInput=document.getElementById('presetContentInput'); if(e){ const p = presets.find(x=>x.id==e); if(p){ p.name=nameInput.value.trim(); p.content=contentInput.value.trim(); saveGlobalsToActiveChar() } this.textContent='添加'; delete this.dataset.editId } else { const n=nameInput.value.trim(), c=contentInput.value.trim(); if(!n&&!c) return; presets.push({id:Date.now().toString(36)+Math.random().toString(36),name:n,content:c}); saveGlobalsToActiveChar() } nameInput.value=''; contentInput.value=''; renderPresets() });
-  document.getElementById('exportPresetsBtn').addEventListener('click',()=>{ const b = new Blob([JSON.stringify({presets,enabledPresetIds},null,2)],{type:'application/json'}); const a = document.createElement('a'); a.href=URL.createObjectURL(b); a.download='dogchat_role_presets.json'; a.click() });
-  document.getElementById('importPresetsBtn').addEventListener('click',()=>document.getElementById('presetImportFile').click());
-  document.getElementById('presetImportFile').addEventListener('change',function(e){ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=function(ev){ try{ const d=JSON.parse(ev.target.result); if(d.presets){ presets=d.presets; ensureId(presets); saveGlobalsToActiveChar() } if(d.enabledPresetIds) enabledPresetIds=d.enabledPresetIds; saveGlobalsToActiveChar(); renderPresets(); alert('导入成功') } catch(err){ alert('导入失败') } }; r.readAsText(f); this.value='' });
+  document.getElementById('exportPresetsBtn').addEventListener('click',()=>{ const b = new Blob([JSON.stringify({presets,enabledPresetIds},null,2)],{type:'application/json'}); const a = document.createElement('a'); a.href=URL.createObjectURL(b); a.download='dogchat_role_presets.json'; a.click() }); document.getElementById('importPresetsBtn').addEventListener('click',()=>document.getElementById('presetImportFile').click()); document.getElementById('presetImportFile').addEventListener('change',function(e){ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=function(ev){ try{ const d=JSON.parse(ev.target.result); if(d.presets){ presets=d.presets; ensureId(presets); saveGlobalsToActiveChar() } if(d.enabledPresetIds) enabledPresetIds=d.enabledPresetIds; saveGlobalsToActiveChar(); renderPresets(); alert('导入成功') } catch(err){ alert('导入失败') } }; r.readAsText(f); this.value='' });
   function renderWorlds(){ const c = document.getElementById('worldList'); c.innerHTML = worlds.map(w=>`<div class="entry-item"><label><input type="checkbox" data-id="${escapeHtml(w.id)}" class="world-check" ${enabledWorldIds.includes(w.id)?'checked':''}> ${escapeHtml(w.key)}</label><div class="entry-actions"><button class="edit-world" data-id="${escapeHtml(w.id)}">✎</button><button class="delete-world" data-id="${escapeHtml(w.id)}">✕</button><button class="copy-world" data-id="${escapeHtml(w.id)}">📋</button></div></div>`).join(''); c.querySelectorAll('.world-check').forEach(cb=>cb.addEventListener('change',function(){ if(this.checked) enabledWorldIds.push(this.dataset.id); else enabledWorldIds = enabledWorldIds.filter(x=>x!==this.dataset.id); saveGlobalsToActiveChar() })); c.querySelectorAll('.edit-world').forEach(btn=>btn.addEventListener('click',function(){ const w = worlds.find(x=>x.id==this.dataset.id); if(!w) return; const keyInput=document.getElementById('worldKeyInput'), contentInput=document.getElementById('worldContentInput'); keyInput.value=w.key; contentInput.value=w.content; document.getElementById('addWorldBtn').textContent='更新'; document.getElementById('addWorldBtn').dataset.editId=this.dataset.id; autoResizeTextarea(keyInput); autoResizeTextarea(contentInput) })); c.querySelectorAll('.delete-world').forEach(btn=>btn.addEventListener('click',function(){ worlds = worlds.filter(w=>w.id!=this.dataset.id); enabledWorldIds = enabledWorldIds.filter(x=>x!==this.dataset.id); saveGlobalsToActiveChar(); renderWorlds() })); c.querySelectorAll('.copy-world').forEach(btn=>btn.addEventListener('click',function(){ const w = worlds.find(x=>x.id==this.dataset.id); if(w) navigator.clipboard.writeText(w.content).then(()=>alert('内容已复制')) })) }
   document.getElementById('addWorldBtn').addEventListener('click',function(){ const e=this.dataset.editId; const keyInput=document.getElementById('worldKeyInput'), contentInput=document.getElementById('worldContentInput'); if(e){ const w = worlds.find(x=>x.id==e); if(w){ w.key=keyInput.value.trim(); w.content=contentInput.value.trim(); saveGlobalsToActiveChar() } this.textContent='添加'; delete this.dataset.editId } else { const k=keyInput.value.trim(), c=contentInput.value.trim(); if(!k||!c) return; worlds.push({id:Date.now().toString(36)+Math.random().toString(36),key:k,content:c}); saveGlobalsToActiveChar() } keyInput.value=''; contentInput.value=''; renderWorlds() });
-  document.getElementById('exportWorldsBtn').addEventListener('click',()=>{ const b = new Blob([JSON.stringify({worlds,enabledWorldIds},null,2)],{type:'application/json'}); const a = document.createElement('a'); a.href=URL.createObjectURL(b); a.download='dogchat_role_worlds.json'; a.click() });
-  document.getElementById('importWorldsBtn').addEventListener('click',()=>document.getElementById('worldImportFile').click());
-  document.getElementById('worldImportFile').addEventListener('change',function(e){ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=function(ev){ try{ const d=JSON.parse(ev.target.result); if(d.worlds){ worlds=d.worlds; ensureId(worlds); saveGlobalsToActiveChar() } if(d.enabledWorldIds) enabledWorldIds=d.enabledWorldIds; saveGlobalsToActiveChar(); renderWorlds(); alert('导入成功') } catch(err){ alert('导入失败') } }; r.readAsText(f); this.value='' });
+  document.getElementById('exportWorldsBtn').addEventListener('click',()=>{ const b = new Blob([JSON.stringify({worlds,enabledWorldIds},null,2)],{type:'application/json'}); const a = document.createElement('a'); a.href=URL.createObjectURL(b); a.download='dogchat_role_worlds.json'; a.click() }); document.getElementById('importWorldsBtn').addEventListener('click',()=>document.getElementById('worldImportFile').click()); document.getElementById('worldImportFile').addEventListener('change',function(e){ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=function(ev){ try{ const d=JSON.parse(ev.target.result); if(d.worlds){ worlds=d.worlds; ensureId(worlds); saveGlobalsToActiveChar() } if(d.enabledWorldIds) enabledWorldIds=d.enabledWorldIds; saveGlobalsToActiveChar(); renderWorlds(); alert('导入成功') } catch(err){ alert('导入失败') } }; r.readAsText(f); this.value='' });
   document.getElementById('manageBtn').addEventListener('click',()=>{ manageModal.classList.add('show'); renderConversations(); renderSkipLogs(); });
-  document.getElementById('closeManageBtn').addEventListener('click',()=>manageModal.classList.remove('show'));
-  manageModal.addEventListener('click',e=>{ if(e.target===manageModal) manageModal.classList.remove('show') });
+  document.getElementById('closeManageBtn').addEventListener('click',()=>manageModal.classList.remove('show')); manageModal.addEventListener('click',e=>{ if(e.target===manageModal) manageModal.classList.remove('show') });
   document.getElementById('exportChatBtn').addEventListener('click',()=>{ const d={remark:remarkVal,signature:signatureVal,charName:charSettings.name,charAge:charSettings.age,charPersonality:charSettings.personality,charDetails:charSettings.details,charPrompt:charSettings.prompt,bgImage:charSettings.bgImage,presets,worlds,enabledPresetIds,enabledWorldIds,chatMessages,messageHistory,conversations,activeConvId}; const b = new Blob([JSON.stringify(d,null,2)],{type:'application/json'}); const a = document.createElement('a'); a.href=URL.createObjectURL(b); a.download=`dogchat_backup_${new Date().toISOString().slice(0,10)}.json`; a.click(); alert('导出成功') });
   document.getElementById('importChatBtn').addEventListener('click',()=>document.getElementById('importChatFile').click());
   document.getElementById('importChatFile').addEventListener('change',function(e){ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=function(ev){ try{ const d=JSON.parse(ev.target.result); if(d.remark) remarkVal=d.remark; if(d.signature) signatureVal=d.signature; if(d.charName) charSettings.name=d.charName; if(d.charAge) charSettings.age=d.charAge; if(d.charPersonality) charSettings.personality=d.charPersonality; if(d.charDetails) charSettings.details=d.charDetails; if(d.charPrompt) charSettings.prompt=d.charPrompt; if(d.bgImage!==undefined) charSettings.bgImage=d.bgImage; if(d.presets) presets=d.presets; if(d.worlds) worlds=d.worlds; if(d.enabledPresetIds) enabledPresetIds=d.enabledPresetIds; if(d.enabledWorldIds) enabledWorldIds=d.enabledWorldIds; if(d.chatMessages) chatMessages=d.chatMessages; if(d.messageHistory) messageHistory=d.messageHistory; if(d.conversations) conversations=d.conversations; if(d.activeConvId!==undefined) activeConvId=d.activeConvId; ensureId(presets); ensureId(worlds); chatMessages.forEach(ensureMsgId); chatMessages.forEach(ensureMsgTimestamp); saveGlobalsToActiveChar(); refreshAllUIForActiveChar(); remarkInput.value=remarkVal; signatureInput.value=signatureVal; updateRemark(remarkVal); updateSignature(signatureVal); reloadChatUI(); alert('导入成功') } catch(err){ alert('导入失败：'+err.message) } }; r.readAsText(f); this.value='' });
@@ -1088,9 +942,7 @@
   function onHDragStart(e,h){ draggingH=true; actHandle=h; const p=getPos(e); dStart=p; fStart.left=parseFloat(cropFrame.style.left)||0; fStart.top=parseFloat(cropFrame.style.top)||0; fStart.size=parseFloat(cropFrame.style.width)||MIN_CROP; cropFrame.style.transition='none'; e.preventDefault(); e.stopPropagation() }
   function onHDragMove(e){ if(!draggingH||!actHandle) return; const wp=wrapPos(getPos(e).x,getPos(e).y); const aspect=getCropAspect(); let nl=fStart.left, nt=fStart.top, nw=fStart.size, nh=ccType==='bg'?nw/aspect:nw; const dx=actHandle.includes('r')?fStart.left:fStart.left+nw, dy=actHandle.includes('b')?fStart.top:fStart.top+nh; nw=Math.max(Math.abs(wp.x-dx), (ccType==='bg'?Math.abs(wp.y-dy)*aspect:Math.abs(wp.y-dy))); if(ccType==='bg') nh=nw/aspect; else nh=nw; if(actHandle.includes('l')) nl=dx-nw; else nl=dx; if(actHandle.includes('t')) nt=dy-nh; else nt=dy; setCF(nl,nt,nw,nh); e.preventDefault() }
   function onHDragEnd(){ draggingH=false; actHandle=null; cropFrame.style.transition='' }
-  cropFrame.addEventListener('mousedown',onFDragStart); cropFrame.addEventListener('touchstart',onFDragStart,{passive:false});
-  document.addEventListener('mousemove',e=>{ onFDragMove(e); onHDragMove(e) }); document.addEventListener('touchmove',e=>{ onFDragMove(e); onHDragMove(e) },{passive:false});
-  document.addEventListener('mouseup',()=>{ onFDragEnd(); onHDragEnd() }); document.addEventListener('touchend',()=>{ onFDragEnd(); onHDragEnd() });
+  cropFrame.addEventListener('mousedown',onFDragStart); cropFrame.addEventListener('touchstart',onFDragStart,{passive:false}); document.addEventListener('mousemove',e=>{ onFDragMove(e); onHDragMove(e) }); document.addEventListener('touchmove',e=>{ onFDragMove(e); onHDragMove(e) },{passive:false}); document.addEventListener('mouseup',()=>{ onFDragEnd(); onHDragEnd() }); document.addEventListener('touchend',()=>{ onFDragEnd(); onHDragEnd() });
   document.querySelectorAll('.crop-handle').forEach(h=>{ h.addEventListener('mousedown',e=>onHDragStart(e,h.dataset.handle)); h.addEventListener('touchstart',e=>onHDragStart(e,h.dataset.handle),{passive:false}) });
   cropSizeSlider.addEventListener('input',()=>{ const pct=parseInt(cropSizeSlider.value); cropSizeLabel.textContent=pct+'%'; const aspect=getCropAspect(); const maxW=ccType==='bg'?Math.min(cDisp.w,cDisp.h*aspect):Math.min(cDisp.w,cDisp.h); const maxH=ccType==='bg'?maxW/aspect:maxW; const nw=Math.min(maxW,Math.max(MIN_CROP,maxW*pct/100)); const nh=ccType==='bg'?nw/aspect:nw; const cl=parseFloat(cropFrame.style.left)||0, ct=parseFloat(cropFrame.style.top)||0; const cw=parseFloat(cropFrame.style.width)||nw, ch=ccType==='bg'?cw/aspect:cw; setCF(cl+(cw-nw)/2, ct+(ch-nh)/2, nw, nh); });
   let cropCallback=null;
@@ -1098,8 +950,7 @@
   cropConfirmBtn.addEventListener('click',async()=>{ if(ccType==='bg'){ const src=await getCropImg(1024); charSettings.bgImage=src; chatArea.style.backgroundImage=`url(${src})`; chatArea.style.backgroundSize='cover'; chatArea.style.backgroundPosition='center'; saveGlobalsToActiveChar(); } else if(ccType==='persona_inline' && cropCallback){ const src=await getCropImg(256); cropCallback(src); cropCallback=null; } else { const src=await getCropImg(256); avatarState[ccType]={type:'image',text:'',src}; refreshAvatars(ccType); saveGlobalsToActiveChar(); } cropModal.classList.remove('show'); });
   cropCancelBtn.addEventListener('click',()=>{ cropCallback=null; cropModal.classList.remove('show') });
   function openCropModal(type,file,callback){ ccType=type; cropCallback=callback||null; if(cropTitle) cropTitle.textContent=type==='bg'?'裁剪背景':'裁剪头像'; const reader=new FileReader(); reader.onload=ev=>{ cropImage.src=ev.target.result; cropImage.onload=()=>{ cNat.w=cropImage.naturalWidth; cNat.h=cropImage.naturalHeight; requestAnimationFrame(()=>requestAnimationFrame(()=>{ updDisp(); initCF() })) } }; reader.readAsDataURL(file); cropModal.classList.add('show'); cropFrame.style.width='0px'; cropFrame.style.height='0px'; cropHint.style.opacity='1'; draggingF=draggingH=false; actHandle=null; }
-  document.getElementById('changeDogAvatarBtn').addEventListener('click',()=>document.getElementById('dogFileInput').click());
-  document.getElementById('dogFileInput').addEventListener('change',e=>{ if(e.target.files[0]) openCropModal('dog',e.target.files[0]); e.target.value='' });
+  document.getElementById('changeDogAvatarBtn').addEventListener('click',()=>document.getElementById('dogFileInput').click()); document.getElementById('dogFileInput').addEventListener('change',e=>{ if(e.target.files[0]) openCropModal('dog',e.target.files[0]); e.target.value='' });
   function updateAllTimestamps(){ const now=Date.now(); document.querySelectorAll('.char-card-time[data-timestamp]').forEach(el=>{ const ts=parseInt(el.dataset.timestamp); if(ts&&ts>0) el.textContent=formatRelativeTime(ts,now) }); document.querySelectorAll('.time-stamp[data-timestamp]').forEach(el=>{ const ts=parseInt(el.dataset.timestamp); if(ts&&ts>0) el.textContent=formatTimeDivider(ts,now) }) }
   function updateUnreadDisplay(){ const total = characters.reduce((sum,c)=> sum + (c.unreadCount||0), 0); document.querySelectorAll('.tab-unread-badge').forEach(badge=>{ if(total>0){ badge.textContent = total>99?'99+':total; badge.style.display='inline-flex'; } else { badge.style.display='none'; } }); document.querySelectorAll('.char-card-unread').forEach(el=>{ const charId = el.dataset.charId; const char = characters.find(c=>c.id===charId); if(char){ const unread = char.unreadCount||0; if(unread>0){ el.style.display='flex'; el.querySelector('.unread-count').textContent = unread>99?'99+':unread; } else { el.style.display='none'; } } }); }
   function checkAutoReply(){ if(!apiSettings.autoReplyEnabled) return; if(!apiSettings.enabled || !apiSettings.key || !apiSettings.url) return; if(chatMessages.length===0) return; const lastMsg = chatMessages[chatMessages.length-1]; const lastTs = lastMsg ? (lastMsg.timestamp||0) : 0; const minutesPassed = (Date.now()-lastTs)/60000; if(minutesPassed < apiSettings.autoReplyDelayMinutes) return; const today = new Date().toDateString(); if(apiSettings.autoReplyLastDate !== today){ apiSettings.autoReplyTodayCount = 0; apiSettings.autoReplyLastDate = today; } const max = apiSettings.autoReplyDailyMax; const min = apiSettings.autoReplyDailyMin; if(apiSettings.autoReplyTodayCount >= max) return; const count = Math.floor(Math.random()*(max-min+1))+min; if(apiSettings.autoReplyTodayCount >= count) return; apiSettings.autoReplyTodayCount++; saveGlobalsToActiveChar(); triggerAiReply(true, apiSettings.autoReplyMsgCount, apiSettings.autoReplyMsgCount); }
