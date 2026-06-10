@@ -133,7 +133,7 @@
     .setting-row select,.setting-row input[type="text"],.setting-row input[type="password"],.setting-row textarea,.setting-row input[type="number"] { flex:1; border:.5px solid #d0d0d0; border-radius:6px; padding:8px; font-size:14px; outline:0; background:#fff; -webkit-appearance:none; appearance:none; min-width:60px }
     .setting-row select { background-image:url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23999'%3e%3cpath d='M7 10l5 5 5-5z'/%3e%3c/svg%3e"); background-repeat:no-repeat; background-position:right 8px center; background-size:16px; padding-right:28px }
     textarea { resize:vertical; min-height:60px; font-family:inherit }
-    .setting-row textarea { min-height:60px; overflow-y:hidden; resize:none }
+    .setting-row textarea { min-height:60px; overflow-y:auto; resize:vertical }
     .hint-text { font-size:11px; color:#999; width:100%; margin-top:-10px; margin-bottom:10px }
     .model-row { display:flex; align-items:center; gap:8px; flex:1 }
     .model-row input { flex:1 }
@@ -284,7 +284,7 @@
     .msg-edit-actions button { padding:4px 12px; border:0; border-radius:4px; font-size:12px; cursor:pointer }
     .msg-edit-save { background:#07c160; color:#fff }
     .msg-edit-cancel { background:#e0e0e0; color:#333 }
-    .auto-resize { min-height:60px; max-height:200px; overflow-y:hidden }
+    .auto-resize { min-height:60px; max-height:200px; overflow-y:auto }
     .lib-select { width:100%; margin-bottom:10px }
     .time-stamp { text-align:center; font-size:12px; color:#b2b2b2; margin:10px 0 8px }
     .weather-status-row { display:flex; align-items:center; gap:8px; padding:8px 10px; background:#f5f5f5; border-radius:8px; margin-bottom:10px; font-size:13px; flex-wrap:wrap }
@@ -303,6 +303,9 @@
     .weather-location-row button:active { background:#d0d0d0 }
     .weather-location-row button.fetch-location-btn { background:#07c160; color:#fff }
     .weather-location-row button.fetch-location-btn:disabled { opacity:.6 }
+    .skip-log-item { padding:8px 0; border-bottom:.5px solid #eee; font-size:12px; }
+    .skip-log-item .skip-time { color:#999; font-size:11px; }
+    .skip-log-item .skip-reason { color:#666; margin-top:2px; }
   </style>
 </head>
 <body>
@@ -312,7 +315,7 @@
   <div class="chat-view-wrap" id="chatViewWrap">
     <div class="nav-bar"><span class="back-btn" id="chatBackBtn">←</span><div class="chat-info"><span class="chat-title" id="chatTitle">月</span><span class="chat-signature" id="chatSignature">月夜雪纷纷</span></div>
       <div class="nav-right">
-        <span class="auto-skip-hint" id="autoSkipHint" style="display:none" title="自动回复跳过提示">💬</span>
+        <span class="auto-skip-hint" id="autoSkipHint" style="display:none" title="">💬</span>
         <span class="manage-btn" id="manageBtn">📋</span>
         <span class="settings-btn" id="settingsBtn">⚙️</span>
       </div>
@@ -347,7 +350,7 @@
     </div>
   </div>
   <div class="settings-modal" id="settingsModal"><div class="settings-panel" id="settingsPanel"><div class="settings-main" id="settingsMain"><h3>设置</h3><div class="settings-item" id="goProfile"><span class="item-text">个人信息设置</span><span class="item-arrow">›</span></div><div class="settings-item" id="goCharacter"><span class="item-text">角色人设</span><span class="item-arrow">›</span></div><div class="settings-item" id="goApi"><span class="item-text">AI 回复设置</span><span class="item-arrow">›</span></div><div class="settings-item" id="goPreset"><span class="item-text">预设（角色专属）</span><span class="item-arrow">›</span></div><div class="settings-item" id="goWorld"><span class="item-text">世界书（角色专属）</span><span class="item-arrow">›</span></div><div class="settings-item" id="goLog"><span class="item-text">运行日志</span><span class="item-arrow">›</span></div></div><div class="settings-sub" id="settingsProfile" style="display:none"><div class="back-row" id="backFromProfile"><span>‹</span><span>返回</span></div><h3>个人信息</h3><div class="setting-row"><label>备注</label><input type="text" id="remarkInput" value="月"></div><div class="setting-row"><label>签名</label><input type="text" id="signatureInput" value="月夜雪纷纷"></div><div class="avatar-setting"><div class="avatar-preview" id="dogPreview">🌙</div><span id="dogNameLabel">月</span><button class="change-avatar-btn" id="changeDogAvatarBtn">更换</button><input type="file" id="dogFileInput" accept="image/*"></div><div class="avatar-setting" style="flex-wrap:wrap"><div class="avatar-preview avatar-me" id="myPreview">我</div><span id="myPersonaNameLabel" style="flex:1">我</span><button class="change-avatar-btn" id="selectPersonaBtn" style="background:#07c160;color:#fff">选择人设</button></div><div class="hint-text" style="margin-top:2px">从人设库中选择一个用户人设，将作为你的身份提示词发送给AI</div><div id="activePersonaInfo" style="font-size:11px;color:#07c160;margin-top:4px;display:none"></div></div><div class="settings-sub" id="settingsCharacter" style="display:none"><div class="back-row" id="backFromCharacter"><span>‹</span><span>返回</span></div><h3>角色人设</h3><div class="setting-row"><label>名字</label><input type="text" id="charNameInput"></div><div class="setting-row"><label>年龄</label><input type="text" id="charAgeInput"></div><div class="setting-row"><label>性格</label><input type="text" id="charPersonalityInput"></div><div class="setting-row"><label style="align-self:flex-start">详细信息</label><textarea id="charDetailsInput" class="auto-resize"></textarea></div><div class="setting-row"><label style="align-self:flex-start">提示词</label><textarea id="charPromptInput" class="auto-resize"></textarea></div><button class="gen-btn gen-btn-center" id="generatePromptBtn">根据信息生成提示词</button><button class="save-btn" id="saveCharacterBtn">保存人设</button></div><div class="settings-sub" id="settingsApi" style="display:none"><div class="back-row" id="backFromApi"><span>‹</span><span>返回</span></div><h3>AI 回复</h3><div class="toggle-row"><label>启用 AI 回复</label><label class="switch"><input type="checkbox" id="apiEnableCheck"><span class="slider"></span></label></div><div id="apiFields"><div class="setting-row"><label>地址</label><input type="text" id="apiUrlInput" placeholder="https://api.deepseek.com/v1"></div><div class="hint-text">只需填写到 /v1</div><div class="setting-row"><label>密钥</label><input type="password" id="apiKeyInput" placeholder="sk-..."></div><div class="setting-row"><label>模型</label><div class="model-row"><input type="text" id="apiModelInput" placeholder="deepseek-chat"><button class="fetch-models-btn" id="fetchModelsBtn">获取模型</button></div></div><div class="model-select-container" id="modelSelectContainer"><select id="modelSelect"></select></div><div class="toggle-row" style="margin-top:15px"><label>对话模式（线上聊天）</label><label class="switch"><input type="checkbox" id="chatModeCheck"><span class="slider"></span></label></div><div class="hint-text" style="margin-top:4px">开启后模拟线上聊天，关闭则允许动作/心理描写及面对面交流</div><div id="chatModeSubContainer" style="display:none;margin-bottom:15px"><div class="setting-row"><label>对话风格</label><div style="display:flex;gap:10px;align-items:center"><label><input type="radio" name="chatModeSubtype" value="short" checked> 短对话(≈20字)</label><label><input type="radio" name="chatModeSubtype" value="long"> 长对话(≈100字)</label></div></div></div><div class="setting-row" style="margin-top:10px"><label>AI人称</label><select id="aiPersonSelect"><option value="first">第一人称(我)</option><option value="second">第二人称(你)</option><option value="third">第三人称(他/她)</option></select></div><div class="setting-row"><label>用户人称</label><select id="userPersonSelect"><option value="first">第一人称(我)</option><option value="second">第二人称(你)</option><option value="third">第三人称(他/她)</option></select></div><div class="setting-row" style="margin-top:15px"><label>消息条数</label><div style="display:flex;align-items:center;gap:6px"><select id="minMsgsInput" style="width:70px"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select><span>-</span><select id="maxMsgsInput" style="width:70px"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select></div></div><div class="hint-text">AI 每次回复的消息条数范围（1-5）</div><div class="setting-row" style="margin-top:15px"><label>上下文层数</label><select id="contextLayersInput" style="width:80px"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="12">12</option><option value="15">15</option><option value="20">20</option></select></div><div class="hint-text">设置携带的最近对话轮数（默认5）</div><div class="toggle-row" style="margin-top:18px"><label>🤖 启用自动回复</label><label class="switch"><input type="checkbox" id="autoReplyEnabledCheck"><span class="slider"></span></label></div><div style="font-size:11px;color:#999;margin-top:-10px;margin-bottom:10px;text-align:center;">等待你回复的时间如此漫长...</div><div id="autoReplyContainer" style="display:none"><div class="setting-row"><label>延迟(分钟)</label><input type="number" id="autoReplyDelayInput" value="5" min="1" max="120"></div><div class="setting-row"><label>自动条数</label><input type="number" id="autoReplyMsgCountInput" value="1" min="1" max="5"></div><div class="setting-row"><label>每日次数</label><input type="number" id="autoReplyDailyMinInput" value="1" min="0" max="20" style="width:60px"> - <input type="number" id="autoReplyDailyMaxInput" value="3" min="0" max="20" style="width:60px"></div><div class="setting-row"><label>历史范围</label><input type="number" id="autoReplyContextLayersInput" value="5" min="1" max="20"></div><div class="hint-text">自动回复时使用的历史对话轮数</div></div><div class="toggle-row" style="margin-top:18px;border-top:.5px solid #e0e0e0;padding-top:16px"><label>🌤️ 启用天气信息</label><label class="switch"><input type="checkbox" id="weatherEnableCheck"><span class="slider"></span></label></div><div class="hint-text" style="margin-top:2px">开启后，AI回复时将自动获取您所在地的天气信息</div><div id="weatherSettingsContainer" style="display:none"><div class="weather-status-row" id="weatherStatusRow"><span class="weather-icon" id="weatherStatusIcon">📍</span><div class="weather-info"><div class="weather-city" id="weatherStatusCity">未获取位置</div><div class="weather-detail" id="weatherStatusDetail">请先获取位置信息</div></div><span class="weather-status-badge idle" id="weatherStatusBadge">待获取</span></div><div class="weather-location-row"><input type="text" id="weatherCityInput" placeholder="城市名称（可选）" style="flex:1"><button class="fetch-location-btn" id="fetchLocationBtn">📍 获取位置</button></div><div class="hint-text" style="margin-top:4px">点击"获取位置"将请求浏览器定位权限，用于获取当地天气</div><div class="setting-row" style="margin-top:6px"><label>纬度</label><input type="text" id="weatherLatDisplay" readonly style="background:#f5f5f5;font-size:11px;color:#888"><label>经度</label><input type="text" id="weatherLonDisplay" readonly style="background:#f5f5f5;font-size:11px;color:#888"></div><button class="gen-btn" id="refreshWeatherBtn" style="margin-top:6px;width:100%">🔄 手动刷新天气</button></div></div></div><div class="settings-sub" id="settingsPreset" style="display:none"><div class="back-row" id="backFromPreset"><span>‹</span><span>返回</span></div><h3>预设（角色专属）</h3><div class="section-title">关联当前角色（勾选生效）</div><div class="entry-list" id="presetList"></div><div class="entry-add"><textarea id="presetNameInput" placeholder="名称" style="width:30%" class="auto-resize"></textarea><textarea id="presetContentInput" placeholder="内容" class="auto-resize"></textarea><button id="addPresetBtn">添加</button></div><div class="import-export-row"><button id="exportPresetsBtn">导出</button><button id="importPresetsBtn">导入</button><input type="file" id="presetImportFile" accept=".json" style="display:none"></div></div><div class="settings-sub" id="settingsWorld" style="display:none"><div class="back-row" id="backFromWorld"><span>‹</span><span>返回</span></div><h3>世界书（角色专属）</h3><div class="section-title">关联当前角色（勾选生效）</div><div class="entry-list" id="worldList"></div><div class="entry-add"><textarea id="worldKeyInput" placeholder="关键词" style="width:30%" class="auto-resize"></textarea><textarea id="worldContentInput" placeholder="内容" class="auto-resize"></textarea><button id="addWorldBtn">添加</button></div><div class="import-export-row"><button id="exportWorldsBtn">导出</button><button id="importWorldsBtn">导入</button><input type="file" id="worldImportFile" accept=".json" style="display:none"></div></div><div class="settings-sub" id="settingsLog" style="display:none"><div class="back-row" id="backFromLog"><span>‹</span><span>返回</span></div><h3>运行日志</h3><textarea id="logTextarea" class="log-textarea" readonly></textarea><button class="copy-btn" id="copyLogBtn">复制全部日志</button><button class="gen-btn" id="showAutoReplyLogBtn" style="margin-top:10px;">🤖 自动回复日志</button><div id="autoReplyLogContainer" style="display:none; max-height:300px; overflow-y:auto; margin-top:10px; border:1px solid #ddd; padding:8px; border-radius:6px;"></div></div></div></div>
-  <div class="manage-modal" id="manageModal"><div class="manage-panel"><h3>聊天管理</h3><button id="exportChatBtn">📤 导出聊天记录和设定</button><button id="importChatBtn" class="btn-secondary">📥 导入聊天记录和设定</button><button id="newChatBtn" class="btn-danger">✨ 开启新聊天</button><button id="saveCurrentBtn" class="btn-secondary">💾 保存当前对话到历史</button><div class="section-title" style="margin-top:15px">历史聊天</div><div class="history-list" id="historyList"></div><button class="close-manage" id="closeManageBtn">关闭</button><input type="file" id="importChatFile" accept=".json" style="display:none"></div></div>
+  <div class="manage-modal" id="manageModal"><div class="manage-panel"><h3>聊天管理</h3><button id="exportChatBtn">📤 导出聊天记录和设定</button><button id="importChatBtn" class="btn-secondary">📥 导入聊天记录和设定</button><button id="newChatBtn" class="btn-danger">✨ 开启新聊天</button><button id="saveCurrentBtn" class="btn-secondary">💾 保存当前对话到历史</button><div class="section-title" style="margin-top:15px">历史聊天</div><div class="history-list" id="historyList"></div><div class="section-title" style="margin-top:15px">自动回复拒绝记录</div><div class="skip-log-list" id="skipLogList" style="max-height:150px; overflow-y:auto; margin-bottom:10px;"></div><button class="close-manage" id="closeManageBtn">关闭</button><input type="file" id="importChatFile" accept=".json" style="display:none"></div></div>
   <div class="persona-modal" id="personaEditModal"><div class="persona-panel" id="personaEditPanel"><h3 id="personaEditTitle">编辑人设</h3><div class="setting-row"><label>姓名</label><input type="text" id="personaNameInput" placeholder="你的名字"></div><div class="avatar-setting"><div class="avatar-preview avatar-me" id="personaAvatarPreview">👤</div><span>头像</span><button class="change-avatar-btn" id="personaChangeAvatarBtn">更换头像</button><input type="file" id="personaFileInput" accept="image/*"></div><div class="setting-row"><label style="align-self:flex-start">人物设定</label><textarea id="personaDetailInput" class="auto-resize" placeholder="描述你的身份、性格等，这将作为用户提示词发送给AI"></textarea></div><div class="hint-text">人物设定会在聊天时作为你的身份信息发送给AI，帮助AI更好地理解你。</div><button class="save-btn" id="savePersonaBtn">保存人设</button><button class="copy-btn" id="cancelPersonaBtn" style="background:#e0e0e0">取消</button><input type="file" id="personaCropFileInput" accept="image/*" style="display:none"></div></div>
   <div class="persona-modal" id="personaSelectModal"><div class="persona-panel" id="personaSelectPanel"><h3>选择用户人设</h3><div class="persona-list" id="personaSelectList"></div><div class="hint-text" style="text-align:center;margin-top:8px">选中的"人物设定"将作为用户提示词发送给AI</div><button class="copy-btn" id="closePersonaSelectBtn" style="background:#e0e0e0">关闭</button></div></div>
   <div class="crop-modal" id="cropModal"><div class="crop-header"><button class="crop-cancel" id="cropCancelBtn">取消</button><span class="crop-title">裁剪头像</span><button class="crop-confirm" id="cropConfirmBtn">确定</button></div><div class="crop-body" id="cropBody"><div class="crop-image-wrapper" id="cropImageWrapper"><img id="cropImage" src="" alt="裁剪图片"><div class="crop-frame" id="cropFrame"><div class="crop-handle crop-handle-tl" data-handle="tl"></div><div class="crop-handle crop-handle-tr" data-handle="tr"></div><div class="crop-handle crop-handle-bl" data-handle="bl"></div><div class="crop-handle crop-handle-br" data-handle="br"></div><div class="crop-hint">拖动裁剪框或调整角手柄</div></div></div></div><div class="crop-footer"><span class="zoom-label">缩放</span><input type="range" id="cropSizeSlider" min="30" max="100" value="75" step="1"><span class="zoom-label" id="cropSizeLabel">75%</span></div></div>
@@ -424,7 +427,8 @@
         autoReplyTodayCount:0, autoReplyLastDate:'',
         autoReplyContextLayers: 5,
         autoReplyConsecutiveCount: 0,
-        aiPerson: 'first', userPerson: 'second'
+        aiPerson: 'first', userPerson: 'second',
+        autoSkipLogs: []
       },
       unreadCount: 0,
       createdAt: new Date().toISOString(), lastActive: new Date().toISOString()
@@ -452,7 +456,8 @@
     autoReplyTodayCount:0, autoReplyLastDate:'',
     autoReplyContextLayers: 5,
     autoReplyConsecutiveCount: 0,
-    aiPerson:'first', userPerson:'second'
+    aiPerson:'first', userPerson:'second',
+    autoSkipLogs: []
   };
   let remarkVal = '月', signatureVal = '月夜雪纷纷';
   let unreadCount = 0;
@@ -580,6 +585,7 @@
     if(apiSettings.autoReplyConsecutiveCount===undefined) apiSettings.autoReplyConsecutiveCount=0;
     if(apiSettings.aiPerson===undefined) apiSettings.aiPerson = 'first';
     if(apiSettings.userPerson===undefined) apiSettings.userPerson = 'second';
+    if(apiSettings.autoSkipLogs===undefined) apiSettings.autoSkipLogs = [];
     unreadCount = ac.unreadCount || 0;
     fetchedCityName = apiSettings.autoWeatherCity || '';
     remarkVal = ac.name || '月'; signatureVal = ac.signature || '月夜雪纷纷';
@@ -618,6 +624,7 @@
   const autoReplyContextLayersInput = document.getElementById('autoReplyContextLayersInput');
   const autoSkipHintEl = document.getElementById('autoSkipHint');
   const showAutoReplyLogBtn = document.getElementById('showAutoReplyLogBtn'), autoReplyLogContainer = document.getElementById('autoReplyLogContainer');
+  const skipLogList = document.getElementById('skipLogList');
   const manageModal = document.getElementById('manageModal'), cropModal = document.getElementById('cropModal'), cropImage = document.getElementById('cropImage'), cropFrame = document.getElementById('cropFrame'), cropImageWrapper = document.getElementById('cropImageWrapper'), cropCancelBtn = document.getElementById('cropCancelBtn'), cropConfirmBtn = document.getElementById('cropConfirmBtn'), cropSizeSlider = document.getElementById('cropSizeSlider'), cropSizeLabel = document.getElementById('cropSizeLabel'), cropHint = cropFrame.querySelector('.crop-hint');
   const deleteModal = document.getElementById('deleteModal'), confirmDialogOverlay = document.getElementById('confirmDialogOverlay'), confirmDialogMsg = document.getElementById('confirmDialogMsg'), confirmDialogCancel = document.getElementById('confirmDialogCancel'), confirmDialogOk = document.getElementById('confirmDialogOk');
   const weatherEnableCheck = document.getElementById('weatherEnableCheck'), weatherSettingsContainer = document.getElementById('weatherSettingsContainer'), weatherCityInput = document.getElementById('weatherCityInput'), fetchLocationBtn = document.getElementById('fetchLocationBtn'), refreshWeatherBtn = document.getElementById('refreshWeatherBtn'), weatherLatDisplay = document.getElementById('weatherLatDisplay'), weatherLonDisplay = document.getElementById('weatherLonDisplay');
@@ -668,7 +675,6 @@
     refreshAllUIForActiveChar();
     if(!chatHistoryPushed){ history.pushState({chatView:true},'',location.href); chatHistoryPushed = true }
     showView('chat'); reloadChatUI(); chatArea.scrollTop = chatArea.scrollHeight;
-    hideAutoSkipHint();
   }
   function deleteCharacter(charId){ characters = characters.filter(c=>c.id!==charId); if(activeCharacterId===charId){ activeCharacterId = characters.length>0?characters[0].id:null; save('activeCharacterId',activeCharacterId); loadActiveCharToGlobals(); refreshAllUIForActiveChar(); reloadChatUI() } saveAllData(); renderCharacterList(charSearchInput?.value||'') }
   function refreshAllUIForActiveChar(){
@@ -693,9 +699,23 @@
     updateWeatherStatusUI(); refreshAvatars('dog'); refreshAvatars('user'); updatePersonaDisplay();
     pendingUserMessages=[]; currentQuote=null; updateQuoteHint(); updateSendHint();
     [charDetailsInput,charPromptInput,personaDetailInput].forEach(autoResizeTextarea);
-    if(autoSkipReason) { autoSkipHintEl.style.display = 'flex'; autoSkipHintEl.title = autoSkipReason; } else { autoSkipHintEl.style.display = 'none'; }
+    if(autoSkipReason) { autoSkipHintEl.style.display = 'flex'; autoSkipHintEl.title = '屏幕那端传来了消息，是TA憋在心里的...：' + autoSkipReason; } else { autoSkipHintEl.style.display = 'none'; }
   }
-  function showAutoSkipHint(reason) { autoSkipReason = reason; if(autoSkipHintEl) { autoSkipHintEl.style.display = 'flex'; autoSkipHintEl.title = reason; autoSkipHintEl.onclick = () => alert('自动回复跳过理由：\n' + reason); } }
+  function showAutoSkipHint(reason) {
+    autoSkipReason = reason;
+    const now = new Date().toISOString();
+    apiSettings.autoSkipLogs.unshift({ time: now, reason: reason });
+    if(apiSettings.autoSkipLogs.length > 100) apiSettings.autoSkipLogs.pop();
+    saveGlobalsToActiveChar();
+    if(autoSkipHintEl) {
+      autoSkipHintEl.style.display = 'flex';
+      autoSkipHintEl.title = '屏幕那端传来了消息，是TA憋在心里的...：' + reason;
+      autoSkipHintEl.onclick = () => {
+        alert('屏幕那端传来了消息，是TA憋在心里的...：\n' + reason);
+        hideAutoSkipHint();
+      };
+    }
+  }
   function hideAutoSkipHint() { autoSkipReason = null; if(autoSkipHintEl) autoSkipHintEl.style.display = 'none'; }
   function updatePersonaDisplay(){ const activePersona = getActiveUserPersona(); if(activePersona){ myPersonaNameLabel.textContent = activePersona.name||'我'; activePersonaInfo.textContent = '当前人设：'+(activePersona.name||'我')+' | '+(activePersona.persona||'无设定'); activePersonaInfo.style.display='block'; if(activePersona.avatar){ avatarState.user = {...activePersona.avatar} } } else { myPersonaNameLabel.textContent='我'; activePersonaInfo.style.display='none' } refreshAvatars('user') }
   createCharBtn.addEventListener('click',()=>{ const newChar = createDefaultCharacter('新角色'); characters.push(newChar); saveAllData(); renderCharacterList(charSearchInput?.value||''); openCharacterChat(newChar.id) });
@@ -743,12 +763,12 @@
     const characterName = charSettings.name || remarkVal || '角色';
     const userName = (getActiveUserPersona()?.name) || '用户';
     let instruction = '\n\n[人称设定]\n';
-    if(aiPerson==='first') instruction += `请使用第一人称“我”来代表你自己（${characterName}）。`;
-    else if(aiPerson==='second') instruction += `请使用第二人称“你”来代表你自己（${characterName}）。`;
-    else if(aiPerson==='third') instruction += `请使用第三人称“${characterName}”来代表你自己。`;
-    if(userPerson==='first') instruction += `称呼用户为“我”。`;
-    else if(userPerson==='second') instruction += `称呼用户为“你”或“${userName}”。`;
-    else if(userPerson==='third') instruction += `称呼用户为“${userName}”（第三人称）。`;
+    if(aiPerson==='first') instruction += `请使用第一人称"我"来代表你自己（${characterName}）。`;
+    else if(aiPerson==='second') instruction += `请使用第二人称"你"来代表你自己（${characterName}）。`;
+    else if(aiPerson==='third') instruction += `请使用第三人称"${characterName}"来代表你自己。`;
+    if(userPerson==='first') instruction += `称呼用户为"我"。`;
+    else if(userPerson==='second') instruction += `称呼用户为"你"或"${userName}"。`;
+    else if(userPerson==='third') instruction += `称呼用户为"${userName}"（第三人称）。`;
     return instruction;
   }
   function buildHistoryString(includeAutoReplyTags = false){
@@ -772,11 +792,8 @@
     if(!isAutoReply && waiting) return;
     if(isAutoReply){
       const lastMsg = chatMessages.length>0 ? chatMessages[chatMessages.length-1] : null;
-      if(lastMsg && lastMsg.isAutoReply){
-        apiSettings.autoReplyConsecutiveCount++;
-      } else {
-        apiSettings.autoReplyConsecutiveCount = 1;
-      }
+      if(lastMsg && lastMsg.isAutoReply){ apiSettings.autoReplyConsecutiveCount++; }
+      else { apiSettings.autoReplyConsecutiveCount = 1; }
       saveGlobalsToActiveChar();
     }
     const globalPresetsEnabled = libraryPresets.filter(p=>p.globallyEnabled);
@@ -793,17 +810,9 @@
     const userName = activePersona?.name || '用户';
     systemPrompt += `\n\n[角色身份] 你的名字是${charName}，你正在与用户${userName}对话。请始终以${charName}的身份进行回复，不要混淆身份。`;
     if(activePersona && activePersona.persona && activePersona.persona.trim()){ systemPrompt += `\n\n[用户设定]\n用户${userName}的人设：${activePersona.persona}\n请根据用户的人设特点来调整你的回复风格和内容。` }
-    const nowTime = new Date();
-    systemPrompt += `\n\n[当前时间] ${nowTime.toLocaleString('zh-CN',{hour12:false})}`;
+    const nowTime = new Date(); systemPrompt += `\n\n[当前时间] ${nowTime.toLocaleString('zh-CN',{hour12:false})}`;
     if(apiSettings.weatherEnabled && apiSettings.weatherLat!=null && apiSettings.weatherLon!=null && !isNaN(apiSettings.weatherLat) && !isNaN(apiSettings.weatherLon)){ try{ const weatherInfo = await getWeatherInfo(); if(weatherInfo){ const weatherStr = getWeatherString(weatherInfo); systemPrompt += `\n${weatherStr}` } } catch(e){ addLog('warn','获取天气信息失败，跳过: '+e.message) } }
-    if(apiSettings.chatMode){
-      const lengthHint = apiSettings.chatModeSubtype==='long'?'约100个汉字':'约20个汉字';
-      systemPrompt += '\n\n【对话模式】你现在正在进行线上文字聊天（例如在微信上）。你们不在同一空间，只能通过文字交流。请完全以角色第一人称视角回复，只输出角色本人说的话或打出的字。不要进行任何第三人称的动作、神态、心理活动或环境描写。';
-      systemPrompt += `\n每条消息的字数请控制在${lengthHint}左右。`;
-      systemPrompt += '\n示例：\n用户：你好\n你：你好，今天感觉怎么样？\n请严格模仿示例格式，只输出纯文本对话内容。';
-    } else {
-      systemPrompt += '\n\n【小说模式】请以小说叙述形式回复，可以包含动作、神态、心理和环境描写，也可以进行面对面交流。';
-    }
+    if(apiSettings.chatMode){ const lengthHint = apiSettings.chatModeSubtype==='long'?'约100个汉字':'约20个汉字'; systemPrompt += '\n\n【对话模式】你现在正在进行线上文字聊天（例如在微信上）。你们不在同一空间，只能通过文字交流。请完全以角色第一人称视角回复，只输出角色本人说的话或打出的字。不要进行任何第三人称的动作、神态、心理活动或环境描写。'; systemPrompt += `\n每条消息的字数请控制在${lengthHint}左右。`; systemPrompt += '\n示例：\n用户：你好\n你：你好，今天感觉怎么样？\n请严格模仿示例格式，只输出纯文本对话内容。'; } else { systemPrompt += '\n\n【小说模式】请以小说叙述形式回复，可以包含动作、神态、心理和环境描写，也可以进行面对面交流。'; }
     systemPrompt += getPersonInstruction();
     const min = overrideMinMsgs!==null ? overrideMinMsgs : apiSettings.minMsgs;
     const max = overrideMaxMsgs!==null ? overrideMaxMsgs : apiSettings.maxMsgs;
@@ -817,20 +826,12 @@
       const sender = lastMsg ? (lastMsg.role==='user' ? userName : charName) : '未知';
       const contentPreview = lastMsg ? (lastMsg.text||'').substring(0,50) : '';
       const consecutive = apiSettings.autoReplyConsecutiveCount || 1;
-      if(apiSettings.chatMode){
-        systemPrompt += `\n\n[自动回复触发] 你们已经 ${minutesAgo} 分钟没有对话了。最后一条消息是 ${sender} 发送的：“${contentPreview}”，在此之后用户没有发新信息。这是第 ${consecutive} 次发送自动回复，在此之前用户都没有回复。`;
-      } else {
-        systemPrompt += `\n\n[自动回复触发] 你们已经 ${minutesAgo} 分钟没有见面了。最后一条消息是 ${sender} 发送的：“${contentPreview}”，在此之后用户没有发新信息。这是第 ${consecutive} 次发送自动回复，在此之前用户都没有回复。`;
-      }
+      if(apiSettings.chatMode){ systemPrompt += `\n\n[自动回复触发] 你们已经 ${minutesAgo} 分钟没有对话了。最后一条消息是 ${sender} 发送的："${contentPreview}"，在此之后用户没有发新信息。这是第 ${consecutive} 次发送自动回复，在此之前用户都没有回复。`; }
+      else { systemPrompt += `\n\n[自动回复触发] 你们已经 ${minutesAgo} 分钟没有见面了。最后一条消息是 ${sender} 发送的："${contentPreview}"，在此之后用户没有发新信息。这是第 ${consecutive} 次发送自动回复，在此之前用户都没有回复。`; }
       systemPrompt += `\n\n【自动回复判断】请站在${charName}的角度，根据你的人设、当前上下文以及刚刚过去的时间，判断此时是否应该主动给用户发送一条消息。如果认为不应该发送，请在回复内容的最开头一行明确输出 [AUTO_SKIP] 并紧接着用一行说明你选择不回复的理由。如果认为应该发送，则正常回复。`;
     }
-    const historyStr = buildHistoryString(true);
-    systemPrompt += `\n\n[历史聊天记录]\n${historyStr}`;
-    if(isAutoReply){
-      currentAutoReplyLog = { time: new Date().toISOString(), prompt: systemPrompt, response: null, skipped: false, reason: '' };
-      autoReplyLogs.unshift(currentAutoReplyLog);
-      if(autoReplyLogs.length > 50) autoReplyLogs.pop();
-    }
+    const historyStr = buildHistoryString(true); systemPrompt += `\n\n[历史聊天记录]\n${historyStr}`;
+    if(isAutoReply){ currentAutoReplyLog = { time: new Date().toISOString(), prompt: systemPrompt, response: null, skipped: false, reason: '' }; autoReplyLogs.unshift(currentAutoReplyLog); if(autoReplyLogs.length > 50) autoReplyLogs.pop(); }
     if(apiSettings.enabled && apiSettings.key && apiSettings.url){
       waiting=true; sendBtn.disabled=true; retryBtn.disabled=true;
       const loadingWrapper = document.createElement('div'); loadingWrapper.className='msg-wrapper msg-wrapper-left';
@@ -850,15 +851,11 @@
         const thinkRegex = /【思考过程】\s*([\s\S]*?)\s*【思考结束】/i; const thinkMatch = finalContent.match(thinkRegex);
         if(thinkMatch){ if(!finalReasoning) finalReasoning = thinkMatch[1].trim(); finalContent = finalContent.replace(thinkRegex,'').trim() }
         if(isAutoReply && finalContent.startsWith('[AUTO_SKIP]')){
-          let reason = '未提供具体理由';
-          const reasonMatch = finalContent.match(/^\[AUTO_SKIP\]\s*\n(.*)/);
-          if(reasonMatch) reason = reasonMatch[1].trim();
+          let reason = '未提供具体理由'; const reasonMatch = finalContent.match(/^\[AUTO_SKIP\]\s*\n(.*)/); if(reasonMatch) reason = reasonMatch[1].trim();
           if(currentAutoReplyLog){ currentAutoReplyLog.response = finalContent; currentAutoReplyLog.skipped = true; currentAutoReplyLog.reason = reason; currentAutoReplyLog = null; }
           showAutoSkipHint(reason);
           addLog('info',`自动回复判断跳过：${reason}`);
-          loadingWrapper.remove();
-          waiting=false; sendBtn.disabled=false; retryBtn.disabled=false;
-          return;
+          loadingWrapper.remove(); waiting=false; sendBtn.disabled=false; retryBtn.disabled=false; return;
         }
         let segments = finalContent ? finalContent.split(/\n{2,}/).filter(s=>s.trim()!=='') : [];
         if(segments.length===0 && finalContent) segments = [finalContent];
@@ -868,12 +865,7 @@
         segments.forEach((seg,idx)=>{ const showBtn = (idx===0) && !!finalReasoning; const msgId = 'msg_'+Date.now().toString(36)+Math.random().toString(36).substr(2,5); const ts = now+idx; chatMessages.push({id:msgId,role:'dog',text:seg.trim(),reasoning:(idx===0&&finalReasoning)?finalReasoning:null,timestamp:ts, isAutoReply: isAutoReply || false}); if(lastTs===0||(ts-lastTs)>=300000){ fragment.appendChild(createTimeStampDiv(ts)); lastTs=ts } else { lastTs=Math.max(lastTs,ts) } fragment.appendChild(createDogMsg(seg.trim(),finalReasoning,showBtn,msgId)) });
         messageHistory.push({role:'assistant',content:finalContent||''}); saveChatHistory(); loadingWrapper.replaceWith(fragment);
         if(currentAutoReplyLog){ currentAutoReplyLog.response = finalContent; currentAutoReplyLog.skipped = false; currentAutoReplyLog = null; }
-        if(isAutoReply && !chatViewWrap.classList.contains('active')){
-          unreadCount += segments.length;
-          saveGlobalsToActiveChar();
-          updateUnreadDisplay();
-          if(messageListViewWrap.classList.contains('active')) renderCharacterList();
-        }
+        if(isAutoReply && !chatViewWrap.classList.contains('active')){ unreadCount += segments.length; saveGlobalsToActiveChar(); updateUnreadDisplay(); if(messageListViewWrap.classList.contains('active')) renderCharacterList(); }
       } catch(err){
         console.error(err); const errorMsg = `😢 AI 请求失败：${err.message}`; const msgId = 'msg_'+Date.now().toString(36)+Math.random().toString(36).substr(2,5); const ts = Date.now();
         messageHistory.push({role:'assistant',content:errorMsg}); chatMessages.push({id:msgId,role:'dog',text:errorMsg,reasoning:null,timestamp:ts, isAutoReply: false}); saveChatHistory();
@@ -903,6 +895,15 @@
   function deleteConversation(id){ if(!confirm('确定要删除这个对话吗？')) return; conversations = conversations.filter(c=>c.id!==id); if(activeConvId===id){ chatMessages=[]; messageHistory=[]; activeConvId=null; save('chatMessages',chatMessages); save('messageHistory',messageHistory); save('activeConversationId',activeConvId); saveGlobalsToActiveChar(); pendingUserMessages=[]; updateSendHint(); reloadChatUI() } save('conversations',conversations); saveGlobalsToActiveChar(); renderConversations() }
   function startRenameConversation(id){ const container = document.getElementById('historyList'); const item = container.querySelector(`[data-conv-id="${id}"]`); if(!item) return; const nameSpan = item.querySelector('.item-name'), editGroup = item.querySelector('.edit-name-group'), input = editGroup.querySelector('input'); const conv = conversations.find(c=>c.id===id); input.value = conv.name; nameSpan.style.display='none'; editGroup.style.display='flex'; input.focus(); const saveAndClose = ()=>{ const n = input.value.trim(); if(n){ conv.name = n; nameSpan.textContent = n; save('conversations',conversations); saveGlobalsToActiveChar() } nameSpan.style.display=''; editGroup.style.display='none' }; const confirmBtn = editGroup.querySelector('.cancel-name-btn'); if(confirmBtn){ confirmBtn.textContent='确认'; confirmBtn.onclick = saveAndClose } const saveBtn = editGroup.querySelector('.save-name-btn'); if(saveBtn) saveBtn.style.display='none'; input.onkeydown = e=>{ if(e.key==='Enter') saveAndClose(); if(e.key==='Escape'){ nameSpan.style.display=''; editGroup.style.display='none' } } }
   function renderConversations(){ const container = document.getElementById('historyList'); if(!container) return; if(conversations.length===0){ container.innerHTML = '<div style="text-align:center;color:#999;padding:10px;">暂无历史对话</div>'; return } container.innerHTML = conversations.map(c=>`<div class="history-item" data-conv-id="${escapeHtml(c.id)}"><div class="item-info" data-id="${escapeHtml(c.id)}"><div class="item-name">${escapeHtml(c.name)}</div><div class="item-time">${new Date(c.timestamp).toLocaleString()}</div><div class="edit-name-group"><input type="text" /><button class="save-name-btn">保存</button><button class="cancel-name-btn">取消</button></div></div><div class="item-actions"><button class="item-rename" data-id="${escapeHtml(c.id)}">✎</button><button class="item-delete" data-id="${escapeHtml(c.id)}">✕</button></div></div>`).join(''); container.querySelectorAll('.item-info').forEach(el=> el.addEventListener('click',function(e){ if(e.target.closest('.edit-name-group')||e.target.closest('.item-rename')) return; switchConversation(this.dataset.id) })); container.querySelectorAll('.item-rename').forEach(btn=> btn.addEventListener('click',function(e){ e.stopPropagation(); startRenameConversation(this.dataset.id) })); container.querySelectorAll('.item-delete').forEach(btn=> btn.addEventListener('click',function(e){ e.stopPropagation(); deleteConversation(this.dataset.id) })) }
+  function renderSkipLogs(){
+    if(!skipLogList) return;
+    const logs = apiSettings.autoSkipLogs || [];
+    if(logs.length === 0){ skipLogList.innerHTML = '<div style="color:#999;padding:5px;font-size:12px;">暂无拒绝记录</div>'; return; }
+    skipLogList.innerHTML = logs.map(log=>{
+      const time = new Date(log.time).toLocaleString();
+      return `<div class="skip-log-item"><div class="skip-time">${time}</div><div class="skip-reason">屏幕那端传来了消息，是TA憋在心里的...：${escapeHtml(log.reason)}</div></div>`;
+    }).join('');
+  }
   function openDeleteModal(){ const modal = document.getElementById('deleteModal'), list = document.getElementById('deleteList'); const roleName = remarkVal||'月'; list.innerHTML = chatMessages.map(m=>`<div class="entry-item"><label><input type="checkbox" value="${escapeHtml(m.id)}" class="delete-check"> ${escapeHtml(m.role==='user'?'我':roleName)}: ${escapeHtml((m.text||'').substring(0,30))}${(m.text||'').length>30?'...':''}</label></div>`).join(''); modal.classList.add('show'); document.getElementById('deleteConfirmBtn').onclick = ()=>{ const checked = Array.from(list.querySelectorAll('.delete-check:checked')).map(cb=>cb.value); if(checked.length===0){ alert('请至少选择一条消息'); return } chatMessages = chatMessages.filter(m=>!checked.includes(m.id)); syncHistoryFromChat(); saveChatHistory(); reloadChatUI(); modal.classList.remove('show') }; document.getElementById('deleteCancelBtn').onclick = ()=> modal.classList.remove('show'); modal.addEventListener('click',e=>{ if(e.target===modal) modal.classList.remove('show') }) }
   function showMain(){ settingsPanel.classList.remove('character-panel','preset-panel','world-panel','log-panel','persona-panel'); settingsMain.style.display='block'; settingsProfile.style.display='none'; settingsCharacter.style.display='none'; settingsApi.style.display='none'; settingsPreset.style.display='none'; settingsWorld.style.display='none'; settingsLog.style.display='none' }
   function showProfile(){ settingsPanel.classList.remove('character-panel','preset-panel','world-panel','log-panel','persona-panel'); settingsMain.style.display='none'; settingsProfile.style.display='block'; settingsCharacter.style.display='none'; settingsApi.style.display='none'; settingsPreset.style.display='none'; settingsWorld.style.display='none'; settingsLog.style.display='none'; updatePersonaDisplay() }
@@ -928,20 +929,7 @@
   document.getElementById('copyLogBtn').addEventListener('click',()=>{ navigator.clipboard.writeText(document.getElementById('logTextarea').value).then(()=>alert('日志已复制')).catch(()=>alert('复制失败')) });
   showAutoReplyLogBtn.addEventListener('click',()=>{
     const container = autoReplyLogContainer;
-    if(container.style.display==='none' || container.style.display===''){
-      container.style.display='block';
-      container.innerHTML = autoReplyLogs.length===0 ? '<div style="color:#999;padding:5px;">暂无自动回复日志</div>' : autoReplyLogs.map(log=>{
-        const time = new Date(log.time).toLocaleString();
-        const skippedText = log.skipped ? `跳过：${log.reason}` : '已发送';
-        return `<div style="margin-bottom:12px;padding:10px;background:#f5f5f5;border-radius:6px;">
-          <div><strong>${time}</strong> ${skippedText}</div>
-          <div style="font-size:11px;color:#666;white-space:pre-wrap;max-height:150px;overflow-y:auto;margin:4px 0;">提示词：\n${escapeHtml(log.prompt||'')}</div>
-          <div style="font-size:11px;color:#666;white-space:pre-wrap;max-height:150px;overflow-y:auto;">回复：\n${escapeHtml(log.response||'')}</div>
-        </div>`;
-      }).join('');
-    } else {
-      container.style.display='none';
-    }
+    if(container.style.display==='none' || container.style.display===''){ container.style.display='block'; container.innerHTML = autoReplyLogs.length===0 ? '<div style="color:#999;padding:5px;">暂无自动回复日志</div>' : autoReplyLogs.map(log=>{ const time = new Date(log.time).toLocaleString(); const skippedText = log.skipped ? `跳过：${log.reason}` : '已发送'; return `<div style="margin-bottom:12px;padding:10px;background:#f5f5f5;border-radius:6px;"><div><strong>${time}</strong> ${skippedText}</div><div style="font-size:11px;color:#666;white-space:pre-wrap;max-height:150px;overflow-y:auto;margin:4px 0;">提示词：\n${escapeHtml(log.prompt||'')}</div><div style="font-size:11px;color:#666;white-space:pre-wrap;max-height:150px;overflow-y:auto;">回复：\n${escapeHtml(log.response||'')}</div></div>`; }).join(''); } else { container.style.display='none'; }
   });
   document.getElementById('generatePromptBtn').addEventListener('click',()=>{ const n=charNameInput.value.trim()||'月', a=charAgeInput.value.trim(), p=charPersonalityInput.value.trim()||'神秘温柔', d=charDetailsInput.value.trim(); let t=`你是一个名叫${n}的角色，${a?a+'岁，':''}性格${p}。`; if(d) t+=` ${d}`; charPromptInput.value=t; autoResizeTextarea(charPromptInput) });
   document.getElementById('saveCharacterBtn').addEventListener('click',()=>{ charSettings.name=charNameInput.value.trim(); charSettings.age=charAgeInput.value.trim(); charSettings.personality=charPersonalityInput.value.trim(); charSettings.details=charDetailsInput.value.trim(); charSettings.prompt=charPromptInput.value.trim(); saveGlobalsToActiveChar(); alert('人设已保存') });
@@ -974,7 +962,7 @@
   document.getElementById('exportWorldsBtn').addEventListener('click',()=>{ const b = new Blob([JSON.stringify({worlds,enabledWorldIds},null,2)],{type:'application/json'}); const a = document.createElement('a'); a.href=URL.createObjectURL(b); a.download='dogchat_role_worlds.json'; a.click() });
   document.getElementById('importWorldsBtn').addEventListener('click',()=>document.getElementById('worldImportFile').click());
   document.getElementById('worldImportFile').addEventListener('change',function(e){ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=function(ev){ try{ const d=JSON.parse(ev.target.result); if(d.worlds){ worlds=d.worlds; ensureId(worlds); saveGlobalsToActiveChar() } if(d.enabledWorldIds) enabledWorldIds=d.enabledWorldIds; saveGlobalsToActiveChar(); renderWorlds(); alert('导入成功') } catch(err){ alert('导入失败') } }; r.readAsText(f); this.value='' });
-  document.getElementById('manageBtn').addEventListener('click',()=>{ manageModal.classList.add('show'); renderConversations() });
+  document.getElementById('manageBtn').addEventListener('click',()=>{ manageModal.classList.add('show'); renderConversations(); renderSkipLogs(); });
   document.getElementById('closeManageBtn').addEventListener('click',()=>manageModal.classList.remove('show'));
   manageModal.addEventListener('click',e=>{ if(e.target===manageModal) manageModal.classList.remove('show') });
   document.getElementById('exportChatBtn').addEventListener('click',()=>{ const d={remark:remarkVal,signature:signatureVal,charName:charSettings.name,charAge:charSettings.age,charPersonality:charSettings.personality,charDetails:charSettings.details,charPrompt:charSettings.prompt,presets,worlds,enabledPresetIds,enabledWorldIds,chatMessages,messageHistory,conversations,activeConvId}; const b = new Blob([JSON.stringify(d,null,2)],{type:'application/json'}); const a = document.createElement('a'); a.href=URL.createObjectURL(b); a.download=`dogchat_backup_${new Date().toISOString().slice(0,10)}.json`; a.click(); alert('导出成功') });
@@ -1011,59 +999,13 @@
   function updateAllTimestamps(){ const now=Date.now(); document.querySelectorAll('.char-card-time[data-timestamp]').forEach(el=>{ const ts=parseInt(el.dataset.timestamp); if(ts&&ts>0) el.textContent=formatRelativeTime(ts,now) }); document.querySelectorAll('.time-stamp[data-timestamp]').forEach(el=>{ const ts=parseInt(el.dataset.timestamp); if(ts&&ts>0) el.textContent=formatTimeDivider(ts,now) }) }
   function updateUnreadDisplay(){
     const total = characters.reduce((sum,c)=> sum + (c.unreadCount||0), 0);
-    document.querySelectorAll('.tab-unread-badge').forEach(badge=>{
-      if(total>0){ badge.textContent = total>99?'99+':total; badge.style.display='inline-flex'; }
-      else { badge.style.display='none'; }
-    });
-    document.querySelectorAll('.char-card-unread').forEach(el=>{
-      const charId = el.dataset.charId;
-      const char = characters.find(c=>c.id===charId);
-      if(char){
-        const unread = char.unreadCount||0;
-        if(unread>0){ el.style.display='flex'; el.querySelector('.unread-count').textContent = unread>99?'99+':unread; }
-        else { el.style.display='none'; }
-      }
-    });
+    document.querySelectorAll('.tab-unread-badge').forEach(badge=>{ if(total>0){ badge.textContent = total>99?'99+':total; badge.style.display='inline-flex'; } else { badge.style.display='none'; } });
+    document.querySelectorAll('.char-card-unread').forEach(el=>{ const charId = el.dataset.charId; const char = characters.find(c=>c.id===charId); if(char){ const unread = char.unreadCount||0; if(unread>0){ el.style.display='flex'; el.querySelector('.unread-count').textContent = unread>99?'99+':unread; } else { el.style.display='none'; } } });
   }
-  function checkAutoReply(){
-    if(!apiSettings.autoReplyEnabled) return;
-    if(!apiSettings.enabled || !apiSettings.key || !apiSettings.url) return;
-    if(chatMessages.length===0) return;
-    const lastMsg = chatMessages[chatMessages.length-1];
-    const lastTs = lastMsg ? (lastMsg.timestamp||0) : 0;
-    const minutesPassed = (Date.now()-lastTs)/60000;
-    if(minutesPassed < apiSettings.autoReplyDelayMinutes) return;
-    const today = new Date().toDateString();
-    if(apiSettings.autoReplyLastDate !== today){
-      apiSettings.autoReplyTodayCount = 0;
-      apiSettings.autoReplyLastDate = today;
-    }
-    const max = apiSettings.autoReplyDailyMax;
-    const min = apiSettings.autoReplyDailyMin;
-    if(apiSettings.autoReplyTodayCount >= max) return;
-    const count = Math.floor(Math.random()*(max-min+1))+min;
-    if(apiSettings.autoReplyTodayCount >= count) return;
-    apiSettings.autoReplyTodayCount++;
-    saveGlobalsToActiveChar();
-    triggerAiReply(true, apiSettings.autoReplyMsgCount, apiSettings.autoReplyMsgCount);
-  }
+  function checkAutoReply(){ if(!apiSettings.autoReplyEnabled) return; if(!apiSettings.enabled || !apiSettings.key || !apiSettings.url) return; if(chatMessages.length===0) return; const lastMsg = chatMessages[chatMessages.length-1]; const lastTs = lastMsg ? (lastMsg.timestamp||0) : 0; const minutesPassed = (Date.now()-lastTs)/60000; if(minutesPassed < apiSettings.autoReplyDelayMinutes) return; const today = new Date().toDateString(); if(apiSettings.autoReplyLastDate !== today){ apiSettings.autoReplyTodayCount = 0; apiSettings.autoReplyLastDate = today; } const max = apiSettings.autoReplyDailyMax; const min = apiSettings.autoReplyDailyMin; if(apiSettings.autoReplyTodayCount >= max) return; const count = Math.floor(Math.random()*(max-min+1))+min; if(apiSettings.autoReplyTodayCount >= count) return; apiSettings.autoReplyTodayCount++; saveGlobalsToActiveChar(); triggerAiReply(true, apiSettings.autoReplyMsgCount, apiSettings.autoReplyMsgCount); }
   function startAutoReplyTimer(){ stopAutoReplyTimer(); autoReplyTimer = setInterval(checkAutoReply, 10000); }
   function stopAutoReplyTimer(){ if(autoReplyTimer){ clearInterval(autoReplyTimer); autoReplyTimer = null; } }
-  function initAll(){
-    loadActiveCharToGlobals();
-    refreshAllUIForActiveChar();
-    remarkInput.value = remarkVal; signatureInput.value = signatureVal;
-    updateRemark(remarkVal); updateSignature(signatureVal);
-    refreshAvatars('dog'); refreshAvatars('user');
-    updatePersonaDisplay(); reloadChatUI(); chatArea.scrollTop = chatArea.scrollHeight;
-    renderCharacterList(); ensureId(libraryPresets); ensureId(libraryWorlds); ensureId(userPersonas); saveAllData();
-    showMain(); messageListViewWrap.classList.add('active'); renderCharacterList(); updateAllTabBars('messages');
-    addLog('info','页面加载完成'); setInterval(updateAllTimestamps,30000);
-    updateWeatherStatusUI();
-    if(apiSettings.weatherEnabled) startWeatherAutoRefresh();
-    if(apiSettings.autoReplyEnabled) startAutoReplyTimer();
-    updateUnreadDisplay();
-  }
+  function initAll(){ loadActiveCharToGlobals(); refreshAllUIForActiveChar(); remarkInput.value = remarkVal; signatureInput.value = signatureVal; updateRemark(remarkVal); updateSignature(signatureVal); refreshAvatars('dog'); refreshAvatars('user'); updatePersonaDisplay(); reloadChatUI(); chatArea.scrollTop = chatArea.scrollHeight; renderCharacterList(); ensureId(libraryPresets); ensureId(libraryWorlds); ensureId(userPersonas); saveAllData(); showMain(); messageListViewWrap.classList.add('active'); renderCharacterList(); updateAllTabBars('messages'); addLog('info','页面加载完成'); setInterval(updateAllTimestamps,30000); updateWeatherStatusUI(); if(apiSettings.weatherEnabled) startWeatherAutoRefresh(); if(apiSettings.autoReplyEnabled) startAutoReplyTimer(); updateUnreadDisplay(); }
   initAll();
 })();
 </script>
