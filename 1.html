@@ -311,6 +311,7 @@
 </head>
 <body>
 <div class="phone" id="phoneRoot">
+  <!-- 启动画面 -->
   <div class="splash-screen" id="splashScreen"><div class="splash-stars"><span class="star"></span><span class="star"></span><span class="star"></span><span class="star"></span><span class="star"></span></div><div class="splash-content"><div class="moon-wrapper"><div class="moon"></div></div><h1 class="splash-title">Lumos</h1><div class="progress-bar-container"><div class="progress-bar-fill" id="progressFill"></div></div><button class="splash-enter-btn" id="splashEnterBtn">进入</button></div></div>
   <div class="status-bar"><span id="statusTime">10:24</span><span id="statusBattery">📶 🔋 91%</span></div>
   <div class="chat-view-wrap" id="chatViewWrap">
@@ -326,6 +327,7 @@
     <div class="pending-hint" id="sendHint"><span class="pending-text" id="sendHintText">积0条·三击回复</span><button class="pending-cancel" id="clearPendingBtn">×</button></div>
     <div class="input-bar"><button class="retry-btn" id="retryBtn" title="重说上一次AI回复">重说</button><textarea class="input-field" id="messageInput" placeholder="输入消息..." rows="1"></textarea><button class="send-btn" id="sendBtn">发送</button></div>
   </div>
+  <!-- 信息列表等视图 -->
   <div class="message-list-view-wrap active" id="messageListViewWrap"><div class="nav-bar"><span style="font-size:17px;font-weight:600;color:#000">信息</span></div><div class="search-bar-row"><div class="search-input-wrap"><span class="search-icon">🔍</span><input type="text" id="charSearchInput" placeholder="搜索角色"></div><button class="create-char-btn" id="createCharBtn">＋ 创建</button></div><div class="character-list" id="characterList"></div>
     <div class="bottom-tab-bar" id="bottomTabBar1">
       <div class="bottom-tab-item active" data-tab="messages">
@@ -350,7 +352,9 @@
       <div class="bottom-tab-item active" data-tab="profile"><span class="tab-icon">👤</span><span>我的</span></div>
     </div>
   </div>
+  <!-- 设置面板 -->
   <div class="settings-modal" id="settingsModal"><div class="settings-panel" id="settingsPanel"><div class="settings-main" id="settingsMain"><h3>设置</h3><div class="settings-item" id="goProfile"><span class="item-text">个人信息设置</span><span class="item-arrow">›</span></div><div class="settings-item" id="goCharacter"><span class="item-text">角色人设</span><span class="item-arrow">›</span></div><div class="settings-item" id="goApi"><span class="item-text">AI 回复设置</span><span class="item-arrow">›</span></div><div class="settings-item" id="goPreset"><span class="item-text">预设（角色专属）</span><span class="item-arrow">›</span></div><div class="settings-item" id="goWorld"><span class="item-text">世界书（角色专属）</span><span class="item-arrow">›</span></div><div class="settings-item" id="goLog"><span class="item-text">运行日志</span><span class="item-arrow">›</span></div></div><div class="settings-sub" id="settingsProfile" style="display:none"><div class="back-row" id="backFromProfile"><span>‹</span><span>返回</span></div><h3>个人信息</h3><div class="setting-row"><label>备注</label><input type="text" id="remarkInput" value="月"></div><div class="setting-row"><label>签名</label><input type="text" id="signatureInput" value="月夜雪纷纷"></div><div class="avatar-setting"><div class="avatar-preview" id="dogPreview">🌙</div><span id="dogNameLabel">月</span><button class="change-avatar-btn" id="changeDogAvatarBtn">更换</button><input type="file" id="dogFileInput" accept="image/*"></div><div class="avatar-setting" style="flex-wrap:wrap"><div class="avatar-preview avatar-me" id="myPreview">我</div><span id="myPersonaNameLabel" style="flex:1">我</span><button class="change-avatar-btn" id="selectPersonaBtn" style="background:#07c160;color:#fff">选择人设</button></div><div class="hint-text" style="margin-top:2px">从人设库中选择一个用户人设，将作为你的身份提示词发送给AI</div><div id="activePersonaInfo" style="font-size:11px;color:#07c160;margin-top:4px;display:none"></div>
+    <!-- 聊天背景区域 -->
     <div class="setting-row" style="margin-top:10px"><label>聊天背景</label><button class="change-avatar-btn" id="changeBgBtn">更换背景</button><button class="change-avatar-btn" id="clearBgBtn" style="margin-left:6px;">清除背景</button></div>
     <input type="file" id="bgFileInput" accept="image/*" style="display:none">
     <div class="hint-text" style="margin-top:2px">点击更换可裁剪背景，图片将自动填充聊天区域</div>
@@ -478,8 +482,7 @@
   let autoSkipReason = null;
   let currentAutoReplyLog = null;
   let autoReplyLogs = [];
-
-  /* ---------- 通知功能 ---------- */
+  /* ---------- 通知功能（兼容 ServiceWorker） ---------- */
   function getNotificationIconUrl() {
     const dog = avatarState.dog;
     if (dog.type === 'image' && dog.src) return dog.src;
@@ -497,33 +500,42 @@
     }
     return '';
   }
-
   function sendAutoReplyNotifications(segments) {
     if (!apiSettings.notificationsEnabled) return;
     if (!('Notification' in window)) return;
     if (Notification.permission !== 'granted') return;
-    const iconUrl = getNotificationIconUrl();
     const title = 'TA想对你说的是...';
+    const iconUrl = getNotificationIconUrl();
+    async function showOne(body, tag) {
+      const options = { body, icon: iconUrl, tag, requireInteraction: false };
+      try {
+        const n = new Notification(title, options);
+        n.onclick = () => { window.focus(); if (!chatViewWrap.classList.contains('active')) openCharacterChat(activeCharacterId); };
+      } catch (e) {
+        if (e.message && e.message.includes('ServiceWorkerRegistration')) {
+          addLog('warn', 'new Notification 不支持，尝试 Service Worker 通知');
+          if (navigator.serviceWorker && navigator.serviceWorker.ready) {
+            try {
+              const reg = await navigator.serviceWorker.ready;
+              await reg.showNotification(title, options);
+            } catch (e2) {
+              addLog('warn', 'ServiceWorker 通知也失败: ' + e2.message);
+            }
+          }
+        } else {
+          addLog('warn', '发送通知失败: ' + e.message);
+        }
+      }
+    }
     if (segments.length <= 3) {
       segments.forEach((seg, idx) => {
-        const body = seg.trim().substring(0, 120);
-        const tag = 'auto-reply-' + Date.now() + '-' + idx;
-        try {
-          const n = new Notification(title, { body, icon: iconUrl, tag, requireInteraction: false });
-          n.onclick = () => { window.focus(); if (!chatViewWrap.classList.contains('active')) openCharacterChat(activeCharacterId); };
-        } catch(e) { addLog('warn', '发送通知失败: ' + e.message); }
+        showOne(seg.trim().substring(0, 120), 'auto-reply-' + Date.now() + '-' + idx);
       });
     } else {
       const previews = segments.slice(0, 3).map(s => s.trim().substring(0, 30)).join('；');
-      const body = `（共${segments.length}条新消息）${previews}...`;
-      const tag = 'auto-reply-' + Date.now();
-      try {
-        const n = new Notification(title, { body, icon: iconUrl, tag, requireInteraction: false });
-        n.onclick = () => { window.focus(); if (!chatViewWrap.classList.contains('active')) openCharacterChat(activeCharacterId); };
-      } catch(e) { addLog('warn', '发送合并通知失败: ' + e.message); }
+      showOne(`（共${segments.length}条新消息）${previews}...`, 'auto-reply-' + Date.now());
     }
   }
-
   async function requestNotificationPermission() {
     if (!('Notification' in window)) return false;
     if (Notification.permission === 'granted') return true;
@@ -532,7 +544,6 @@
     return result === 'granted';
   }
   /* ---------- 通知功能结束 ---------- */
-
   function getWeatherEmojiAndDesc(code){ const map={0:{emoji:'☀️',desc:'晴天'},1:{emoji:'🌤️',desc:'大部晴'},2:{emoji:'⛅',desc:'部分多云'},3:{emoji:'☁️',desc:'多云'},45:{emoji:'🌫️',desc:'雾'},48:{emoji:'🌫️',desc:'雾凇'},51:{emoji:'🌧️',desc:'小雨'},53:{emoji:'🌧️',desc:'中雨'},55:{emoji:'🌧️',desc:'大雨'},61:{emoji:'🌧️',desc:'小雨'},63:{emoji:'🌧️',desc:'中雨'},65:{emoji:'🌧️',desc:'大雨'},71:{emoji:'❄️',desc:'小雪'},73:{emoji:'❄️',desc:'中雪'},75:{emoji:'❄️',desc:'大雪'},80:{emoji:'🌦️',desc:'阵雨'},81:{emoji:'🌦️',desc:'中阵雨'},82:{emoji:'🌦️',desc:'大阵雨'},95:{emoji:'⛈️',desc:'雷暴'},96:{emoji:'⛈️',desc:'雷暴冰雹'},99:{emoji:'⛈️',desc:'强雷暴'} }; return map[code] || {emoji:'🌡️',desc:'未知'} }
   async function fetchWeatherData(lat,lon){ const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&timezone=auto`; const response = await fetch(url,{signal:AbortSignal.timeout(8000)}); if(!response.ok) throw new Error(`天气API返回状态 ${response.status}`); const data = await response.json(); if(!data.current_weather) throw new Error('天气数据不可用'); return data }
   async function reverseGeocodeCity(lat,lon){ try{ const url = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=zh`; const response = await fetch(url,{signal:AbortSignal.timeout(6000)}); if(!response.ok) throw new Error('反向地理编码失败'); const data = await response.json(); let cityName = data.city || data.locality || data.principalSubdivision || ''; if(!cityName && data.countryName) cityName = data.countryName; if(!cityName) cityName = `${lat.toFixed(2)},${lon.toFixed(2)}`; return cityName; } catch(e){ addLog('warn','反向地理编码失败: '+e.message); return `${lat.toFixed(2)},${lon.toFixed(2)}`; } }
@@ -699,9 +710,7 @@
   const personaEditModal = document.getElementById('personaEditModal'), personaSelectModal = document.getElementById('personaSelectModal'), personaNameInput = document.getElementById('personaNameInput'), personaDetailInput = document.getElementById('personaDetailInput'), personaAvatarPreview = document.getElementById('personaAvatarPreview'), personaChangeAvatarBtn = document.getElementById('personaChangeAvatarBtn'), personaFileInput = document.getElementById('personaFileInput'), savePersonaBtn = document.getElementById('savePersonaBtn'), cancelPersonaBtn = document.getElementById('cancelPersonaBtn');
   const personaSelectList = document.getElementById('personaSelectList'), closePersonaSelectBtn = document.getElementById('closePersonaSelectBtn'), selectPersonaBtn = document.getElementById('selectPersonaBtn'), myPersonaNameLabel = document.getElementById('myPersonaNameLabel'), activePersonaInfo = document.getElementById('activePersonaInfo');
   const profilePersonaEditor = document.getElementById('profilePersonaEditor'), profileAddPersonaBtn = document.getElementById('profileAddPersonaBtn'), globalExportBtn = document.getElementById('globalExportBtn'), globalImportBtn = document.getElementById('globalImportBtn'), globalResetBtn = document.getElementById('globalResetBtn'), globalImportFile = document.getElementById('globalImportFile');
-
   const changeBgBtn = document.getElementById('changeBgBtn'), clearBgBtn = document.getElementById('clearBgBtn'), bgFileInput = document.getElementById('bgFileInput');
-
   let editingPersonaId = null;
   let waiting = false, currentQuote = null, pendingUserMessages = [], clickCount = 0, clickTimer = null;
   let ccType = 'dog', cNat = {w:0,h:0}, cDisp = {w:0,h:0,left:0,top:0}, draggingF = false, draggingH = false, actHandle = null, dStart = {x:0,y:0}, fStart = {left:0,top:0,size:0};
@@ -935,7 +944,7 @@
         segments.forEach((seg,idx)=>{ const showBtn = (idx===0) && !!finalReasoning; const msgId = 'msg_'+Date.now().toString(36)+Math.random().toString(36).substr(2,5); const ts = now+idx; chatMessages.push({id:msgId,role:'dog',text:seg.trim(),reasoning:(idx===0&&finalReasoning)?finalReasoning:null,timestamp:ts, isAutoReply: isAutoReply || false}); if(lastTs===0||(ts-lastTs)>=300000){ fragment.appendChild(createTimeStampDiv(ts)); lastTs=ts } else { lastTs=Math.max(lastTs,ts) } fragment.appendChild(createDogMsg(seg.trim(),finalReasoning,showBtn,msgId)) });
         messageHistory.push({role:'assistant',content:finalContent||''}); saveChatHistory(); loadingWrapper.replaceWith(fragment);
         if(currentAutoReplyLog){ currentAutoReplyLog.response = finalContent; currentAutoReplyLog.skipped = false; currentAutoReplyLog = null; }
-        if(isAutoReply && !chatViewWrap.classList.contains('active')){
+        if(isAutoReply && document.visibilityState !== 'visible'){
           unreadCount += segments.length; saveGlobalsToActiveChar(); updateUnreadDisplay();
           if(messageListViewWrap.classList.contains('active')) renderCharacterList();
           sendAutoReplyNotifications(segments);
