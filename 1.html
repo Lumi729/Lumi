@@ -1003,21 +1003,43 @@
       saveGlobalsToActiveChar();
     });
   }
-  // 通知开关事件
+  // 通知开关事件（智能权限请求）
   if(notificationEnableCheck){
     notificationEnableCheck.addEventListener('change', async function(){
       if(this.checked){
         if('Notification' in window){
-          const permission = await Notification.requestPermission();
-          if(permission === 'granted'){
-            notificationPermission = permission;
+          const currentPermission = Notification.permission;
+          if(currentPermission === 'granted'){
+            notificationPermission = 'granted';
             apiSettings.notificationEnabled = true;
             saveGlobalsToActiveChar();
-          } else {
-            alert('需要允许通知权限才能启用消息通知');
+            addLog('info','通知已开启（已有权限）');
+          } else if(currentPermission === 'denied'){
+            alert('通知权限已被浏览器阻止。\n请在浏览器设置中允许本站通知，然后重新打开此开关。');
             this.checked = false;
             apiSettings.notificationEnabled = false;
             saveGlobalsToActiveChar();
+          } else {
+            // 默认状态，尝试请求权限
+            try {
+              const permission = await Notification.requestPermission();
+              if(permission === 'granted'){
+                notificationPermission = 'granted';
+                apiSettings.notificationEnabled = true;
+                saveGlobalsToActiveChar();
+                addLog('info','通知权限已获取并开启');
+              } else {
+                alert('需要允许通知权限才能启用消息通知');
+                this.checked = false;
+                apiSettings.notificationEnabled = false;
+                saveGlobalsToActiveChar();
+              }
+            } catch(e) {
+              alert('无法请求通知权限：' + e.message);
+              this.checked = false;
+              apiSettings.notificationEnabled = false;
+              saveGlobalsToActiveChar();
+            }
           }
         } else {
           alert('你的浏览器不支持桌面通知');
@@ -1236,7 +1258,6 @@
   function startAutoReplyTimer(){ stopAutoReplyTimer(); autoReplyTimer = setInterval(checkAutoReply, 10000); }
   function stopAutoReplyTimer(){ if(autoReplyTimer){ clearInterval(autoReplyTimer); autoReplyTimer = null; } }
   function initAll(){
-    // 初始加载时检查通知权限
     if('Notification' in window){
       notificationPermission = Notification.permission;
     }
