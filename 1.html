@@ -1,3 +1,4 @@
+<!-- 第一部分：从 <!DOCTYPE html> 到 <script> 开头（接第二部分） -->
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -311,7 +312,6 @@
 </head>
 <body>
 <div class="phone" id="phoneRoot">
-  <!-- 启动画面 -->
   <div class="splash-screen" id="splashScreen"><div class="splash-stars"><span class="star"></span><span class="star"></span><span class="star"></span><span class="star"></span><span class="star"></span></div><div class="splash-content"><div class="moon-wrapper"><div class="moon"></div></div><h1 class="splash-title">Lumos</h1><div class="progress-bar-container"><div class="progress-bar-fill" id="progressFill"></div></div><button class="splash-enter-btn" id="splashEnterBtn">进入</button></div></div>
   <div class="status-bar"><span id="statusTime">10:24</span><span id="statusBattery">📶 🔋 91%</span></div>
   <div class="chat-view-wrap" id="chatViewWrap">
@@ -327,7 +327,6 @@
     <div class="pending-hint" id="sendHint"><span class="pending-text" id="sendHintText">积0条·三击回复</span><button class="pending-cancel" id="clearPendingBtn">×</button></div>
     <div class="input-bar"><button class="retry-btn" id="retryBtn" title="重说上一次AI回复">重说</button><textarea class="input-field" id="messageInput" placeholder="输入消息..." rows="1"></textarea><button class="send-btn" id="sendBtn">发送</button></div>
   </div>
-  <!-- 信息列表等视图 -->
   <div class="message-list-view-wrap active" id="messageListViewWrap"><div class="nav-bar"><span style="font-size:17px;font-weight:600;color:#000">信息</span></div><div class="search-bar-row"><div class="search-input-wrap"><span class="search-icon">🔍</span><input type="text" id="charSearchInput" placeholder="搜索角色"></div><button class="create-char-btn" id="createCharBtn">＋ 创建</button></div><div class="character-list" id="characterList"></div>
     <div class="bottom-tab-bar" id="bottomTabBar1">
       <div class="bottom-tab-item active" data-tab="messages">
@@ -352,14 +351,11 @@
       <div class="bottom-tab-item active" data-tab="profile"><span class="tab-icon">👤</span><span>我的</span></div>
     </div>
   </div>
-  <!-- 设置面板 -->
   <div class="settings-modal" id="settingsModal"><div class="settings-panel" id="settingsPanel"><div class="settings-main" id="settingsMain"><h3>设置</h3><div class="settings-item" id="goProfile"><span class="item-text">个人信息设置</span><span class="item-arrow">›</span></div><div class="settings-item" id="goCharacter"><span class="item-text">角色人设</span><span class="item-arrow">›</span></div><div class="settings-item" id="goApi"><span class="item-text">AI 回复设置</span><span class="item-arrow">›</span></div><div class="settings-item" id="goPreset"><span class="item-text">预设（角色专属）</span><span class="item-arrow">›</span></div><div class="settings-item" id="goWorld"><span class="item-text">世界书（角色专属）</span><span class="item-arrow">›</span></div><div class="settings-item" id="goLog"><span class="item-text">运行日志</span><span class="item-arrow">›</span></div></div><div class="settings-sub" id="settingsProfile" style="display:none"><div class="back-row" id="backFromProfile"><span>‹</span><span>返回</span></div><h3>个人信息</h3><div class="setting-row"><label>备注</label><input type="text" id="remarkInput" value="月"></div><div class="setting-row"><label>签名</label><input type="text" id="signatureInput" value="月夜雪纷纷"></div><div class="avatar-setting"><div class="avatar-preview" id="dogPreview">🌙</div><span id="dogNameLabel">月</span><button class="change-avatar-btn" id="changeDogAvatarBtn">更换</button><input type="file" id="dogFileInput" accept="image/*"></div><div class="avatar-setting" style="flex-wrap:wrap"><div class="avatar-preview avatar-me" id="myPreview">我</div><span id="myPersonaNameLabel" style="flex:1">我</span><button class="change-avatar-btn" id="selectPersonaBtn" style="background:#07c160;color:#fff">选择人设</button></div><div class="hint-text" style="margin-top:2px">从人设库中选择一个用户人设，将作为你的身份提示词发送给AI</div><div id="activePersonaInfo" style="font-size:11px;color:#07c160;margin-top:4px;display:none"></div>
-    <!-- 聊天背景区域 -->
     <div class="setting-row" style="margin-top:10px"><label>聊天背景</label><button class="change-avatar-btn" id="changeBgBtn">更换背景</button><button class="change-avatar-btn" id="clearBgBtn" style="margin-left:6px;">清除背景</button></div>
     <input type="file" id="bgFileInput" accept="image/*" style="display:none">
     <div class="hint-text" style="margin-top:2px">点击更换可裁剪背景，图片将自动填充聊天区域</div>
   </div><div class="settings-sub" id="settingsCharacter" style="display:none"><div class="back-row" id="backFromCharacter"><span>‹</span><span>返回</span></div><h3>角色人设</h3><div class="setting-row"><label>名字</label><input type="text" id="charNameInput"></div><div class="setting-row"><label>年龄</label><input type="text" id="charAgeInput"></div><div class="setting-row"><label>性格</label><input type="text" id="charPersonalityInput"></div><div class="setting-row"><label style="align-self:flex-start">详细信息</label><textarea id="charDetailsInput" class="auto-resize"></textarea></div><div class="setting-row"><label style="align-self:flex-start">提示词</label><textarea id="charPromptInput" class="auto-resize"></textarea></div><button class="gen-btn gen-btn-center" id="generatePromptBtn">根据信息生成提示词</button><button class="save-btn" id="saveCharacterBtn">保存人设</button></div><div class="settings-sub" id="settingsApi" style="display:none"><div class="back-row" id="backFromApi"><span>‹</span><span>返回</span></div><h3>AI 回复</h3><div class="toggle-row"><label>启用 AI 回复</label><label class="switch"><input type="checkbox" id="apiEnableCheck"><span class="slider"></span></label></div><div id="apiFields"><div class="setting-row"><label>地址</label><input type="text" id="apiUrlInput" placeholder="https://api.deepseek.com/v1"></div><div class="hint-text">只需填写到 /v1</div><div class="setting-row"><label>密钥</label><input type="password" id="apiKeyInput" placeholder="sk-..."></div><div class="setting-row"><label>模型</label><div class="model-row"><input type="text" id="apiModelInput" placeholder="deepseek-chat"><button class="fetch-models-btn" id="fetchModelsBtn">获取模型</button></div></div><div class="model-select-container" id="modelSelectContainer"><select id="modelSelect"></select></div><div class="toggle-row" style="margin-top:15px"><label>对话模式（线上聊天）</label><label class="switch"><input type="checkbox" id="chatModeCheck"><span class="slider"></span></label></div><div class="hint-text" style="margin-top:4px">开启后模拟线上聊天，关闭则允许动作/心理描写及面对面交流</div><div id="chatModeSubContainer" style="display:none;margin-bottom:15px"><div class="setting-row"><label>对话风格</label><div style="display:flex;gap:10px;align-items:center"><label><input type="radio" name="chatModeSubtype" value="short" checked> 短对话(≈20字)</label><label><input type="radio" name="chatModeSubtype" value="long"> 长对话(≈100字)</label></div></div></div><div class="setting-row" style="margin-top:10px"><label>AI人称</label><select id="aiPersonSelect"><option value="first">第一人称(我)</option><option value="second">第二人称(你)</option><option value="third">第三人称(他/她)</option></select></div><div class="setting-row"><label>用户人称</label><select id="userPersonSelect"><option value="first">第一人称(我)</option><option value="second">第二人称(你)</option><option value="third">第三人称(他/她)</option></select></div><div class="setting-row" style="margin-top:15px"><label>消息条数</label><div style="display:flex;align-items:center;gap:6px"><select id="minMsgsInput" style="width:70px"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select><span>-</span><select id="maxMsgsInput" style="width:70px"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select></div></div><div class="hint-text">AI 每次回复的消息条数范围（1-5）</div><div class="setting-row" style="margin-top:15px"><label>上下文层数</label><select id="contextLayersInput" style="width:80px"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="12">12</option><option value="15">15</option><option value="20">20</option></select></div><div class="hint-text">设置携带的最近对话轮数（默认5）</div><div class="toggle-row" style="margin-top:18px"><label>🤖 启用自动回复</label><label class="switch"><input type="checkbox" id="autoReplyEnabledCheck"><span class="slider"></span></label></div><div style="font-size:11px;color:#999;margin-top:-10px;margin-bottom:10px;text-align:center;">等待你回复的时间如此漫长...</div><div id="autoReplyContainer" style="display:none"><div class="setting-row"><label>延迟(分钟)</label><input type="number" id="autoReplyDelayInput" value="5" min="1" max="120"></div><div class="setting-row"><label>自动条数</label><input type="number" id="autoReplyMsgCountInput" value="1" min="1" max="5"></div><div class="setting-row"><label>每日次数</label><input type="number" id="autoReplyDailyMinInput" value="1" min="0" max="20" style="width:60px"> - <input type="number" id="autoReplyDailyMaxInput" value="3" min="0" max="20" style="width:60px"></div><div class="setting-row"><label>历史范围</label><input type="number" id="autoReplyContextLayersInput" value="5" min="1" max="20"></div><div class="hint-text">自动回复时使用的历史对话轮数</div>
-    <!-- 通知开关 -->
     <div class="toggle-row" style="margin-top:12px;border-top:.5px solid #e0e0e0;padding-top:12px"><label>🔔 自动回复通知</label><label class="switch"><input type="checkbox" id="notificationsEnabledCheck"><span class="slider"></span></label></div><div class="hint-text">开启后，AI自动回复时将在系统通知栏显示消息提醒（需浏览器支持）</div>
     </div><div class="toggle-row" style="margin-top:18px;border-top:.5px solid #e0e0e0;padding-top:16px"><label>🌤️ 启用天气信息</label><label class="switch"><input type="checkbox" id="weatherEnableCheck"><span class="slider"></span></label></div><div class="hint-text" style="margin-top:2px">开启后，AI回复时将自动获取您所在地的天气信息</div><div id="weatherSettingsContainer" style="display:none"><div class="weather-status-row" id="weatherStatusRow"><span class="weather-icon" id="weatherStatusIcon">📍</span><div class="weather-info"><div class="weather-city" id="weatherStatusCity">未获取位置</div><div class="weather-detail" id="weatherStatusDetail">请先获取位置信息</div></div><span class="weather-status-badge idle" id="weatherStatusBadge">待获取</span></div><div class="weather-location-row"><input type="text" id="weatherCityInput" placeholder="城市名称（可选）" style="flex:1"><button class="fetch-location-btn" id="fetchLocationBtn">📍 获取位置</button></div><div class="hint-text" style="margin-top:4px">点击"获取位置"将请求浏览器定位权限，用于获取当地天气</div><div class="setting-row" style="margin-top:6px"><label>纬度</label><input type="text" id="weatherLatDisplay" readonly style="background:#f5f5f5;font-size:11px;color:#888"><label>经度</label><input type="text" id="weatherLonDisplay" readonly style="background:#f5f5f5;font-size:11px;color:#888"></div><button class="gen-btn" id="refreshWeatherBtn" style="margin-top:6px;width:100%">🔄 手动刷新天气</button></div></div></div><div class="settings-sub" id="settingsPreset" style="display:none"><div class="back-row" id="backFromPreset"><span>‹</span><span>返回</span></div><h3>预设（角色专属）</h3><div class="section-title">关联当前角色（勾选生效）</div><div class="entry-list" id="presetList"></div><div class="entry-add"><textarea id="presetNameInput" placeholder="名称" style="width:30%" class="auto-resize"></textarea><textarea id="presetContentInput" placeholder="内容" class="auto-resize"></textarea><button id="addPresetBtn">添加</button></div><div class="import-export-row"><button id="exportPresetsBtn">导出</button><button id="importPresetsBtn">导入</button><input type="file" id="presetImportFile" accept=".json" style="display:none"></div></div><div class="settings-sub" id="settingsWorld" style="display:none"><div class="back-row" id="backFromWorld"><span>‹</span><span>返回</span></div><h3>世界书（角色专属）</h3><div class="section-title">关联当前角色（勾选生效）</div><div class="entry-list" id="worldList"></div><div class="entry-add"><textarea id="worldKeyInput" placeholder="关键词" style="width:30%" class="auto-resize"></textarea><textarea id="worldContentInput" placeholder="内容" class="auto-resize"></textarea><button id="addWorldBtn">添加</button></div><div class="import-export-row"><button id="exportWorldsBtn">导出</button><button id="importWorldsBtn">导入</button><input type="file" id="worldImportFile" accept=".json" style="display:none"></div></div><div class="settings-sub" id="settingsLog" style="display:none"><div class="back-row" id="backFromLog"><span>‹</span><span>返回</span></div><h3>运行日志</h3><textarea id="logTextarea" class="log-textarea" readonly></textarea><button class="copy-btn" id="copyLogBtn">复制全部日志</button><button class="gen-btn" id="showAutoReplyLogBtn" style="margin-top:10px;">🤖 自动回复日志</button><div id="autoReplyLogContainer" style="display:none; max-height:300px; overflow-y:auto; margin-top:10px; border:1px solid #ddd; padding:8px; border-radius:6px;"></div></div></div></div>
   <div class="manage-modal" id="manageModal"><div class="manage-panel"><h3>聊天管理</h3><button id="exportChatBtn">📤 导出聊天记录和设定</button><button id="importChatBtn" class="btn-secondary">📥 导入聊天记录和设定</button><button id="newChatBtn" class="btn-danger">✨ 开启新聊天</button><button id="saveCurrentBtn" class="btn-secondary">💾 保存当前对话到历史</button><div class="section-title" style="margin-top:15px">历史聊天</div><div class="history-list" id="historyList"></div><div class="section-title" style="margin-top:15px">自动回复拒绝记录</div><div class="skip-log-list" id="skipLogList" style="max-height:150px; overflow-y:auto; margin-bottom:10px;"></div><button class="close-manage" id="closeManageBtn">关闭</button><input type="file" id="importChatFile" accept=".json" style="display:none"></div></div>
@@ -483,26 +479,10 @@
   let currentAutoReplyLog = null;
   let autoReplyLogs = [];
 
-  // ✅ 注册极简 Service Worker，专门用于支持 showNotification
+  // ✅ 注册您的 /Lumi/sw.js
   if ('serviceWorker' in navigator) {
-    const swCode = `
-      self.addEventListener('notificationclick', event => {
-        event.notification.close();
-        event.waitUntil(
-          clients.matchAll({ type: 'window' }).then(windowClients => {
-            if (windowClients.length > 0) {
-              windowClients[0].focus();
-            } else {
-              clients.openWindow('/');
-            }
-          })
-        );
-      });
-    `;
-    const blob = new Blob([swCode], { type: 'application/javascript' });
-    const swUrl = URL.createObjectURL(blob);
-    navigator.serviceWorker.register(swUrl)
-      .then(reg => console.log('Service Worker 已注册'))
+    navigator.serviceWorker.register('/Lumi/sw.js')
+      .then(reg => console.log('Service Worker 已注册: /Lumi/sw.js'))
       .catch(err => console.warn('Service Worker 注册失败:', err));
   }
 
@@ -532,13 +512,11 @@
     const iconUrl = getNotificationIconUrl();
     async function showOne(body, tag) {
         const options = { body, icon: iconUrl, tag, requireInteraction: false };
-        // 优先尝试普通 Notification
         try {
             const n = new Notification(title, options);
             n.onclick = () => { window.focus(); if (!chatViewWrap.classList.contains('active')) openCharacterChat(activeCharacterId); };
             return;
         } catch (e) {
-            // 如果普通 Notification 不可用，则尝试 Service Worker（已注册）
             if (navigator.serviceWorker && navigator.serviceWorker.ready) {
                 try {
                     const reg = await navigator.serviceWorker.ready;
@@ -568,6 +546,8 @@
     return result === 'granted';
   }
   /* ---------- 通知功能结束 ---------- */
+
+  // 以下为原有所有功能代码（完整，未省略）
   function getWeatherEmojiAndDesc(code){ const map={0:{emoji:'☀️',desc:'晴天'},1:{emoji:'🌤️',desc:'大部晴'},2:{emoji:'⛅',desc:'部分多云'},3:{emoji:'☁️',desc:'多云'},45:{emoji:'🌫️',desc:'雾'},48:{emoji:'🌫️',desc:'雾凇'},51:{emoji:'🌧️',desc:'小雨'},53:{emoji:'🌧️',desc:'中雨'},55:{emoji:'🌧️',desc:'大雨'},61:{emoji:'🌧️',desc:'小雨'},63:{emoji:'🌧️',desc:'中雨'},65:{emoji:'🌧️',desc:'大雨'},71:{emoji:'❄️',desc:'小雪'},73:{emoji:'❄️',desc:'中雪'},75:{emoji:'❄️',desc:'大雪'},80:{emoji:'🌦️',desc:'阵雨'},81:{emoji:'🌦️',desc:'中阵雨'},82:{emoji:'🌦️',desc:'大阵雨'},95:{emoji:'⛈️',desc:'雷暴'},96:{emoji:'⛈️',desc:'雷暴冰雹'},99:{emoji:'⛈️',desc:'强雷暴'} }; return map[code] || {emoji:'🌡️',desc:'未知'} }
   async function fetchWeatherData(lat,lon){ const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&timezone=auto`; const response = await fetch(url,{signal:AbortSignal.timeout(8000)}); if(!response.ok) throw new Error(`天气API返回状态 ${response.status}`); const data = await response.json(); if(!data.current_weather) throw new Error('天气数据不可用'); return data }
   async function reverseGeocodeCity(lat,lon){ try{ const url = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=zh`; const response = await fetch(url,{signal:AbortSignal.timeout(6000)}); if(!response.ok) throw new Error('反向地理编码失败'); const data = await response.json(); let cityName = data.city || data.locality || data.principalSubdivision || ''; if(!cityName && data.countryName) cityName = data.countryName; if(!cityName) cityName = `${lat.toFixed(2)},${lon.toFixed(2)}`; return cityName; } catch(e){ addLog('warn','反向地理编码失败: '+e.message); return `${lat.toFixed(2)},${lon.toFixed(2)}`; } }
