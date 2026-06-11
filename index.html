@@ -427,6 +427,7 @@
       chatMessages: [{ id: initialMsgId, role:'dog', text:'你好呀～今天也要开心喔！', reasoning:null, quoteText:null, quoteRole:null, quoteId:null, timestamp: Date.now(), isAutoReply: false }],
       messageHistory: [{ role:'assistant', content:'你好呀～今天也要开心喔！' }],
       conversations:[], activeConversationId:null,
+      activePersonaId: null,
       apiSettings: {
         enabled: load('apiEnabled',false), url: load('apiUrl','https://api.deepseek.com/v1'), key: load('apiKey',''), model: load('apiModel','deepseek-chat'),
         chatMode: load('chatMode',false), chatModeSubtype: load('chatModeSubtype','short'), contextLayers: load('contextLayers',5),
@@ -590,6 +591,8 @@
     unreadCount = ac.unreadCount || 0; fetchedCityName = apiSettings.autoWeatherCity || '';
     remarkVal = ac.name || '月'; signatureVal = ac.signature || '月夜雪纷纷';
     avatarState.dog = { type: ac.avatarType==='image'?'image':'text', text: ac.avatarEmoji||'🌙', src: ac.avatarSrc||'' };
+    // 加载角色专属的激活人设ID
+    activeUserPersonaId = ac.activePersonaId !== undefined ? ac.activePersonaId : (userPersonas.length>0 ? userPersonas[0].id : null);
     const activePersona = getActiveUserPersona();
     if(activePersona && activePersona.avatar){ avatarState.user = {...activePersona.avatar} } else { avatarState.user = load('avatarUser',{type:'text',text:'我',src:''}) }
     chatMessages.forEach(ensureMsgId); chatMessages.forEach(ensureMsgTimestamp);
@@ -601,7 +604,9 @@
     ac.chatMessages = chatMessages; ac.messageHistory = messageHistory; ac.conversations = conversations; ac.activeConversationId = activeConvId;
     ac.charSettings = charSettings; ac.apiSettings = apiSettings; ac.name = remarkVal; ac.signature = signatureVal;
     ac.avatarEmoji = avatarState.dog.type==='text' ? avatarState.dog.text : '🌙'; ac.avatarType = avatarState.dog.type; ac.avatarSrc = avatarState.dog.src || '';
-    ac.unreadCount = unreadCount; ac.lastActive = new Date().toISOString(); saveAllData();
+    ac.unreadCount = unreadCount; ac.lastActive = new Date().toISOString();
+    ac.activePersonaId = activeUserPersonaId;
+    saveAllData();
     const activePersona = getActiveUserPersona(); if(activePersona){ activePersona.avatar = {...avatarState.user}; saveUserPersonas() }
   }
   function ensureMsgId(msg){ if(!msg.id) msg.id = 'msg_'+Date.now().toString(36)+Math.random().toString(36).substring(2,7) }
@@ -946,6 +951,25 @@
   function checkAutoReply(){ if(!apiSettings.autoReplyEnabled) return; if(!apiSettings.enabled || !apiSettings.key || !apiSettings.url) return; if(chatMessages.length===0) return; const lastMsg = chatMessages[chatMessages.length-1]; const lastTs = lastMsg ? (lastMsg.timestamp||0) : 0; const minutesPassed = (Date.now()-lastTs)/60000; if(minutesPassed < apiSettings.autoReplyDelayMinutes) return; const today = new Date().toDateString(); if(apiSettings.autoReplyLastDate !== today){ apiSettings.autoReplyTodayCount = 0; apiSettings.autoReplyLastDate = today; } const max = apiSettings.autoReplyDailyMax; const min = apiSettings.autoReplyDailyMin; if(apiSettings.autoReplyTodayCount >= max) return; const count = Math.floor(Math.random()*(max-min+1))+min; if(apiSettings.autoReplyTodayCount >= count) return; apiSettings.autoReplyTodayCount++; saveGlobalsToActiveChar(); triggerAiReply(true, apiSettings.autoReplyMsgCount, apiSettings.autoReplyMsgCount); }
   function startAutoReplyTimer(){ stopAutoReplyTimer(); autoReplyTimer = setInterval(checkAutoReply, 10000); }
   function stopAutoReplyTimer(){ if(autoReplyTimer){ clearInterval(autoReplyTimer); autoReplyTimer = null; } }
+  // 键盘弹出时自动滚动到底部
+  messageInput.addEventListener('focus', () => {
+    if (window.visualViewport) {
+      const viewport = window.visualViewport;
+      const handler = () => {
+        requestAnimationFrame(() => {
+          chatArea.scrollTop = chatArea.scrollHeight;
+        });
+      };
+      viewport.addEventListener('resize', handler);
+      viewport.addEventListener('scroll', handler);
+      const blurHandler = () => {
+        viewport.removeEventListener('resize', handler);
+        viewport.removeEventListener('scroll', handler);
+        messageInput.removeEventListener('blur', blurHandler);
+      };
+      messageInput.addEventListener('blur', blurHandler);
+    }
+  });
   function initAll(){ loadActiveCharToGlobals(); refreshAllUIForActiveChar(); remarkInput.value = remarkVal; signatureInput.value = signatureVal; updateRemark(remarkVal); updateSignature(signatureVal); refreshAvatars('dog'); refreshAvatars('user'); updatePersonaDisplay(); reloadChatUI(); chatArea.scrollTop = chatArea.scrollHeight; renderCharacterList(); ensureId(libraryPresets); ensureId(libraryWorlds); ensureId(userPersonas); saveAllData(); showMain(); messageListViewWrap.classList.add('active'); renderCharacterList(); updateAllTabBars('messages'); addLog('info','页面加载完成'); setInterval(updateAllTimestamps,30000); updateWeatherStatusUI(); if(apiSettings.weatherEnabled) startWeatherAutoRefresh(); if(apiSettings.autoReplyEnabled) startAutoReplyTimer(); updateUnreadDisplay(); }
   initAll();
 })();
