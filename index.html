@@ -80,8 +80,8 @@
         .message-actions button:active{background:rgba(0,0,0,.1)}
         .reasoning-btn{font-size:12px;color:#999;cursor:pointer;margin-left:4px;user-select:none;vertical-align:middle}
         .reasoning-box{font-size:12px;color:#666;background:#f5f5f5;border-radius:4px;padding:6px 8px;margin-top:6px;max-height:120px;overflow-y:auto;white-space:pre-wrap;word-break:break-word;line-height:1.4}
-        .citation-block{margin-bottom:2px;padding:1px 4px;background:#f0f0f0;border-radius:4px;font-size:9px;color:#888;border-top:1px dashed #ccc;border-bottom:1px dashed #ccc;position:relative;word-break:break-word;cursor:pointer;max-width:75%;transition:background .2s;display:inline-block;text-align:left;line-height:1.2}
-        .citation-block:active{background:#e0e0e0}
+        .citation-block{margin-bottom:2px;padding:1px 4px;background:rgba(240,240,240,0.5);border-radius:4px;font-size:9px;color:#888;border-top:1px dashed #ccc;border-bottom:1px dashed #ccc;position:relative;word-break:break-word;cursor:pointer;max-width:75%;transition:background .2s;display:inline-block;text-align:left;line-height:1.2}
+        .citation-block:active{background:rgba(224,224,224,0.5)}
         .citation-block::before{content:"——————";display:block;text-align:center;font-size:7px;color:#bbb;margin-bottom:0;letter-spacing:2px}
         .citation-block::after{content:"——————";display:block;text-align:center;font-size:7px;color:#bbb;margin-top:0;letter-spacing:2px}
         .citation-block .citation-author{font-weight:600;margin-bottom:0;font-size:8px;color:#666}
@@ -289,7 +289,7 @@
         .msg-edit-cancel{background:#e0e0e0;color:#333}
         .auto-resize{min-height:60px;max-height:200px;overflow-y:auto}
         .lib-select{width:100%;margin-bottom:10px}
-        .time-stamp{text-align:center;font-size:12px;color:#b2b2b2;margin:10px 0 8px}
+        .time-stamp{text-align:center;font-size:12px;color:#b2b2b2;margin:10px auto 8px;display:inline-block;padding:2px 12px;background:rgba(0,0,0,0.06);border-radius:12px;align-self:center;}
         .weather-status-row{display:flex;align-items:center;gap:8px;padding:8px 10px;background:#f5f5f5;border-radius:8px;margin-bottom:10px;font-size:13px;flex-wrap:wrap}
         .weather-status-row .weather-icon{font-size:22px;flex-shrink:0}
         .weather-status-row .weather-info{flex:1;min-width:0;color:#333}
@@ -752,7 +752,6 @@
     const firstId = recalledIds[0];
     hint.addEventListener('click', () => { if (hint.parentNode) hint.parentNode.removeChild(hint); if (firstId) scrollToMessage(firstId); });
     chatArea.appendChild(hint);
-    // 不再自动消失，仅点击关闭
   }
   function processAiRecall(content, newSegments) {
     const regex = /\[RECALL:(-?\d+)\]/g;
@@ -760,16 +759,8 @@
     while ((match = regex.exec(content)) !== null) {
       const n = parseInt(match[1]); cleanContent = cleanContent.replace(match[0], '');
       if (isNaN(n)) continue;
-      if (n >= 1) { // 历史消息
-        const msgId = recallDogMessage(n); if (msgId) recalledIds.push(msgId);
-      } else if (n <= 0) { // 本轮消息：n=0为第一条，n=-1为第二条，以此类推
-        const idx = Math.abs(n); // 0->0, -1->1, -2->2 ...
-        if (idx < newSegments.length) {
-          const seg = newSegments[idx];
-          seg.recalled = true; seg.recalledText = seg.text; seg.text = '';
-          recalledIds.push(seg.id);
-        }
-      }
+      if (n >= 1) { const msgId = recallDogMessage(n); if (msgId) recalledIds.push(msgId); }
+      else if (n <= 0) { const idx = Math.abs(n); if (idx < newSegments.length) { const seg = newSegments[idx]; seg.recalled = true; seg.recalledText = seg.text; seg.text = ''; recalledIds.push(seg.id); } }
     }
     return { content: cleanContent.trim(), recalledIds };
   }
@@ -792,7 +783,6 @@
     if(min===max) systemPrompt += `\n请发送恰好 ${min} 条消息，每条消息之间用双换行分隔。`; else systemPrompt += `\n请发送 ${min} 到 ${max} 条消息，每条消息之间用双换行分隔。`;
     systemPrompt += '\n\n当用户的消息以 [用户引用了来自...] 开头时，表示用户针对该引用内容进行了回复，请基于引用内容进行回应。';
     systemPrompt += '\n\n【思维链指令】每次回复时，请在开头用"【思考过程】"和"【思考结束】"包裹你的内心思考过程...';
-    // 新的撤回说明
     systemPrompt += `\n
 【撤回功能说明】
 你现在拥有撤回你之前发送的消息的能力，包括本轮回复中你刚发出的消息。
