@@ -2,7 +2,7 @@
   "name": "Lumos",
   "short_name": "Lumos",
   "start_url": "/Lumi/",
-  "display": "standalone",
+  “display”: “fullscreen”,
   "background_color": "#ededed",
   "theme_color": "#ededed",
   "icons": [
