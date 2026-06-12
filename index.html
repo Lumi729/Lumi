@@ -1037,7 +1037,7 @@
   async function checkAutoReply() {
     if (autoReplyInProgress) return;
     autoReplyInProgress = true;
-    const oldCharId = activeCharacterId;
+    const currentActiveCharId = activeCharacterId;
     saveGlobalsToActiveChar();
     try {
       for (const char of characters) {
@@ -1059,14 +1059,14 @@
         activeCharacterId = char.id;
         loadActiveCharToGlobals();
         apiSettings.autoReplyTodayCount++;
-        const isActiveChat = chatViewWrap.classList.contains('active') && activeCharacterId === char.id;
+        const isActiveChat = chatViewWrap.classList.contains('active') && currentActiveCharId === char.id;
         const useSkipUI = !isActiveChat;
         await triggerAiReply(true, apiSettings.autoReplyMsgCount, apiSettings.autoReplyMsgCount, useSkipUI, isActiveChat);
         saveGlobalsToActiveChar();
         updateUnreadDisplay();
       }
     } finally {
-      activeCharacterId = oldCharId;
+      activeCharacterId = currentActiveCharId;
       loadActiveCharToGlobals();
       autoReplyInProgress = false;
       updateUnreadDisplay();
