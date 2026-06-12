@@ -6,7 +6,6 @@
     <title>Lumos</title>
     <link rel="manifest" href="/Lumi/manifest.json">
     <meta name="theme-color" content="#ededed">
-    <!-- iOS 全屏支持 -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <style>
@@ -388,7 +387,6 @@
     splashEnterBtn.addEventListener('click', function() {
       sessionStorage.setItem(SPLASH_SESSION_KEY, 'true');
       if (splashScreen) splashScreen.classList.add('hide');
-      // 尝试全屏
       if (document.documentElement.requestFullscreen) {
         document.documentElement.requestFullscreen().catch(err => console.log('无法进入全屏:', err));
       } else if (document.documentElement.webkitRequestFullscreen) {
@@ -411,8 +409,8 @@
   function getAllSettingsData() { const data = {}; for(let i=0;i<localStorage.length;i++){ const key = localStorage.key(i); if(key && key.startsWith('dogchat_multi_')){ try{ data[key] = JSON.parse(localStorage.getItem(key)) } catch(e){ data[key] = localStorage.getItem(key) } } } return data }
   function restoreAllSettingsData(data) { const keysToRemove = []; for(let i=0;i<localStorage.length;i++){ const key = localStorage.key(i); if(key && key.startsWith('dogchat_multi_')) keysToRemove.push(key) } keysToRemove.forEach(k => localStorage.removeItem(k)); for(const [key,value] of Object.entries(data)){ if(key.startsWith('dogchat_multi_')){ try{ localStorage.setItem(key, JSON.stringify(value)) } catch(e){} } } }
   function clearAllSettings() { const keysToRemove = []; for(let i=0;i<localStorage.length;i++){ const key = localStorage.key(i); if(key && key.startsWith('dogchat_multi_')) keysToRemove.push(key) } keysToRemove.forEach(k => localStorage.removeItem(k)) }
-  const statusTime = document.getElementById('statusTime'), statusBattery = document.getElementById('statusBattery');
-  function updateStatusTime() { const now = new Date(); statusTime.textContent = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}` }
+  const statusTimeEl = document.getElementById('statusTime'), statusBattery = document.getElementById('statusBattery');
+  function updateStatusTime() { const now = new Date(); statusTimeEl.textContent = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}` }
   function updateBatteryDisplay(battery) { if(!statusBattery) return; const level = Math.round(battery.level*100), charging = battery.charging; let icon = '🔋'; if(charging) icon = '⚡'; if(level<=15) icon = '🪫'; statusBattery.textContent = `📶 ${icon} ${level}%` }
   async function initBattery() { if(!navigator.getBattery || !statusBattery) return; try{ const battery = await navigator.getBattery(); updateBatteryDisplay(battery); battery.addEventListener('levelchange',()=> updateBatteryDisplay(battery)); battery.addEventListener('chargingchange',()=> updateBatteryDisplay(battery)) } catch(e){ addLog('warn','电池状态API不可用') } }
   updateStatusTime(); setInterval(updateStatusTime,1000); initBattery();
@@ -1108,7 +1106,32 @@
       messageInput.addEventListener('blur', blurHandler);
     }
   });
-  function initAll(){ loadActiveCharToGlobals(); refreshAllUIForActiveChar(); remarkInput.value = remarkVal; signatureInput.value = signatureVal; updateRemark(remarkVal); updateSignature(signatureVal); refreshAvatars('dog'); refreshAvatars('user'); updatePersonaDisplay(); reloadChatUI(); chatArea.scrollTop = chatArea.scrollHeight; renderCharacterList(); ensureId(libraryPresets); ensureId(libraryWorlds); ensureId(userPersonas); saveAllData(); showMain(); messageListViewWrap.classList.add('active'); renderCharacterList(); updateAllTabBars('messages'); addLog('info','页面加载完成'); setInterval(updateAllTimestamps,30000); updateWeatherStatusUI(); if(apiSettings.weatherEnabled) startWeatherAutoRefresh(); if(apiSettings.autoReplyEnabled) startAutoReplyTimer(); updateUnreadDisplay(); }
+  function initAll(){
+    loadActiveCharToGlobals(); refreshAllUIForActiveChar();
+    remarkInput.value = remarkVal; signatureInput.value = signatureVal;
+    updateRemark(remarkVal); updateSignature(signatureVal);
+    refreshAvatars('dog'); refreshAvatars('user'); updatePersonaDisplay();
+    reloadChatUI(); chatArea.scrollTop = chatArea.scrollHeight;
+    renderCharacterList(); ensureId(libraryPresets); ensureId(libraryWorlds); ensureId(userPersonas);
+    saveAllData(); showMain(); messageListViewWrap.classList.add('active'); renderCharacterList();
+    updateAllTabBars('messages'); addLog('info','页面加载完成');
+    setInterval(updateAllTimestamps,30000); updateWeatherStatusUI();
+    if(apiSettings.weatherEnabled) startWeatherAutoRefresh();
+    if(apiSettings.autoReplyEnabled) startAutoReplyTimer();
+    updateUnreadDisplay();
+    // 双击左上角时间重新全屏
+    if (statusTimeEl) {
+      statusTimeEl.addEventListener('dblclick', () => {
+        if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+          if (document.documentElement.requestFullscreen) {
+            document.documentElement.requestFullscreen().catch(() => {});
+          } else if (document.documentElement.webkitRequestFullscreen) {
+            document.documentElement.webkitRequestFullscreen();
+          }
+        }
+      });
+    }
+  }
   initAll();
 })();
 </script>
