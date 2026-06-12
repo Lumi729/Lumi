@@ -203,8 +203,8 @@
         .delete-actions .btn-confirm:disabled{opacity:.5}
         @keyframes highlightFlash{0%{background-color:rgba(7,193,96,.15)}100%{background-color:transparent}}
         .msg-wrapper.flash-highlight{animation:highlightFlash 1.5s ease-out}
-        .recall-system-hint{text-align:center;margin:8px 0;color:#666;font-size:12px;cursor:pointer;transition:opacity 0.5s;}
-        .recall-system-hint:active{background:rgba(0,0,0,.03)}
+        .recall-system-hint{text-align:center;font-size:12px;color:#e0e0e0;margin:10px auto 8px;display:inline-block;padding:2px 12px;background:rgba(0,0,0,0.15);border-radius:12px;align-self:center;cursor:pointer;transition:opacity 0.5s;}
+        .recall-system-hint:active{background:rgba(0,0,0,0.2)}
         .message-list-view{display:flex;flex-direction:column;flex:1;background:#ededed}
         .search-bar-row{display:flex;align-items:center;padding:8px 12px;gap:8px;background:#ededed;border-bottom:.5px solid rgba(0,0,0,.08)}
         .search-input-wrap{flex:1;background:#fff;border-radius:6px;display:flex;align-items:center;padding:6px 10px;gap:6px}
@@ -591,7 +591,6 @@
     unreadCount = ac.unreadCount || 0; fetchedCityName = apiSettings.autoWeatherCity || '';
     remarkVal = ac.name || '月'; signatureVal = ac.signature || '月夜雪纷纷';
     avatarState.dog = { type: ac.avatarType==='image'?'image':'text', text: ac.avatarEmoji||'🌙', src: ac.avatarSrc||'' };
-    // 加载角色专属的激活人设ID
     activeUserPersonaId = ac.activePersonaId !== undefined ? ac.activePersonaId : (userPersonas.length>0 ? userPersonas[0].id : null);
     const activePersona = getActiveUserPersona();
     if(activePersona && activePersona.avatar){ avatarState.user = {...activePersona.avatar} } else { avatarState.user = load('avatarUser',{type:'text',text:'我',src:''}) }
@@ -753,7 +752,7 @@
   function showRecallHint(recalledIds) {
     if (!recalledIds || recalledIds.length === 0) return;
     const count = recalledIds.length;
-    const hint = document.createElement('div'); hint.className = 'recall-system-hint'; hint.textContent = `对方撤回了 ${count} 条消息`; hint.style.cursor = 'pointer';
+    const hint = document.createElement('div'); hint.className = 'recall-system-hint'; hint.textContent = `对方撤回了 ${count} 条消息`;
     const firstId = recalledIds[0];
     hint.addEventListener('click', () => { if (hint.parentNode) hint.parentNode.removeChild(hint); if (firstId) scrollToMessage(firstId); });
     chatArea.appendChild(hint);
@@ -951,7 +950,6 @@
   function checkAutoReply(){ if(!apiSettings.autoReplyEnabled) return; if(!apiSettings.enabled || !apiSettings.key || !apiSettings.url) return; if(chatMessages.length===0) return; const lastMsg = chatMessages[chatMessages.length-1]; const lastTs = lastMsg ? (lastMsg.timestamp||0) : 0; const minutesPassed = (Date.now()-lastTs)/60000; if(minutesPassed < apiSettings.autoReplyDelayMinutes) return; const today = new Date().toDateString(); if(apiSettings.autoReplyLastDate !== today){ apiSettings.autoReplyTodayCount = 0; apiSettings.autoReplyLastDate = today; } const max = apiSettings.autoReplyDailyMax; const min = apiSettings.autoReplyDailyMin; if(apiSettings.autoReplyTodayCount >= max) return; const count = Math.floor(Math.random()*(max-min+1))+min; if(apiSettings.autoReplyTodayCount >= count) return; apiSettings.autoReplyTodayCount++; saveGlobalsToActiveChar(); triggerAiReply(true, apiSettings.autoReplyMsgCount, apiSettings.autoReplyMsgCount); }
   function startAutoReplyTimer(){ stopAutoReplyTimer(); autoReplyTimer = setInterval(checkAutoReply, 10000); }
   function stopAutoReplyTimer(){ if(autoReplyTimer){ clearInterval(autoReplyTimer); autoReplyTimer = null; } }
-  // 键盘弹出时自动滚动到底部
   messageInput.addEventListener('focus', () => {
     if (window.visualViewport) {
       const viewport = window.visualViewport;
