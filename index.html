@@ -332,6 +332,9 @@
         .char-action-sheet .action-cancel{margin-top:4px;font-weight:600;color:#007aff}
         .char-card.pinned{background:rgba(0,0,0,.03)}
         .pin-badge{font-size:10px;color:#999;margin-left:2px}
+        .main-container.css-fullscreen{position:fixed!important;top:0;left:0;width:100vw!important;height:100vh!important;height:100dvh!important;max-width:none!important;border-radius:0!important;z-index:9999;border:none!important;box-shadow:none!important}
+        .main-container.css-fullscreen .phone{width:100%!important;max-width:none!important}
+        .main-container.css-fullscreen .status-bar{border-radius:0}
     </style>
 </head>
 <body>
@@ -414,17 +417,13 @@
     splashEnterBtn.addEventListener('click', function() {
       sessionStorage.setItem(SPLASH_SESSION_KEY, 'true');
       if (splashScreen) splashScreen.classList.add('hide');
-      if (document.documentElement.requestFullscreen) {
-        document.documentElement.requestFullscreen().catch(err => console.log('无法进入全屏:', err));
-      } else if (document.documentElement.webkitRequestFullscreen) {
-        document.documentElement.webkitRequestFullscreen();
-      }
+      document.querySelector('.main-container').classList.add('css-fullscreen');
     });
   }
   let chatHistoryPushed = false;
   window.addEventListener('popstate', function(e) {
     const chatViewWrap = document.getElementById('chatViewWrap');
-    if (chatHistoryPushed && chatViewWrap && chatViewWrap.classList.contains('active')) { chatHistoryPushed = false; saveGlobalsToActiveChar(); chatViewWrap.classList.remove('active'); document.getElementById('messageListViewWrap').classList.add('active'); document.getElementById('libraryViewWrap').classList.remove('active'); document.getElementById('profileViewWrap').classList.remove('active'); updateAllTabBars('messages'); renderCharacterList(); if(document.fullscreenElement || document.webkitFullscreenElement){ history.pushState({chatView:false},'',location.href); } }
+    if (chatHistoryPushed && chatViewWrap && chatViewWrap.classList.contains('active')) { chatHistoryPushed = false; saveGlobalsToActiveChar(); chatViewWrap.classList.remove('active'); document.getElementById('messageListViewWrap').classList.add('active'); document.getElementById('libraryViewWrap').classList.remove('active'); document.getElementById('profileViewWrap').classList.remove('active'); updateAllTabBars('messages'); renderCharacterList() }
   });
   function autoResizeTextarea(textarea) { if (!textarea) return; const maxHeight = parseInt(window.getComputedStyle(textarea).maxHeight) || 0; textarea.style.height = 'auto'; if (maxHeight && textarea.scrollHeight > maxHeight) { textarea.style.height = maxHeight + 'px'; textarea.style.overflowY = 'auto'; textarea.style.webkitOverflowScrolling = 'touch' } else { textarea.style.height = textarea.scrollHeight + 'px'; textarea.style.overflowY = 'hidden'; textarea.style.webkitOverflowScrolling = '' } }
   document.addEventListener('input', function(e) { if (e.target.classList.contains('auto-resize') || e.target.id === 'messageInput' || e.target.classList.contains('msg-edit-textarea')) autoResizeTextarea(e.target) });
@@ -1114,7 +1113,11 @@
       if(min===max) systemPrompt += `\n请发送恰好 ${min} 条消息，每条消息之间用双换行分隔。`; else systemPrompt += `\n请发送 ${min} 到 ${max} 条消息，每条消息之间用双换行分隔。`;
     }
     systemPrompt += '\n\n当用户的消息以 [用户引用了来自...] 开头时，表示用户针对该引用内容进行了回复，请基于引用内容进行回应。';
-    systemPrompt += '\n\n【思维链指令】每次回复时，请在开头用"【思考过程】"和"【思考结束】"包裹你的内心思考过程...';
+    if(chatType==='group'){
+      systemPrompt += '\n\n【心声指令】每次回复时，请在开头用"【思考过程】"和"【思考结束】"包裹你所扮演角色此刻的内心心声——那些不好意思说出口、想说又没说、或不方便发出来的真实想法和感受。这些心声不会被其他角色看到，只有读者能看到。请用角色的口吻来写心声，体现角色的性格和情感。';
+    } else {
+      systemPrompt += '\n\n【思维链指令】每次回复时，请在开头用"【思考过程】"和"【思考结束】"包裹你的内心思考过程...';
+    }
     systemPrompt += `\n【撤回功能说明】...（略）`;
     if(isAutoReply){ const lastMsg = chatMessages.length>0 ? chatMessages[chatMessages.length-1] : null; const lastTs = lastMsg ? (lastMsg.timestamp || 0) : 0; const minutesAgo = lastTs ? Math.floor((Date.now()-lastTs)/60000) : 0; const sender = lastMsg ? (lastMsg.role==='user' ? userName : charName) : '未知'; const contentPreview = lastMsg ? (lastMsg.text||'').substring(0,50) : ''; systemPrompt += `\n\n[自动回复触发] 你们已经 ${minutesAgo} 分钟没有对话了...`; systemPrompt += `\n\n【自动回复判断】请站在${charName}的角度，如果认为不应该发送，请输出 [AUTO_SKIP] 并说明理由；否则正常回复。`; }
     const historyStr = buildHistoryString(true); systemPrompt += `\n\n[历史聊天记录]\n${historyStr}`;
@@ -1493,22 +1496,7 @@
     if(apiSettings.weatherEnabled) startWeatherAutoRefresh();
     if(apiSettings.autoReplyEnabled) startAutoReplyTimer();
     updateUnreadDisplay();
-    if (statusTimeEl) { statusTimeEl.addEventListener('dblclick', () => { if (!document.fullscreenElement && !document.webkitFullscreenElement) { if (document.documentElement.requestFullscreen) { document.documentElement.requestFullscreen().catch(() => {}); } else if (document.documentElement.webkitRequestFullscreen) { document.documentElement.webkitRequestFullscreen(); } } }); }
-    if(window.visualViewport){
-      const mainContainer = document.querySelector('.main-container');
-      window.visualViewport.addEventListener('resize', ()=>{
-        if(document.fullscreenElement || document.webkitFullscreenElement){
-          if(mainContainer) mainContainer.style.height = window.visualViewport.height + 'px';
-          setTimeout(()=>{ if(chatArea) chatArea.scrollTop = chatArea.scrollHeight; }, 50);
-        }
-      });
-      document.addEventListener('fullscreenchange', ()=>{
-        if(!document.fullscreenElement && mainContainer) mainContainer.style.height = '';
-      });
-      document.addEventListener('webkitfullscreenchange', ()=>{
-        if(!document.webkitFullscreenElement && mainContainer) mainContainer.style.height = '';
-      });
-    }
+    if (statusTimeEl) { statusTimeEl.addEventListener('dblclick', () => { document.querySelector('.main-container').classList.toggle('css-fullscreen'); }); }
   }
   initAll();
 })();
