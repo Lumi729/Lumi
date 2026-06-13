@@ -372,7 +372,7 @@
       <div class="bottom-tab-item" data-tab="profile"><span class="tab-icon">👤</span><span>我的</span></div>
     </div>
   </div>
-  <div class="profile-view-wrap" id="profileViewWrap"><div class="nav-bar"><span style="font-size:17px;font-weight:600;color:#000">我的 · 用户人设</span></div><div class="profile-view" id="profileViewContent"><span class="profile-icon">👤</span><span style="font-size:14px;color:#000;font-weight:500">用户人设库</span><span style="font-size:11px;color:#bbb">管理你的所有人设，聊天时可快速切换</span><div id="profilePersonaEditor" style="width:100%;background:#fff;border-radius:10px;padding:15px;margin-top:8px;overflow:visible"></div><button class="save-btn" id="profileAddPersonaBtn" style="margin-top:8px">＋ 新建人设</button><div class="hint-text" style="text-align:center;margin-top:6px">选择人设即可编辑，在聊天设置中可选择当前使用的人设</div><div class="global-btn-row" style="margin-top:12px;width:100%"><button class="btn-export" id="globalExportBtn">📤 导出全部设置</button><button class="btn-import" id="globalImportBtn">📥 导入全部设置</button></div><div class="global-btn-row" style="margin-top:4px;width:100%"><button class="btn-reset" id="globalResetBtn" style="flex:1">🔄 恢复默认设置</button></div><input type="file" id="globalImportFile" accept=".json" style="display:none"></div>
+  <div class="profile-view-wrap" id="profileViewWrap"><div class="nav-bar"><span style="font-size:17px;font-weight:600;color:#000">我的 · 用户人设</span></div><div class="profile-view" id="profileViewContent"><span class="profile-icon">🌙</span><span style="font-size:14px;color:#000;font-weight:500">用户人设库</span><span style="font-size:11px;color:#bbb">管理你的所有人设，聊天时可快速切换</span><div id="profilePersonaEditor" style="width:100%;background:#fff;border-radius:10px;padding:15px;margin-top:8px;overflow:visible"></div><button class="save-btn" id="profileAddPersonaBtn" style="margin-top:8px">＋ 新建人设</button><div class="hint-text" style="text-align:center;margin-top:6px">选择人设即可编辑，在聊天设置中可选择当前使用的人设</div><div class="global-btn-row" style="margin-top:12px;width:100%"><button class="btn-export" id="globalExportBtn">📤 导出全部设置</button><button class="btn-import" id="globalImportBtn">📥 导入全部设置</button></div><div class="global-btn-row" style="margin-top:4px;width:100%"><button class="btn-reset" id="globalResetBtn" style="flex:1">🔄 恢复默认设置</button></div><input type="file" id="globalImportFile" accept=".json" style="display:none"></div>
     <div class="bottom-tab-bar" id="bottomTabBar3">
       <div class="bottom-tab-item" data-tab="messages"><span class="tab-icon">💬</span><span>信息</span></div>
       <div class="bottom-tab-item" data-tab="library"><span class="tab-icon">📚</span><span>资料库</span></div>
@@ -424,7 +424,7 @@
   let chatHistoryPushed = false;
   window.addEventListener('popstate', function(e) {
     const chatViewWrap = document.getElementById('chatViewWrap');
-    if (chatHistoryPushed && chatViewWrap && chatViewWrap.classList.contains('active')) { chatHistoryPushed = false; saveGlobalsToActiveChar(); chatViewWrap.classList.remove('active'); document.getElementById('messageListViewWrap').classList.add('active'); document.getElementById('libraryViewWrap').classList.remove('active'); document.getElementById('profileViewWrap').classList.remove('active'); updateAllTabBars('messages'); renderCharacterList() }
+    if (chatHistoryPushed && chatViewWrap && chatViewWrap.classList.contains('active')) { chatHistoryPushed = false; saveGlobalsToActiveChar(); chatViewWrap.classList.remove('active'); document.getElementById('messageListViewWrap').classList.add('active'); document.getElementById('libraryViewWrap').classList.remove('active'); document.getElementById('profileViewWrap').classList.remove('active'); updateAllTabBars('messages'); renderCharacterList(); if(document.fullscreenElement || document.webkitFullscreenElement){ history.pushState({chatView:false},'',location.href); } }
   });
   function autoResizeTextarea(textarea) { if (!textarea) return; const maxHeight = parseInt(window.getComputedStyle(textarea).maxHeight) || 0; textarea.style.height = 'auto'; if (maxHeight && textarea.scrollHeight > maxHeight) { textarea.style.height = maxHeight + 'px'; textarea.style.overflowY = 'auto'; textarea.style.webkitOverflowScrolling = 'touch' } else { textarea.style.height = textarea.scrollHeight + 'px'; textarea.style.overflowY = 'hidden'; textarea.style.webkitOverflowScrolling = '' } }
   document.addEventListener('input', function(e) { if (e.target.classList.contains('auto-resize') || e.target.id === 'messageInput' || e.target.classList.contains('msg-edit-textarea')) autoResizeTextarea(e.target) });
@@ -645,6 +645,7 @@
     if(apiSettings.autoSkipLogs===undefined) apiSettings.autoSkipLogs = [];
     if(apiSettings.notificationsEnabled===undefined) apiSettings.notificationsEnabled = false;
     unreadCount = ac.unreadCount || 0; fetchedCityName = apiSettings.autoWeatherCity || '';
+    autoSkipReason = ac.autoSkipReason || null;
     remarkVal = ac.name || '月'; signatureVal = ac.signature || '月夜雪纷纷';
     avatarState.dog = { type: ac.avatarType==='image'?'image':'text', text: ac.avatarEmoji||'🌙', src: ac.avatarSrc||'' };
     activeUserPersonaId = ac.activePersonaId !== undefined ? ac.activePersonaId : (userPersonas.length>0 ? userPersonas[0].id : null);
@@ -664,6 +665,7 @@
     ac.charSettings = charSettings; ac.apiSettings = apiSettings; ac.name = remarkVal; ac.signature = signatureVal;
     ac.avatarEmoji = avatarState.dog.type==='text' ? avatarState.dog.text : '🌙'; ac.avatarType = avatarState.dog.type; ac.avatarSrc = avatarState.dog.src || '';
     ac.unreadCount = unreadCount; ac.lastActive = new Date().toISOString();
+    ac.autoSkipReason = autoSkipReason;
     ac.activePersonaId = activeUserPersonaId;
     saveAllData();
     const activePersona = getActiveUserPersona(); if(activePersona){ activePersona.avatar = {...avatarState.user}; saveUserPersonas() }
@@ -724,7 +726,7 @@
   }
   document.querySelectorAll('.bottom-tab-bar').forEach(bar=>{ bar.addEventListener('click',function(e){ const tabItem = e.target.closest('.bottom-tab-item'); if(!tabItem) return; const tab = tabItem.dataset.tab; if(chatHistoryPushed && chatViewWrap.classList.contains('active') && tab!=='chat'){ chatHistoryPushed = false; history.back() } if(tab==='messages') showView('messages'); else if(tab==='library') showView('library'); else if(tab==='profile') showView('profile') }) });
   chatBackBtn.addEventListener('click',()=>{ if(chatHistoryPushed && chatViewWrap.classList.contains('active')){ history.back() } else { saveGlobalsToActiveChar(); showView('messages') } });
-  function getLastMessagePreview(character){ const msgs = character.chatMessages || []; if(msgs.length===0) return '暂无消息'; const last = msgs[msgs.length-1]; if(last.role==='hint') return last.text; const who = last.role==='user'?'我':(character.name||'角色'); const txt = (last.text||'').substring(0,30); return who+': '+txt+(last.text && last.text.length>30?'...':'') }
+  function getLastMessagePreview(character){ const msgs = character.chatMessages || []; if(msgs.length===0) return '暂无消息'; const last = msgs[msgs.length-1]; if(last.role==='hint') return last.text; const who = last.role==='user'?'我':(character.type==='group' && last.senderName ? last.senderName : (character.name||'角色')); const txt = (last.text||'').substring(0,30); return who+': '+txt+(last.text && last.text.length>30?'...':'') }
   function renderCharacterList(filterText){ if(!characterList) return; let filtered = characters; if(filterText && filterText.trim()){ const q = filterText.trim().toLowerCase(); filtered = characters.filter(c=>c.name.toLowerCase().includes(q)) } filtered.sort((a,b)=>{ if(a.pinned && !b.pinned) return -1; if(!a.pinned && b.pinned) return 1; const aMsgs = a.chatMessages||[]; const bMsgs = b.chatMessages||[]; const aTs = aMsgs.length>0?(aMsgs[aMsgs.length-1].timestamp||0):0; const bTs = bMsgs.length>0?(bMsgs[bMsgs.length-1].timestamp||0):0; return bTs - aTs; }); const now = Date.now(); characterList.innerHTML = filtered.map(c=>{ const isGroup = c.type === 'group'; const memberCount = isGroup ? ((c.members ? c.members.length : 0) + ((c.selectedUserPersonaIds && c.selectedUserPersonaIds.length) || 1)) : 0; const avatarHtml = c.avatarType==='image' && c.avatarSrc ? `<div class="char-card-avatar" style="background-image:url(${escapeHtml(c.avatarSrc)});background-size:cover;"></div>` : `<div class="char-card-avatar" style="background:linear-gradient(135deg,#a8e063,#56ab2f);">${escapeHtml(c.avatarEmoji||'🌙')}</div>`; const msgs = c.chatMessages || []; const lastMsg = msgs.length>0?msgs[msgs.length-1]:null; const lastTs = lastMsg?(lastMsg.timestamp||0):0; const timeStr = lastTs?formatRelativeTime(lastTs,now):''; const unread = c.unreadCount || 0; const pinHtml = c.pinned ? '<span class="pin-badge">📌</span>' : ''; const nameDisplay = isGroup ? `${escapeHtml(c.name)} (${memberCount})` : escapeHtml(c.name); return `<div class="char-card${c.pinned?' pinned':''}" data-char-id="${escapeHtml(c.id)}" data-char-name="${escapeHtml(c.name)}">${avatarHtml}<div class="char-card-info"><div class="char-card-name">${nameDisplay}${pinHtml}</div><div class="char-card-preview">${escapeHtml(getLastMessagePreview(c))}</div></div><div class="char-card-time" data-timestamp="${lastTs}">${timeStr}</div><div class="char-card-unread" data-char-id="${escapeHtml(c.id)}" style="display:${unread>0?'flex':'none'}"><span class="unread-count">${unread>99?'99+':unread}</span></div></div>`; }).join(''); characterList.querySelectorAll('.char-card').forEach(card=>{ card.addEventListener('click',function(){ openCharacterChat(this.dataset.charId) }); let longPressTimer; const startLongPress = (e)=>{ longPressTimer = setTimeout(()=>{ showCharActionMenu(card.dataset.charId, card.dataset.charName) },600) }; const cancelLongPress = ()=>clearTimeout(longPressTimer); card.addEventListener('touchstart',startLongPress,{passive:true}); card.addEventListener('touchend',cancelLongPress); card.addEventListener('touchmove',cancelLongPress); card.addEventListener('mousedown',startLongPress); card.addEventListener('mouseup',cancelLongPress); card.addEventListener('mouseleave',cancelLongPress) }); }
   function openCharacterChat(charId){ saveGlobalsToActiveChar(); activeCharacterId = charId; save('activeCharacterId',activeCharacterId); loadActiveCharToGlobals(); unreadCount = 0; saveGlobalsToActiveChar(); updateUnreadDisplay(); refreshAllUIForActiveChar(); if(!chatHistoryPushed){ history.pushState({chatView:true},'',location.href); chatHistoryPushed = true } showView('chat'); reloadChatUI(); chatArea.scrollTop = chatArea.scrollHeight; }
   function deleteCharacter(charId){ characters = characters.filter(c=>c.id!==charId); if(activeCharacterId===charId){ activeCharacterId = characters.length>0?characters[0].id:null; save('activeCharacterId',activeCharacterId); loadActiveCharToGlobals(); refreshAllUIForActiveChar(); reloadChatUI() } saveAllData(); renderCharacterList(charSearchInput?.value||''); updateUnreadDisplay() }
@@ -786,7 +788,7 @@
     }
     pendingUserMessages=[]; currentQuote=null; updateQuoteHint(); updateSendHint();
     [charDetailsInput, charPromptInput].forEach(autoResizeTextarea);
-    if(autoSkipReason) { autoSkipHintEl.style.display = 'flex'; autoSkipHintEl.title = '屏幕那端传来了消息，是TA憋在心里的...：' + autoSkipReason; } else { autoSkipHintEl.style.display = 'none'; }
+    if(autoSkipReason) { autoSkipHintEl.style.display = 'flex'; autoSkipHintEl.title = '屏幕那端传来了消息，是TA憋在心里的...：' + autoSkipReason; autoSkipHintEl.onclick = () => { alert('屏幕那端传来了消息，是TA憋在心里的...：\n' + autoSkipReason); hideAutoSkipHint(); }; } else { autoSkipHintEl.style.display = 'none'; }
     updatePersonaSwitchBar();
     updateUnreadDisplay();
   }
@@ -830,7 +832,7 @@
     currentUserPersonaId = currentPersonaSelect.value;
   });
   function showAutoSkipHint(reason) { autoSkipReason = reason; const now = new Date().toISOString(); apiSettings.autoSkipLogs.unshift({ time: now, reason: reason }); if(apiSettings.autoSkipLogs.length > 100) apiSettings.autoSkipLogs.pop(); saveGlobalsToActiveChar(); if(autoSkipHintEl) { autoSkipHintEl.style.display = 'flex'; autoSkipHintEl.title = '屏幕那端传来了消息，是TA憋在心里的...：' + reason; autoSkipHintEl.onclick = () => { alert('屏幕那端传来了消息，是TA憋在心里的...：\n' + reason); hideAutoSkipHint(); }; } }
-  function hideAutoSkipHint() { autoSkipReason = null; if(autoSkipHintEl) autoSkipHintEl.style.display = 'none'; }
+  function hideAutoSkipHint() { autoSkipReason = null; if(autoSkipHintEl) autoSkipHintEl.style.display = 'none'; saveGlobalsToActiveChar(); }
   function updatePersonaDisplay(){ const activePersona = getActiveUserPersona(); if(activePersona){ myPersonaNameLabel.textContent = activePersona.name||'我'; activePersonaInfo.textContent = '当前人设：'+(activePersona.name||'我')+' | '+(activePersona.persona||'无设定'); activePersonaInfo.style.display='block'; if(activePersona.avatar){ avatarState.user = {...activePersona.avatar} } } else { myPersonaNameLabel.textContent='我'; activePersonaInfo.style.display='none' } refreshAvatars('user') }
   createCharBtn.addEventListener('click',()=>{ createModal.classList.add('show'); });
   createSingleBtn.addEventListener('click',()=>{ createModal.classList.remove('show'); const newChar = createDefaultCharacter('新角色'); characters.push(newChar); saveAllData(); renderCharacterList(charSearchInput?.value||''); openCharacterChat(newChar.id) });
@@ -1107,7 +1109,7 @@
     if(apiSettings.weatherEnabled && apiSettings.weatherLat!=null && apiSettings.weatherLon!=null && !isNaN(apiSettings.weatherLat) && !isNaN(apiSettings.weatherLon)){ try{ const weatherInfo = await getWeatherInfo(); if(weatherInfo){ const weatherStr = getWeatherString(weatherInfo); systemPrompt += `\n${weatherStr}` } } catch(e){ addLog('warn','获取天气信息失败，跳过: '+e.message) } }
     if(apiSettings.chatMode){ const lengthHint = apiSettings.chatModeSubtype==='long'?'约100个汉字':'约20个汉字'; systemPrompt += '\n\n【对话模式】你现在正在进行线上文字聊天...'; systemPrompt += `\n每条消息的字数请控制在${lengthHint}左右。`; } else { systemPrompt += '\n\n【小说模式】请以小说叙述形式回复...'; }
     systemPrompt += getPersonInstruction();
-    if(chatType!=='group'){
+    if(chatType!=='group' || (options.allowedMemberIds && options.allowedMemberIds.length > 0)){
       const min = overrideMinMsgs!==null ? overrideMinMsgs : apiSettings.minMsgs; const max = overrideMaxMsgs!==null ? overrideMaxMsgs : apiSettings.maxMsgs;
       if(min===max) systemPrompt += `\n请发送恰好 ${min} 条消息，每条消息之间用双换行分隔。`; else systemPrompt += `\n请发送 ${min} 到 ${max} 条消息，每条消息之间用双换行分隔。`;
     }
@@ -1188,14 +1190,16 @@
         }
         const { recalledIds } = processAiRecall(finalContent, newSegments); if (recalledIds.length > 0) showRecallHint(recalledIds);
         const now = Date.now(); let lastTs = chatMessages.length>0 ? (chatMessages[chatMessages.length-1].timestamp||0) : 0; const fragment = skipUI ? null : document.createDocumentFragment();
+        const reasoningSenders = new Set();
         newSegments.forEach((seg, idx) => {
           seg.timestamp = now + idx;
-          seg.reasoning = (idx===0 && finalReasoning) ? finalReasoning : null;
+          const sKey = seg.senderId || '__solo__';
+          if(finalReasoning && !reasoningSenders.has(sKey)){ seg.reasoning = finalReasoning; reasoningSenders.add(sKey); } else { seg.reasoning = null; }
           chatMessages.push(seg);
           if (!skipUI) {
             if(lastTs===0||(seg.timestamp-lastTs)>=300000){ fragment.appendChild(createTimeStampDiv(seg.timestamp)); lastTs = seg.timestamp; }
             else { lastTs = Math.max(lastTs, seg.timestamp); }
-            fragment.appendChild(createDogMsg(seg.text, seg.reasoning, (idx===0) && !!finalReasoning, seg.id, null, null, null, seg.senderId, seg.recalled, seg.recalledText, seg.senderName));
+            fragment.appendChild(createDogMsg(seg.text, seg.reasoning, !!seg.reasoning, seg.id, null, null, null, seg.senderId, seg.recalled, seg.recalledText, seg.senderName));
           }
         });
         if (skipReasons.length > 0) {
@@ -1348,7 +1352,7 @@
       let memberSpeak = false;
 
       await new Promise((resolve) => {
-        triggerAiReply(true, null, null, useSkipUI, isActiveChat, {
+        triggerAiReply(true, 1, apiSettings.autoReplyMsgCount, useSkipUI, isActiveChat, {
           allowedMemberIds: [member.id],
           phase: 'initiate',
           onAutoSkip: (reason) => {
@@ -1380,7 +1384,7 @@
             let responderSpeak = false;
 
             await new Promise((resolve) => {
-              triggerAiReply(true, null, null, useSkipUI, isActiveChat, {
+              triggerAiReply(true, 1, apiSettings.autoReplyMsgCount, useSkipUI, isActiveChat, {
                 allowedMemberIds: [responder.id],
                 phase: 'response',
                 initiatorMsg: initiatorMsg,
@@ -1459,7 +1463,7 @@
           loadActiveCharToGlobals();
           const isActiveChat = chatViewWrap.classList.contains('active') && currentActiveCharId === char.id;
           const useSkipUI = !isActiveChat;
-          await triggerAiReply(true, apiSettings.autoReplyMsgCount, apiSettings.autoReplyMsgCount, useSkipUI, isActiveChat);
+          await triggerAiReply(true, 1, apiSettings.autoReplyMsgCount, useSkipUI, isActiveChat);
           saveGlobalsToActiveChar();
         }
         updateUnreadDisplay();
@@ -1469,6 +1473,7 @@
       loadActiveCharToGlobals();
       autoReplyInProgress = false;
       updateUnreadDisplay();
+      if(autoSkipHintEl){ if(autoSkipReason){ autoSkipHintEl.style.display='flex'; autoSkipHintEl.title='屏幕那端传来了消息，是TA憋在心里的...：'+autoSkipReason; autoSkipHintEl.onclick=()=>{ alert('屏幕那端传来了消息，是TA憋在心里的...：\n'+autoSkipReason); hideAutoSkipHint(); }; } else { autoSkipHintEl.style.display='none'; } }
     }
   }
 
@@ -1489,6 +1494,21 @@
     if(apiSettings.autoReplyEnabled) startAutoReplyTimer();
     updateUnreadDisplay();
     if (statusTimeEl) { statusTimeEl.addEventListener('dblclick', () => { if (!document.fullscreenElement && !document.webkitFullscreenElement) { if (document.documentElement.requestFullscreen) { document.documentElement.requestFullscreen().catch(() => {}); } else if (document.documentElement.webkitRequestFullscreen) { document.documentElement.webkitRequestFullscreen(); } } }); }
+    if(window.visualViewport){
+      const mainContainer = document.querySelector('.main-container');
+      window.visualViewport.addEventListener('resize', ()=>{
+        if(document.fullscreenElement || document.webkitFullscreenElement){
+          if(mainContainer) mainContainer.style.height = window.visualViewport.height + 'px';
+          setTimeout(()=>{ if(chatArea) chatArea.scrollTop = chatArea.scrollHeight; }, 50);
+        }
+      });
+      document.addEventListener('fullscreenchange', ()=>{
+        if(!document.fullscreenElement && mainContainer) mainContainer.style.height = '';
+      });
+      document.addEventListener('webkitfullscreenchange', ()=>{
+        if(!document.webkitFullscreenElement && mainContainer) mainContainer.style.height = '';
+      });
+    }
   }
   initAll();
 })();
