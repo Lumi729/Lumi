@@ -335,6 +335,23 @@
         .main-container.css-fullscreen{position:fixed!important;top:0;left:0;width:100vw!important;height:100vh!important;height:100dvh!important;max-width:none!important;border-radius:0!important;z-index:9999;border:none!important;box-shadow:none!important}
         .main-container.css-fullscreen .phone{width:100%!important;max-width:none!important}
         .main-container.css-fullscreen .status-bar{border-radius:0}
+        .summary-overlay{display:none;position:absolute;top:0;left:0;width:100%;height:100%;background:var(--bg,#f5f5f5);z-index:200;flex-direction:column;overflow-y:auto}
+        .summary-overlay.show{display:flex}
+        .summary-header{padding:15px;text-align:center;font-size:16px;color:#666;font-style:italic;border-bottom:.5px solid #e0e0e0}
+        .summary-settings{padding:12px 15px;border-bottom:.5px solid #e0e0e0}
+        .summary-settings .setting-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0}
+        .summary-settings .setting-row label{font-size:13px;color:#333}
+        .summary-settings .setting-row input,.summary-settings .setting-row select{width:70px;padding:4px;border:1px solid #ddd;border-radius:6px;font-size:13px;text-align:center}
+        .summary-list{padding:10px 15px;flex:1}
+        .summary-item{background:#fff;border-radius:10px;margin-bottom:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+        .summary-item-header{padding:12px 15px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;font-size:13px;color:#333}
+        .summary-item-header:active{background:#f0f0f0}
+        .summary-item-body{display:none;padding:0 15px 12px;font-size:12px;color:#555;line-height:1.6;white-space:pre-wrap;word-break:break-word}
+        .summary-item-body.open{display:block}
+        .summary-item-body table{width:100%;border-collapse:collapse;font-size:12px}
+        .summary-item-body th,.summary-item-body td{border:1px solid #e0e0e0;padding:6px 8px;text-align:left}
+        .summary-item-body th{background:#f5f5f5}
+        .summary-item .del-summary{font-size:12px;color:#ff3b30;cursor:pointer;padding:2px 8px}
     </style>
 </head>
 <body>
@@ -388,8 +405,9 @@
     <div class="hint-text" style="margin-top:2px">点击更换可裁剪背景，图片将自动填充聊天区域</div>
     <div class="section-title" id="groupPersonaSection" style="display:none; margin-top:15px;">参与群聊的用户人设（多选）</div>
     <div class="persona-list" id="groupPersonaSelectList" style="display:none;"></div>
-  </div><div class="settings-sub" id="settingsCharacter" style="display:none"><div class="back-row" id="backFromCharacter"><span>‹</span><span>返回</span></div><h3 id="settingsCharacterTitle">角色人设</h3><div class="setting-row" id="charNameRow"><label>名字</label><input type="text" id="charNameInput"></div><div class="setting-row" id="charAgeRow"><label>年龄</label><input type="text" id="charAgeInput"></div><div class="setting-row" id="charPersonalityRow"><label>性格</label><input type="text" id="charPersonalityInput"></div><div class="setting-row"><label style="align-self:flex-start">详细信息</label><textarea id="charDetailsInput" class="auto-resize"></textarea></div><div class="setting-row"><label style="align-self:flex-start">提示词</label><textarea id="charPromptInput" class="auto-resize"></textarea></div><button class="gen-btn gen-btn-center" id="generatePromptBtn">根据信息生成提示词</button><button class="save-btn" id="saveCharacterBtn">保存人设</button></div><div class="settings-sub" id="settingsApi" style="display:none"><div class="back-row" id="backFromApi"><span>‹</span><span>返回</span></div><h3>AI 回复</h3><div class="toggle-row"><label>启用 AI 回复</label><label class="switch"><input type="checkbox" id="apiEnableCheck"><span class="slider"></span></label></div><div id="apiFields"><div class="setting-row"><label>地址</label><input type="text" id="apiUrlInput" placeholder="https://api.deepseek.com/v1"></div><div class="hint-text">只需填写到 /v1</div><div class="setting-row"><label>密钥</label><input type="password" id="apiKeyInput" placeholder="sk-..."></div><div class="setting-row"><label>模型</label><div class="model-row"><input type="text" id="apiModelInput" placeholder="deepseek-chat"><button class="fetch-models-btn" id="fetchModelsBtn">获取模型</button></div></div><div class="model-select-container" id="modelSelectContainer"><select id="modelSelect"></select></div><div class="toggle-row" style="margin-top:15px"><label>对话模式（线上聊天）</label><label class="switch"><input type="checkbox" id="chatModeCheck"><span class="slider"></span></label></div><div class="hint-text" style="margin-top:4px">开启后模拟线上聊天，关闭则允许动作/心理描写及面对面交流</div><div id="chatModeSubContainer" style="display:none;margin-bottom:15px"><div class="setting-row"><label>对话风格</label><div style="display:flex;gap:10px;align-items:center"><label><input type="radio" name="chatModeSubtype" value="short" checked> 短对话(≈20字)</label><label><input type="radio" name="chatModeSubtype" value="long"> 长对话(≈100字)</label></div></div></div><div class="setting-row" style="margin-top:10px"><label>AI人称</label><select id="aiPersonSelect"><option value="first">第一人称(我)</option><option value="second">第二人称(你)</option><option value="third">第三人称(他/她)</option></select></div><div class="setting-row"><label>用户人称</label><select id="userPersonSelect"><option value="first">第一人称(我)</option><option value="second">第二人称(你)</option><option value="third">第三人称(他/她)</option></select></div><div class="setting-row" style="margin-top:15px"><label>消息条数</label><div style="display:flex;align-items:center;gap:6px"><select id="minMsgsInput" style="width:70px"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select><span>-</span><select id="maxMsgsInput" style="width:70px"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select></div></div><div class="hint-text">AI 每次回复的消息条数范围（1-5）</div><div class="setting-row" style="margin-top:15px"><label>上下文层数</label><select id="contextLayersInput" style="width:80px"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="12">12</option><option value="15">15</option><option value="20">20</option></select></div><div class="hint-text">设置携带的最近对话轮数（默认5）</div><div class="toggle-row" style="margin-top:18px"><label>🤖 启用自动回复</label><label class="switch"><input type="checkbox" id="autoReplyEnabledCheck"><span class="slider"></span></label></div><div style="font-size:11px;color:#999;margin-top:-10px;margin-bottom:10px;text-align:center;">等待你回复的时间如此漫长...</div><div id="autoReplyContainer" style="display:none"><div class="setting-row"><label>延迟(分钟)</label><input type="number" id="autoReplyDelayInput" value="5" min="1" max="120"></div><div class="setting-row"><label>自动条数</label><input type="number" id="autoReplyMsgCountInput" value="1" min="1" max="5"></div><div class="setting-row"><label>每日次数</label><input type="number" id="autoReplyDailyMinInput" value="1" min="0" max="20" style="width:60px"> - <input type="number" id="autoReplyDailyMaxInput" value="3" min="0" max="20" style="width:60px"></div><div class="setting-row"><label>历史范围</label><input type="number" id="autoReplyContextLayersInput" value="5" min="1" max="20"></div><div class="hint-text">自动回复时使用的历史对话轮数</div>
+  </div><div class="settings-sub" id="settingsCharacter" style="display:none"><div class="back-row" id="backFromCharacter"><span>‹</span><span>返回</span></div><h3 id="settingsCharacterTitle" style="position:relative">角色人设<button id="openSummaryBtn" style="position:absolute;right:0;top:0;background:none;border:none;font-size:18px;cursor:pointer;padding:4px" title="大总结">📋</button></h3><div class="setting-row" id="charNameRow"><label>名字</label><input type="text" id="charNameInput"></div><div class="setting-row" id="charAgeRow"><label>年龄</label><input type="text" id="charAgeInput"></div><div class="setting-row" id="charPersonalityRow"><label>性格</label><input type="text" id="charPersonalityInput"></div><div class="setting-row"><label style="align-self:flex-start">详细信息</label><textarea id="charDetailsInput" class="auto-resize"></textarea></div><div class="setting-row"><label style="align-self:flex-start">提示词</label><textarea id="charPromptInput" class="auto-resize"></textarea></div><button class="gen-btn gen-btn-center" id="generatePromptBtn">根据信息生成提示词</button><button class="save-btn" id="saveCharacterBtn">保存人设</button></div><div class="settings-sub" id="settingsApi" style="display:none"><div class="back-row" id="backFromApi"><span>‹</span><span>返回</span></div><h3>AI 回复</h3><div class="toggle-row"><label>启用 AI 回复</label><label class="switch"><input type="checkbox" id="apiEnableCheck"><span class="slider"></span></label></div><div id="apiFields"><div class="setting-row"><label>地址</label><input type="text" id="apiUrlInput" placeholder="https://api.deepseek.com/v1"></div><div class="hint-text">只需填写到 /v1</div><div class="setting-row"><label>密钥</label><input type="password" id="apiKeyInput" placeholder="sk-..."></div><div class="setting-row"><label>模型</label><div class="model-row"><input type="text" id="apiModelInput" placeholder="deepseek-chat"><button class="fetch-models-btn" id="fetchModelsBtn">获取模型</button></div></div><div class="model-select-container" id="modelSelectContainer"><select id="modelSelect"></select></div><div class="toggle-row" style="margin-top:15px"><label>对话模式（线上聊天）</label><label class="switch"><input type="checkbox" id="chatModeCheck"><span class="slider"></span></label></div><div class="hint-text" style="margin-top:4px">开启后模拟线上聊天，关闭则允许动作/心理描写及面对面交流</div><div id="chatModeSubContainer" style="display:none;margin-bottom:15px"><div class="setting-row"><label>对话风格</label><div style="display:flex;gap:10px;align-items:center"><label><input type="radio" name="chatModeSubtype" value="short" checked> 短对话(≈20字)</label><label><input type="radio" name="chatModeSubtype" value="long"> 长对话(≈100字)</label></div></div></div><div class="setting-row" style="margin-top:10px"><label>AI人称</label><select id="aiPersonSelect"><option value="first">第一人称(我)</option><option value="second">第二人称(你)</option><option value="third">第三人称(他/她)</option></select></div><div class="setting-row"><label>用户人称</label><select id="userPersonSelect"><option value="first">第一人称(我)</option><option value="second">第二人称(你)</option><option value="third">第三人称(他/她)</option></select></div><div class="setting-row" style="margin-top:15px"><label>消息条数</label><div style="display:flex;align-items:center;gap:6px"><select id="minMsgsInput" style="width:70px"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select><span>-</span><select id="maxMsgsInput" style="width:70px"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select></div></div><div class="hint-text">AI 每次回复的消息条数范围（1-5）</div><div class="setting-row" style="margin-top:15px"><label>上下文层数</label><select id="contextLayersInput" style="width:80px"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="12">12</option><option value="15">15</option><option value="20">20</option></select></div><div class="hint-text">设置携带的最近对话轮数（默认5）</div><div class="toggle-row" style="margin-top:18px"><label>🤖 启用自动回复</label><label class="switch"><input type="checkbox" id="autoReplyEnabledCheck"><span class="slider"></span></label></div><div style="font-size:11px;color:#999;margin-top:-10px;margin-bottom:10px;text-align:center;">等待你回复的时间如此漫长...</div><div id="autoReplyContainer" style="display:none"><div class="setting-row"><label>延迟(分钟)</label><input type="number" id="autoReplyDelayInput" value="5" min="1" max="120"></div><div class="setting-row"><label>自动条数</label><input type="number" id="autoReplyMsgCountInput" value="1" min="1" max="5"></div><div class="setting-row"><label>每日次数</label><input type="number" id="autoReplyDailyMinInput" value="1" min="0" max="20" style="width:60px"> - <input type="number" id="autoReplyDailyMaxInput" value="3" min="0" max="20" style="width:60px"></div><div class="setting-row"><label>历史范围</label><input type="number" id="autoReplyContextLayersInput" value="5" min="1" max="20"></div><div class="hint-text">自动回复时使用的历史对话轮数</div>
     <div class="toggle-row" style="margin-top:12px;border-top:.5px solid #e0e0e0;padding-top:12px"><label>🔔 自动回复通知</label><label class="switch"><input type="checkbox" id="notificationsEnabledCheck"><span class="slider"></span></label></div><div class="hint-text">开启后，AI自动回复时将在系统通知栏显示消息提醒（需浏览器支持）</div>
+    <div class="toggle-row" style="margin-top:12px;border-top:.5px solid #e0e0e0;padding-top:12px"><label>⏰ 时间感知强化</label><label class="switch"><input type="checkbox" id="timePerceptionCheck"><span class="slider"></span></label></div><div class="hint-text" style="font-size:11px;color:#bbb;margin-top:-6px">我晚点回你怎么了？</div>
     </div><div class="toggle-row" style="margin-top:18px;border-top:.5px solid #e0e0e0;padding-top:16px"><label>🌤️ 启用天气信息</label><label class="switch"><input type="checkbox" id="weatherEnableCheck"><span class="slider"></span></label></div><div class="hint-text" style="margin-top:2px">开启后，AI回复时将自动获取您所在地的天气信息</div><div id="weatherSettingsContainer" style="display:none"><div class="weather-status-row" id="weatherStatusRow"><span class="weather-icon" id="weatherStatusIcon">📍</span><div class="weather-info"><div class="weather-city" id="weatherStatusCity">未获取位置</div><div class="weather-detail" id="weatherStatusDetail">请先获取位置信息</div></div><span class="weather-status-badge idle" id="weatherStatusBadge">待获取</span></div><div class="weather-location-row"><input type="text" id="weatherCityInput" placeholder="城市名称（可选）" style="flex:1"><button class="fetch-location-btn" id="fetchLocationBtn">📍 获取位置</button></div><div class="hint-text" style="margin-top:4px">点击"获取位置"将请求浏览器定位权限，用于获取当地天气</div><div class="setting-row" style="margin-top:6px"><label>纬度</label><input type="text" id="weatherLatDisplay" readonly style="background:#f5f5f5;font-size:11px;color:#888"><label>经度</label><input type="text" id="weatherLonDisplay" readonly style="background:#f5f5f5;font-size:11px;color:#888"></div><button class="gen-btn" id="refreshWeatherBtn" style="margin-top:6px;width:100%">🔄 手动刷新天气</button></div></div></div><div class="settings-sub" id="settingsPreset" style="display:none"><div class="back-row" id="backFromPreset"><span>‹</span><span>返回</span></div><h3>预设（角色专属）</h3><div class="section-title">关联当前角色（勾选生效）</div><div class="entry-list" id="presetList"></div><div class="entry-add"><textarea id="presetNameInput" placeholder="名称" style="width:30%" class="auto-resize"></textarea><textarea id="presetContentInput" placeholder="内容" class="auto-resize"></textarea><button id="addPresetBtn">添加</button></div><div class="import-export-row"><button id="exportPresetsBtn">导出</button><button id="importPresetsBtn">导入</button><input type="file" id="presetImportFile" accept=".json" style="display:none"></div></div><div class="settings-sub" id="settingsWorld" style="display:none"><div class="back-row" id="backFromWorld"><span>‹</span><span>返回</span></div><h3>世界书（角色专属）</h3><div class="section-title">关联当前角色（勾选生效）</div><div class="entry-list" id="worldList"></div><div class="entry-add"><textarea id="worldKeyInput" placeholder="关键词" style="width:30%" class="auto-resize"></textarea><textarea id="worldContentInput" placeholder="内容" class="auto-resize"></textarea><button id="addWorldBtn">添加</button></div><div class="import-export-row"><button id="exportWorldsBtn">导出</button><button id="importWorldsBtn">导入</button><input type="file" id="worldImportFile" accept=".json" style="display:none"></div></div><div class="settings-sub" id="settingsLog" style="display:none"><div class="back-row" id="backFromLog"><span>‹</span><span>返回</span></div><h3>运行日志</h3><textarea id="logTextarea" class="log-textarea" readonly></textarea><button class="copy-btn" id="copyLogBtn">复制全部日志</button><button class="gen-btn" id="showAutoReplyLogBtn" style="margin-top:10px;">🤖 自动回复日志</button><div id="autoReplyLogContainer" style="display:none; max-height:300px; overflow-y:auto; margin-top:10px; border:1px solid #ddd; padding:8px; border-radius:6px;"></div></div></div></div>
   <div class="manage-modal" id="manageModal"><div class="manage-panel"><h3>聊天管理</h3><button id="exportChatBtn">📤 导出聊天记录和设定</button><button id="importChatBtn" class="btn-secondary">📥 导入聊天记录和设定</button><button id="newChatBtn" class="btn-danger">✨ 开启新聊天</button><button id="saveCurrentBtn" class="btn-secondary">💾 保存当前对话到历史</button><div class="section-title" style="margin-top:15px">历史聊天</div><div class="history-list" id="historyList"></div><div class="section-title" style="margin-top:15px">自动回复 / 群聊拒绝记录</div><div class="skip-log-list" id="skipLogList" style="max-height:150px; overflow-y:auto; margin-bottom:10px;"></div><button class="close-manage" id="closeManageBtn">关闭</button><input type="file" id="importChatFile" accept=".json" style="display:none"></div></div>
   <div class="persona-modal" id="personaEditModal"><div class="persona-panel" id="personaEditPanel"><h3 id="personaEditTitle">编辑人设</h3><div class="setting-row"><label>姓名</label><input type="text" id="personaNameInput" placeholder="你的名字"></div><div class="avatar-setting"><div class="avatar-preview avatar-me" id="personaAvatarPreview">👤</div><span>头像</span><button class="change-avatar-btn" id="personaChangeAvatarBtn">更换头像</button><input type="file" id="personaFileInput" accept="image/*"></div><div class="setting-row"><label style="align-self:flex-start">人物设定</label><textarea id="personaDetailInput" class="auto-resize" placeholder="描述你的身份、性格等，这将作为用户提示词发送给AI"></textarea></div><div class="hint-text">人物设定会在聊天时作为你的身份信息发送给AI，帮助AI更好地理解你。</div><button class="save-btn" id="savePersonaBtn">保存人设</button><button class="copy-btn" id="cancelPersonaBtn" style="background:#e0e0e0">取消</button><input type="file" id="personaCropFileInput" accept="image/*" style="display:none"></div></div>
@@ -398,6 +416,19 @@
   <div class="delete-modal" id="deleteModal"><div class="delete-panel"><h3>选择要删除的消息</h3><div class="delete-list" id="deleteList"></div><div class="delete-actions"><button class="btn-cancel" id="deleteCancelBtn">取消</button><button class="btn-confirm" id="deleteConfirmBtn">删除选中</button></div></div></div>
   <div class="confirm-dialog-overlay" id="confirmDialogOverlay"><div class="confirm-dialog"><p id="confirmDialogMsg">确定要删除吗？</p><div class="confirm-actions"><button class="btn-cancel-dialog" id="confirmDialogCancel">取消</button><button class="btn-confirm-dialog" id="confirmDialogOk">确定</button></div></div></div>
   <div class="char-action-overlay" id="charActionOverlay"><div class="char-action-sheet"><button id="charActionPin">📌 置顶</button><button id="charActionDelete" class="action-danger">🗑️ 删除角色</button><button id="charActionCancel" class="action-cancel">取消</button></div></div>
+  <div class="summary-overlay" id="summaryOverlay">
+    <div style="padding:10px 15px;display:flex;align-items:center"><button id="closeSummaryBtn" style="background:none;border:none;font-size:20px;cursor:pointer">‹</button><span style="flex:1"></span><button id="triggerSummaryBtn" style="background:#07c160;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:13px;cursor:pointer">立即生成总结</button></div>
+    <div class="summary-header" id="summaryTitle">你与我，在那一天...</div>
+    <div class="summary-settings">
+      <div class="setting-row"><label>启用大总结</label><label class="switch"><input type="checkbox" id="summaryEnabledCheck"><span class="slider"></span></label></div>
+      <div class="setting-row"><label>触发条数</label><input type="number" id="summaryTriggerInput" value="20" min="5" max="200"></div>
+      <div class="setting-row"><label>总结字数</label><input type="number" id="summaryWordCountInput" value="300" min="50" max="2000"></div>
+      <div class="setting-row"><label>总结形式</label><select id="summaryFormatSelect"><option value="text">长文本</option><option value="table">表格</option></select></div>
+      <div class="setting-row"><label>发送轮数</label><input type="number" id="summarySendCountInput" value="3" min="1" max="20"></div>
+      <div style="font-size:11px;color:#999;margin-top:4px">每次对话携带最近几轮大总结</div>
+    </div>
+    <div class="summary-list" id="summaryList"><div style="color:#999;padding:15px;text-align:center;font-size:13px">暂无总结</div></div>
+  </div>
   <div class="create-modal" id="createModal"><div class="create-panel"><h3>创建</h3><button id="createSingleBtn">✨ 创建角色</button><button id="createGroupBtn">👥 创建群聊</button><button class="close-create" id="closeCreateBtn">关闭</button></div></div>
   <div class="create-modal" id="groupCreateModal"><div class="create-panel"><h3>选择群聊成员</h3><div class="create-member-list" id="groupMemberList"></div><div style="display:flex;gap:8px;"><button id="confirmGroupBtn" style="flex:1;">确认创建</button><button id="createEmptyGroupBtn" style="flex:1;background:#576b95;">创建空群聊</button></div><button class="close-create" id="closeGroupCreateBtn" style="width:100%;">取消</button></div></div>
 </div>
@@ -487,10 +518,13 @@
         autoReplyConsecutiveCount: 0,
         aiPerson: 'first', userPerson: 'second',
         autoSkipLogs: [],
-        notificationsEnabled: false
+        notificationsEnabled: false,
+        summaryEnabled: false, summaryTriggerCount: 20, summaryWordCount: 300, summaryFormat: 'text', summarySendCount: 3,
+        timePerceptionEnabled: false
       },
       members: [],
       selectedUserPersonaIds: [],
+      summaries: [],
       unreadCount: 0,
       pinned: false,
       createdAt: new Date().toISOString(), lastActive: new Date().toISOString()
@@ -524,10 +558,13 @@
     autoReplyConsecutiveCount: 0,
     aiPerson:'first', userPerson:'second',
     autoSkipLogs: [],
-    notificationsEnabled: false
+    notificationsEnabled: false,
+    summaryEnabled: false, summaryTriggerCount: 20, summaryWordCount: 300, summaryFormat: 'text', summarySendCount: 3,
+    timePerceptionEnabled: false
   };
   let remarkVal = '月', signatureVal = '月夜雪纷纷';
   let unreadCount = 0;
+  let summaries = [];
   let cachedWeatherData = null, cachedWeatherTime = 0;
   const WEATHER_CACHE_DURATION = 30*60*1000;
   let fetchedCityName = '';
@@ -651,6 +688,7 @@
     if(apiSettings.notificationsEnabled===undefined) apiSettings.notificationsEnabled = false;
     unreadCount = ac.unreadCount || 0; fetchedCityName = apiSettings.autoWeatherCity || '';
     autoSkipReason = ac.autoSkipReason || null;
+    summaries = ac.summaries || [];
     remarkVal = ac.name || '月'; signatureVal = ac.signature || '月夜雪纷纷';
     avatarState.dog = { type: ac.avatarType==='image'?'image':'text', text: ac.avatarEmoji||'🌙', src: ac.avatarSrc||'' };
     activeUserPersonaId = ac.activePersonaId !== undefined ? ac.activePersonaId : (userPersonas.length>0 ? userPersonas[0].id : null);
@@ -671,6 +709,7 @@
     ac.avatarEmoji = avatarState.dog.type==='text' ? avatarState.dog.text : '🌙'; ac.avatarType = avatarState.dog.type; ac.avatarSrc = avatarState.dog.src || '';
     ac.unreadCount = unreadCount; ac.lastActive = new Date().toISOString();
     ac.autoSkipReason = autoSkipReason;
+    ac.summaries = summaries;
     ac.activePersonaId = activeUserPersonaId;
     saveAllData();
     const activePersona = getActiveUserPersona(); if(activePersona){ activePersona.avatar = {...avatarState.user}; saveUserPersonas() }
@@ -717,6 +756,83 @@
   charActionDelete.addEventListener('click',async()=>{ charActionOverlay.classList.remove('show'); if(actionTargetCharId){ const char = characters.find(c=>c.id===actionTargetCharId); const name = char ? char.name : ''; const ok = await showConfirmDialog('确定要删除角色「'+name+'」吗？'); if(ok) deleteCharacter(actionTargetCharId); } actionTargetCharId = null; });
   charActionCancel.addEventListener('click',()=>{ charActionOverlay.classList.remove('show'); actionTargetCharId = null; });
   charActionOverlay.addEventListener('click',e=>{ if(e.target===charActionOverlay){ charActionOverlay.classList.remove('show'); actionTargetCharId = null; } });
+
+  // ===== 大总结系统 =====
+  const summaryOverlay = document.getElementById('summaryOverlay'), summaryList = document.getElementById('summaryList');
+  const summaryEnabledCheck = document.getElementById('summaryEnabledCheck'), summaryTriggerInput = document.getElementById('summaryTriggerInput');
+  const summaryWordCountInput = document.getElementById('summaryWordCountInput'), summaryFormatSelect = document.getElementById('summaryFormatSelect');
+  const summarySendCountInput = document.getElementById('summarySendCountInput'), summaryTitle = document.getElementById('summaryTitle');
+  document.getElementById('openSummaryBtn').addEventListener('click',()=>{
+    summaryTitle.textContent = chatType==='group' ? '当我们对视时' : '你与我，在那一天...';
+    summaryEnabledCheck.checked = apiSettings.summaryEnabled||false;
+    summaryTriggerInput.value = apiSettings.summaryTriggerCount||20;
+    summaryWordCountInput.value = apiSettings.summaryWordCount||300;
+    summaryFormatSelect.value = apiSettings.summaryFormat||'text';
+    summarySendCountInput.value = apiSettings.summarySendCount||3;
+    renderSummaryList(); summaryOverlay.classList.add('show');
+  });
+  document.getElementById('closeSummaryBtn').addEventListener('click',()=>{
+    apiSettings.summaryEnabled = summaryEnabledCheck.checked;
+    apiSettings.summaryTriggerCount = parseInt(summaryTriggerInput.value)||20;
+    apiSettings.summaryWordCount = parseInt(summaryWordCountInput.value)||300;
+    apiSettings.summaryFormat = summaryFormatSelect.value;
+    apiSettings.summarySendCount = parseInt(summarySendCountInput.value)||3;
+    saveGlobalsToActiveChar(); saveAllData(); summaryOverlay.classList.remove('show');
+  });
+  function renderSummaryList(){
+    if(!summaries || summaries.length===0){ summaryList.innerHTML = '<div style="color:#999;padding:15px;text-align:center;font-size:13px">暂无总结</div>'; return; }
+    summaryList.innerHTML = summaries.map((s,i)=>{
+      const time = new Date(s.timestamp).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+      return `<div class="summary-item"><div class="summary-item-header" onclick="this.nextElementSibling.classList.toggle('open')"><span>📖 第${summaries.length-i}轮总结 · ${time} · ${s.msgCount||0}条消息</span><span class="del-summary" onclick="event.stopPropagation();deleteSummary(${i})">删除</span></div><div class="summary-item-body">${escapeHtml(s.content)}</div></div>`;
+    }).join('');
+  }
+  window.deleteSummary = function(idx){ if(confirm('确定删除这条总结？')){ summaries.splice(idx,1); saveGlobalsToActiveChar(); saveAllData(); renderSummaryList(); } };
+  document.getElementById('triggerSummaryBtn').addEventListener('click', ()=>{ generateSummary(true); });
+  async function generateSummary(manual=false){
+    if(!apiSettings.enabled || !apiSettings.key || !apiSettings.url){ if(manual) alert('请先配置AI接口'); return; }
+    const lastSumIdx = summaries.length>0 ? (summaries[0].toIdx||0) : 0;
+    const msgsToSummarize = chatMessages.filter(m=>m.role!=='hint').slice(lastSumIdx);
+    if(msgsToSummarize.length < 3){ if(manual) alert('消息太少，无法生成总结'); return; }
+    const charName = remarkVal||'角色', userName = getActiveUserPersona()?.name||'用户';
+    let histStr = ''; msgsToSummarize.forEach(m=>{
+      let sender = m.role==='user' ? userName : charName;
+      if(m.role==='dog' && chatType==='group'){ const mb = m.senderId?getMemberById(m.senderId):null; sender = mb?mb.name:(m.senderName||charName); }
+      if(m.role==='user' && chatType==='group' && m.senderId){ const p = userPersonas.find(x=>x.id===m.senderId); if(p) sender=p.name; }
+      if(!m.recalled) histStr += `${sender}: ${m.text}\n`;
+    });
+    const fmt = (apiSettings.summaryFormat||'text')==='table' ?
+      '请用表格形式总结，列名为：时间/人物/事件/备注。用纯文本表格（| 分隔列，- 分隔表头）。' :
+      '请用一段连贯的叙述文本来总结。';
+    const prompt = `你是一位叙事总结专家。请将以下对话内容总结为约${apiSettings.summaryWordCount||300}字的摘要。\n${fmt}\n要求：\n- 以第三人称视角书写\n- 按时间顺序记录"谁在什么时候做了什么、说了什么"\n- 保留关键情节转折和情感变化\n- 不要遗漏重要事件\n\n对话内容：\n${histStr}`;
+    try{
+      if(manual){ const btn = document.getElementById('triggerSummaryBtn'); btn.textContent='生成中...'; btn.disabled=true; }
+      const res = await fetch(buildChatUrl(apiSettings.url),{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiSettings.key}`},body:JSON.stringify({model:apiSettings.model,messages:[{role:'user',content:prompt}],temperature:0.3,max_tokens:2048})});
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      const data = await res.json(); const content = data.choices?.[0]?.message?.content?.trim();
+      if(!content) throw new Error('返回为空');
+      const newSummary = { id:'sum_'+Date.now().toString(36), timestamp:Date.now(), content, fromIdx:lastSumIdx, toIdx:chatMessages.filter(m=>m.role!=='hint').length, msgCount:msgsToSummarize.length };
+      summaries.unshift(newSummary); saveGlobalsToActiveChar(); saveAllData();
+      if(manual){ renderSummaryList(); const btn = document.getElementById('triggerSummaryBtn'); btn.textContent='立即生成总结'; btn.disabled=false; }
+      addLog('info',`大总结已生成，覆盖${newSummary.msgCount}条消息`);
+    } catch(e){ addLog('error','大总结生成失败: '+e.message); if(manual){ alert('生成失败: '+e.message); const btn = document.getElementById('triggerSummaryBtn'); btn.textContent='立即生成总结'; btn.disabled=false; } }
+  }
+  async function checkSummaryTrigger(){
+    if(!apiSettings.summaryEnabled) return;
+    const lastSumIdx = summaries.length>0 ? (summaries[0].toIdx||0) : 0;
+    const newMsgCount = chatMessages.filter(m=>m.role!=='hint').length - lastSumIdx;
+    if(newMsgCount >= (apiSettings.summaryTriggerCount||20)){ await generateSummary(false); }
+  }
+  function buildSummaryPrompt(){
+    if(!summaries || summaries.length===0) return '';
+    const count = apiSettings.summarySendCount||3;
+    const selected = summaries.slice(0, count);
+    let str = '## 过往总结\n以下是之前对话的总结摘要，帮助你了解之前发生过的事情：\n\n';
+    selected.forEach((s,i)=>{ str += `--- 第${selected.length-i}轮总结 ---\n${s.content}\n\n`; });
+    return str;
+  }
+
+  // ===== 时间感知 =====
+  const timePerceptionCheck = document.getElementById('timePerceptionCheck');
   function updateAllTabBars(activeTab){ document.querySelectorAll('.bottom-tab-bar').forEach(bar=>{ bar.querySelectorAll('.bottom-tab-item').forEach(item=> item.classList.toggle('active', item.dataset.tab===activeTab)) }) }
   function showView(viewName){
     saveGlobalsToActiveChar();
@@ -767,6 +883,7 @@
     autoReplyDailyMinInput.value = apiSettings.autoReplyDailyMin; autoReplyDailyMaxInput.value = apiSettings.autoReplyDailyMax;
     autoReplyContextLayersInput.value = apiSettings.autoReplyContextLayers;
     if(notificationsEnabledCheck) notificationsEnabledCheck.checked = apiSettings.notificationsEnabled;
+    if(timePerceptionCheck) timePerceptionCheck.checked = apiSettings.timePerceptionEnabled||false;
     if(weatherEnableCheck) weatherEnableCheck.checked = apiSettings.weatherEnabled;
     if(weatherSettingsContainer) weatherSettingsContainer.style.display = apiSettings.weatherEnabled?'block':'none';
     if(weatherCityInput) weatherCityInput.value = apiSettings.weatherCity||apiSettings.autoWeatherCity||'';
@@ -1135,8 +1252,10 @@
         systemPrompt += '\n';
       }
       systemPrompt += `## 当前情境\n${timeWeatherStr}\n\n`;
+      const summaryPromptG = buildSummaryPrompt(); if(summaryPromptG) systemPrompt += summaryPromptG;
       if(historyStr){
         systemPrompt += `## 对话记录\n以下是最近的聊天记录。标注说明：[自动回复] = AI主动发送的消息；[引用了xxx的消息："..."] = 发言者在针对被引用的内容回复；[已撤回] = 该消息已被撤回。\n${historyStr}\n\n`;
+        if(apiSettings.timePerceptionEnabled && lastTs){ systemPrompt += `## 时间感知\n距离上条消息已过去 ${timeAgoStr}。请根据这个时间间隔来调整角色的语气和反应——刚说完话和隔了很久再说话，情绪和表达方式是不同的。\n\n`; }
       }
 
       // --- 行动指令 ---
@@ -1201,8 +1320,10 @@
         systemPrompt += '\n';
       }
       systemPrompt += `## 当前情境\n${timeWeatherStr}\n\n`;
+      const summaryPromptS = buildSummaryPrompt(); if(summaryPromptS) systemPrompt += summaryPromptS;
       if(historyStr){
         systemPrompt += `## 对话记录\n以下是最近的聊天记录。标注说明：[自动回复] = 你主动发送的消息；[引用了xxx的消息："..."] = 发言者在针对被引用的内容回复；[已撤回] = 该消息已被撤回。\n${historyStr}\n\n`;
+        if(apiSettings.timePerceptionEnabled && lastTs){ systemPrompt += `## 时间感知\n距离上条消息已过去 ${timeAgoStr}。请根据这个时间间隔来调整你的语气和反应——刚说完话和隔了很久再说话，情绪和表达方式是不同的。\n\n`; }
       }
 
       // --- 行动指令 ---
@@ -1316,6 +1437,7 @@
         if(currentAutoReplyLog){ currentAutoReplyLog.response = finalContent; currentAutoReplyLog.skipped = false; currentAutoReplyLog = null; }
         if(isAutoReply){ const shouldAddUnread = (document.visibilityState !== 'visible') || !isActiveChat; if (shouldAddUnread) { unreadCount += segmentsRaw.length; saveGlobalsToActiveChar(); updateUnreadDisplay(); if (messageListViewWrap.classList.contains('active')) renderCharacterList(); sendAutoReplyNotifications(segmentsRaw.filter(s => !s.recalled)); } else { updateUnreadDisplay(); } }
         if (options && options.onReply) options.onReply(newSegments);
+        checkSummaryTrigger();
       } catch(err){ console.error(err); const errorMsg = `😢 AI 请求失败：${err.message}`; const msgId = 'msg_'+Date.now().toString(36)+Math.random().toString(36).substr(2,5); const ts = Date.now(); messageHistory.push({role:'assistant',content:errorMsg}); chatMessages.push({id:msgId,role:'dog',text:errorMsg,reasoning:null,timestamp:ts, isAutoReply: false, senderId: null, senderName: null}); saveChatHistory(); if (!skipUI) { const fragment = document.createDocumentFragment(); const prevLastTs = chatMessages.length>1?(chatMessages[chatMessages.length-2]?.timestamp||0):0; if(prevLastTs===0||(ts-prevLastTs)>=300000) fragment.appendChild(createTimeStampDiv(ts)); fragment.appendChild(createDogMsg(errorMsg,null,false,msgId)); loadingWrapper.replaceWith(fragment); } else if (loadingWrapper) { loadingWrapper.remove(); } if(currentAutoReplyLog){ currentAutoReplyLog.response = errorMsg; currentAutoReplyLog.skipped = false; currentAutoReplyLog = null; } }
       finally { if (!skipUI) { sendBtn.disabled=false; retryBtn.disabled=false; } waiting=false; if (!skipUI) chatArea.scrollTop = chatArea.scrollHeight; }
     } else {
@@ -1397,6 +1519,7 @@
   autoReplyDailyMaxInput.addEventListener('change',()=>{ apiSettings.autoReplyDailyMax=parseInt(autoReplyDailyMaxInput.value)||3; saveGlobalsToActiveChar() });
   autoReplyContextLayersInput.addEventListener('change',()=>{ apiSettings.autoReplyContextLayers=parseInt(autoReplyContextLayersInput.value)||5; saveGlobalsToActiveChar() });
   if(notificationsEnabledCheck){ notificationsEnabledCheck.addEventListener('change', async function(){ if(this.checked){ const granted = await requestNotificationPermission(); if(!granted){ this.checked = false; alert('需要通知权限才能开启此功能。'); } } apiSettings.notificationsEnabled = this.checked; saveGlobalsToActiveChar(); }); }
+  if(timePerceptionCheck){ timePerceptionCheck.addEventListener('change', function(){ apiSettings.timePerceptionEnabled = this.checked; saveGlobalsToActiveChar(); }); }
   if(weatherEnableCheck){ weatherEnableCheck.addEventListener('change',()=>{ apiSettings.weatherEnabled=weatherEnableCheck.checked; if(weatherSettingsContainer) weatherSettingsContainer.style.display=apiSettings.weatherEnabled?'block':'none'; saveGlobalsToActiveChar(); if(apiSettings.weatherEnabled) startWeatherAutoRefresh(); else stopWeatherAutoRefresh(); }) }
   if(fetchLocationBtn) fetchLocationBtn.addEventListener('click',fetchLocationAndWeather);
   if(refreshWeatherBtn){ refreshWeatherBtn.addEventListener('click',async()=>{ if(apiSettings.weatherLat==null||apiSettings.weatherLon==null||isNaN(apiSettings.weatherLat)||isNaN(apiSettings.weatherLon)){ alert('请先获取位置信息'); return } const btn=refreshWeatherBtn; btn.disabled=true; btn.textContent='刷新中...'; cachedWeatherData=null; cachedWeatherTime=0; updateWeatherStatusUI(); try{ const weatherInfo = await getWeatherInfo(); if(weatherInfo) addLog('info',`天气手动刷新成功`); else alert('天气刷新失败'); } catch(e){ alert('天气刷新失败: '+e.message) } finally { btn.disabled=false; btn.textContent='🔄 手动刷新天气'; updateWeatherStatusUI() } }) }
