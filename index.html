@@ -407,7 +407,7 @@
       <div class="bottom-tab-item active" data-tab="profile"><span class="tab-icon">👤</span><span>我的</span></div>
     </div>
   </div>
-  <div class="settings-modal" id="settingsModal"><div class="settings-panel" id="settingsPanel"><div class="settings-main" id="settingsMain"><h3>设置</h3><div class="settings-item" id="goProfile"><span class="item-text">个人信息设置</span><span class="item-arrow">›</span></div><div class="settings-item" id="goCharacter"><span class="item-text">角色人设</span><span class="item-arrow">›</span></div><div class="settings-item" id="goApi"><span class="item-text">AI 回复设置</span><span class="item-arrow">›</span></div><div class="settings-item" id="goPreset"><span class="item-text">预设（角色专属）</span><span class="item-arrow">›</span></div><div class="settings-item" id="goWorld"><span class="item-text">世界书（角色专属）</span><span class="item-arrow">›</span></div><div class="settings-item" id="goLog"><span class="item-text">运行日志</span><span class="item-arrow">›</span></div></div><div class="settings-sub" id="settingsProfile" style="display:none"><div class="back-row" id="backFromProfile"><span>‹</span><span>返回</span></div><h3 id="settingsProfileTitle">个人信息</h3><div class="setting-row"><label>备注</label><input type="text" id="remarkInput" value="月"></div><div class="setting-row" id="signatureRow"><label>签名</label><input type="text" id="signatureInput" value="月夜雪纷纷"></div><div class="avatar-setting"><div class="avatar-preview" id="dogPreview">🌙</div><span id="dogNameLabel">月</span><button class="change-avatar-btn" id="changeDogAvatarBtn">更换</button><input type="file" id="dogFileInput" accept="image/*"></div><div class="avatar-setting" style="flex-wrap:wrap"><div class="avatar-preview avatar-me" id="myPreview">我</div><span id="myPersonaNameLabel" style="flex:1">我</span><button class="change-avatar-btn" id="selectPersonaBtn" style="background:#07c160;color:#fff">选择人设</button></div><div class="hint-text" style="margin-top:2px">从人设库中选择一个用户人设，将作为你的身份提示词发送给AI</div><div id="activePersonaInfo" style="font-size:11px;color:#07c160;margin-top:4px;display:none"></div>
+  <div class="settings-modal" id="settingsModal"><div class="settings-panel" id="settingsPanel"><div class="settings-main" id="settingsMain"><h3>设置</h3><div class="settings-item" id="goProfile"><span class="item-text">个人信息设置</span><span class="item-arrow">›</span></div><div class="settings-item" id="goCharacter"><span class="item-text">角色人设</span><span class="item-arrow">›</span></div><div class="settings-item" id="goApi"><span class="item-text">AI 回复设置</span><span class="item-arrow">›</span></div><div class="settings-item" id="goPreset"><span class="item-text">预设（角色专属）</span><span class="item-arrow">›</span></div><div class="settings-item" id="goWorld"><span class="item-text">世界书（角色专属）</span><span class="item-arrow">›</span></div><div class="settings-item" id="goLog"><span class="item-text">运行日志</span><span class="item-arrow">›</span></div><div class="settings-item" id="goSummaryFromMenu" style="color:#07c160"><span class="item-text">📋 大总结</span><span class="item-arrow">›</span></div></div><div class="settings-sub" id="settingsProfile" style="display:none"><div class="back-row" id="backFromProfile"><span>‹</span><span>返回</span></div><h3 id="settingsProfileTitle">个人信息</h3><div class="setting-row"><label>备注</label><input type="text" id="remarkInput" value="月"></div><div class="setting-row" id="signatureRow"><label>签名</label><input type="text" id="signatureInput" value="月夜雪纷纷"></div><div class="avatar-setting"><div class="avatar-preview" id="dogPreview">🌙</div><span id="dogNameLabel">月</span><button class="change-avatar-btn" id="changeDogAvatarBtn">更换</button><input type="file" id="dogFileInput" accept="image/*"></div><div class="avatar-setting" style="flex-wrap:wrap"><div class="avatar-preview avatar-me" id="myPreview">我</div><span id="myPersonaNameLabel" style="flex:1">我</span><button class="change-avatar-btn" id="selectPersonaBtn" style="background:#07c160;color:#fff">选择人设</button></div><div class="hint-text" style="margin-top:2px">从人设库中选择一个用户人设，将作为你的身份提示词发送给AI</div><div id="activePersonaInfo" style="font-size:11px;color:#07c160;margin-top:4px;display:none"></div>
     <div class="setting-row" style="margin-top:10px"><label>聊天背景</label><button class="change-avatar-btn" id="changeBgBtn">更换背景</button><button class="change-avatar-btn" id="clearBgBtn" style="margin-left:6px;">清除背景</button></div>
     <input type="file" id="bgFileInput" accept="image/*" style="display:none">
     <div class="hint-text" style="margin-top:2px">点击更换可裁剪背景，图片将自动填充聊天区域</div>
@@ -479,6 +479,7 @@
   let chatHistoryPushed = false;
   window.addEventListener('popstate', function(e) {
     const chatViewWrap = document.getElementById('chatViewWrap');
+    if(autoReplyInProgress){ history.pushState({},'',location.href); return; }
     if (chatHistoryPushed && chatViewWrap && chatViewWrap.classList.contains('active')) { chatHistoryPushed = false; if(!autoReplyInProgress) saveGlobalsToActiveChar(); chatViewWrap.classList.remove('active'); document.getElementById('messageListViewWrap').classList.add('active'); document.getElementById('libraryViewWrap').classList.remove('active'); document.getElementById('profileViewWrap').classList.remove('active'); updateAllTabBars('messages'); renderCharacterList() }
     if(document.querySelector('.main-container').classList.contains('css-fullscreen')){ history.pushState({},'',location.href); if(!document.fullscreenElement && !document.webkitFullscreenElement){ try{ document.documentElement.requestFullscreen?.() }catch(e){} } }
   });
@@ -726,6 +727,7 @@
   }
   function saveGlobalsToActiveChar(){
     const ac = getActiveCharacter(); if(!ac) return;
+    if(ac.type && ac.type !== chatType) return; // 防止自动回复切换时覆盖角色类型
     ac.type = chatType;
     ac.members = members;
     ac.selectedUserPersonaIds = selectedUserPersonaIds;
@@ -868,7 +870,7 @@
   function renderCharacterList(filterText){ if(!characterList) return; let filtered = characters; if(filterText && filterText.trim()){ const q = filterText.trim().toLowerCase(); filtered = characters.filter(c=>c.name.toLowerCase().includes(q)) } filtered.sort((a,b)=>{ if(a.pinned && !b.pinned) return -1; if(!a.pinned && b.pinned) return 1; const aMsgs = a.chatMessages||[]; const bMsgs = b.chatMessages||[]; const aTs = aMsgs.length>0?(aMsgs[aMsgs.length-1].timestamp||0):0; const bTs = bMsgs.length>0?(bMsgs[bMsgs.length-1].timestamp||0):0; return bTs - aTs; }); const now = Date.now(); characterList.innerHTML = filtered.map(c=>{ const isGroup = c.type === 'group'; const memberCount = isGroup ? ((c.members ? c.members.length : 0) + ((c.selectedUserPersonaIds && c.selectedUserPersonaIds.length) || 1)) : 0; const avatarHtml = c.avatarType==='image' && c.avatarSrc ? `<div class="char-card-avatar" style="background-image:url(${escapeHtml(c.avatarSrc)});background-size:cover;"></div>` : `<div class="char-card-avatar" style="background:linear-gradient(135deg,#a8e063,#56ab2f);">${escapeHtml(c.avatarEmoji||'🌙')}</div>`; const msgs = c.chatMessages || []; const lastMsg = msgs.length>0?msgs[msgs.length-1]:null; const lastTs = lastMsg?(lastMsg.timestamp||0):0; const timeStr = lastTs?formatRelativeTime(lastTs,now):''; const unread = c.unreadCount || 0; const pinHtml = c.pinned ? '<span class="pin-badge">📌</span>' : ''; const nameDisplay = isGroup ? `${escapeHtml(c.name)} (${memberCount})` : escapeHtml(c.name); return `<div class="char-card${c.pinned?' pinned':''}" data-char-id="${escapeHtml(c.id)}" data-char-name="${escapeHtml(c.name)}">${avatarHtml}<div class="char-card-info"><div class="char-card-name">${nameDisplay}${pinHtml}</div><div class="char-card-preview">${escapeHtml(getLastMessagePreview(c))}</div></div><div class="char-card-time" data-timestamp="${lastTs}">${timeStr}</div><div class="char-card-unread" data-char-id="${escapeHtml(c.id)}" style="display:${unread>0?'flex':'none'}"><span class="unread-count">${unread>99?'99+':unread}</span></div></div>`; }).join(''); characterList.querySelectorAll('.char-card').forEach(card=>{ card.addEventListener('click',function(){ openCharacterChat(this.dataset.charId) }); let longPressTimer; const startLongPress = (e)=>{ longPressTimer = setTimeout(()=>{ showCharActionMenu(card.dataset.charId, card.dataset.charName) },600) }; const cancelLongPress = ()=>clearTimeout(longPressTimer); card.addEventListener('touchstart',startLongPress,{passive:true}); card.addEventListener('touchend',cancelLongPress); card.addEventListener('touchmove',cancelLongPress); card.addEventListener('mousedown',startLongPress); card.addEventListener('mouseup',cancelLongPress); card.addEventListener('mouseleave',cancelLongPress) }); }
   function openCharacterChat(charId){ if(autoReplyInProgress){ alert('自动回复处理中，请稍候再切换'); return; } saveGlobalsToActiveChar(); activeCharacterId = charId; save('activeCharacterId',activeCharacterId); loadActiveCharToGlobals(); unreadCount = 0; saveGlobalsToActiveChar(); updateUnreadDisplay(); refreshAllUIForActiveChar(); if(!chatHistoryPushed){ history.pushState({chatView:true},'',location.href); chatHistoryPushed = true } showView('chat'); reloadChatUI(); chatArea.scrollTop = chatArea.scrollHeight; }
   function deleteCharacter(charId){ characters = characters.filter(c=>c.id!==charId); if(activeCharacterId===charId){ activeCharacterId = characters.length>0?characters[0].id:null; save('activeCharacterId',activeCharacterId); loadActiveCharToGlobals(); refreshAllUIForActiveChar(); reloadChatUI() } saveAllData(); renderCharacterList(charSearchInput?.value||''); updateUnreadDisplay() }
-  function refreshAllUIForActiveChar(){
+  function refreshAllUIForActiveChar(){ try{
     const isGroup = chatType === 'group';
     document.getElementById('settingsProfileTitle').textContent = isGroup ? '群聊信息' : '个人信息';
     const stTitle = isGroup ? '群聊设定' : '角色人设';
@@ -945,7 +947,7 @@
     if(autoSkipReason) { autoSkipHintEl.style.display = 'flex'; autoSkipHintEl.title = '屏幕那端传来了消息，是TA憋在心里的...：' + autoSkipReason; autoSkipHintEl.onclick = () => { alert('屏幕那端传来了消息，是TA憋在心里的...：\n' + autoSkipReason); hideAutoSkipHint(); }; } else { autoSkipHintEl.style.display = 'none'; }
     updatePersonaSwitchBar();
     updateUnreadDisplay();
-  }
+  } catch(e){ addLog('error', e.message); } }
   function renderGroupPersonaList(){
     if(!groupPersonaSelectList) return;
     groupPersonaSelectList.innerHTML = userPersonas.map(p=>{
@@ -1115,8 +1117,9 @@
     wrapper.appendChild(row);
     return wrapper;
   }
-  function createUserMsg(text,msgId,quoteText,quoteRole,quoteId,senderId,recalled=false){
+  function createUserMsg(text,msgId,quoteText,quoteRole,quoteId,senderId,recalled=false,mentionName=null){
     const wrapper = document.createElement('div'); wrapper.className='msg-wrapper msg-wrapper-right'; wrapper.id = 'msg-'+msgId;
+    if(mentionName){ const mDiv = document.createElement('div'); mDiv.style.cssText='text-align:right;font-size:11px;color:#1a73e8;margin-bottom:2px;margin-right:50px'; mDiv.textContent='@ '+mentionName; wrapper.appendChild(mDiv); }
     if(quoteText) wrapper.appendChild(createCitationBlock(quoteText,quoteRole,quoteId));
     const row = document.createElement('div'); row.className='message-row message-right';
     row.appendChild(createAvatar('user', senderId));
@@ -1145,7 +1148,7 @@
   function syncHistoryFromChat(){ messageHistory = chatMessages.filter(m=>m.role!=='hint').map(m=>{ if(m.role==='user' && m.recalled) return {role:'user', content:'[用户撤回了一条消息]'}; if(m.role==='dog' && m.recalled) return {role:'assistant', content:'[AI撤回了一条消息]'}; return {role: m.role==='user'?'user':'assistant', content: m.text} }); save('messageHistory',messageHistory) }
   function createTimeStampDiv(ts){ const div = document.createElement('div'); div.className='time-stamp'; div.dataset.timestamp = ts; div.textContent = formatTimeDivider(ts,Date.now()); return div }
   function addCenteredHint(text){ const div = document.createElement('div'); div.className='time-stamp'; div.textContent = text; chatArea.appendChild(div); chatArea.scrollTop = chatArea.scrollHeight; }
-  function reloadChatUI(){ const children = chatArea.children; while(children.length>1) chatArea.removeChild(children[1]); let lastTs = null; chatMessages.forEach(msg=>{ ensureMsgTimestamp(msg); const ts = msg.timestamp; if(lastTs===null || (ts-lastTs)>=300000){ chatArea.appendChild(createTimeStampDiv(ts)); lastTs = ts } else { lastTs = Math.max(lastTs,ts) } if(msg.role==='hint'){ const hintDiv = document.createElement('div'); hintDiv.className='time-stamp'; hintDiv.textContent = msg.text; chatArea.appendChild(hintDiv); } else if(msg.role==='user') chatArea.appendChild(createUserMsg(msg.text,msg.id,msg.quoteText,msg.quoteRole,msg.quoteId,msg.senderId,msg.recalled)); else chatArea.appendChild(createDogMsg(msg.text,msg.reasoning,true,msg.id,msg.quoteText,msg.quoteRole,msg.quoteId,msg.senderId,msg.recalled,msg.recalledText, msg.senderName)); }); chatArea.scrollTop = chatArea.scrollHeight }
+  function reloadChatUI(){ const children = chatArea.children; while(children.length>1) chatArea.removeChild(children[1]); let lastTs = null; chatMessages.forEach(msg=>{ ensureMsgTimestamp(msg); const ts = msg.timestamp; if(lastTs===null || (ts-lastTs)>=300000){ chatArea.appendChild(createTimeStampDiv(ts)); lastTs = ts } else { lastTs = Math.max(lastTs,ts) } if(msg.role==='hint'){ const hintDiv = document.createElement('div'); hintDiv.className='time-stamp'; hintDiv.textContent = msg.text; chatArea.appendChild(hintDiv); } else if(msg.role==='user') chatArea.appendChild(createUserMsg(msg.text,msg.id,msg.quoteText,msg.quoteRole,msg.quoteId,msg.senderId,msg.recalled,msg.mentionName)); else chatArea.appendChild(createDogMsg(msg.text,msg.reasoning,true,msg.id,msg.quoteText,msg.quoteRole,msg.quoteId,msg.senderId,msg.recalled,msg.recalledText, msg.senderName)); }); chatArea.scrollTop = chatArea.scrollHeight }
   function updateQuoteHint(){ if(currentQuote){ const who = currentQuote.role==='user'?'我':remarkVal||'月'; quoteTextSpan.textContent = `引用 ${who}: ${currentQuote.text.substring(0,30)}`; quoteHint.style.display = 'flex' } else quoteHint.style.display = 'none' }
   function updateSendHint(){ if(pendingUserMessages.length>0){ sendHint.style.display='flex'; sendHintText.textContent = `积${pendingUserMessages.length}条·三击回复` } else { sendHint.style.display='none' } }
   clearPendingBtn.addEventListener('click',()=>{ pendingUserMessages=[]; updateSendHint(); clickCount=0; if(clickTimer) clearTimeout(clickTimer) });
@@ -1296,7 +1299,7 @@
       const summaryPromptG = buildSummaryPrompt(); if(summaryPromptG) systemPrompt += summaryPromptG;
       if(historyStr){
         systemPrompt += `## 对话记录\n以下是最近的聊天记录。标注说明：[自动回复] = AI主动发送的消息；[引用了xxx的消息："..."] = 发言者在针对被引用的内容回复；[已撤回] = 该消息已被撤回。\n${historyStr}\n\n`;
-        if(apiSettings.timePerceptionEnabled && lastTs){ systemPrompt += `## 时间感知\n现在是 ${new Date().toLocaleTimeString("zh-CN",{hour:"2-digit",minute:"2-digit",hour12:false})}，${new Date().getHours()>=6&&new Date().getHours()<18?"白天":"夜晚"}。距离上条消息已过去 ${timeAgoStr}。请根据这个时间间隔来调整角色的语气和反应——刚说完话和隔了很久再说话，情绪和表达方式是不同的。\n\n`; }
+        if(apiSettings.timePerceptionEnabled && lastTs){ systemPrompt += `## 时间感知\n现在是 ${new Date().toLocaleTimeString("zh-CN",{hour:"2-digit",minute:"2-digit",hour12:false})}，${(()=>{const h=new Date().getHours();return h<6?"深夜":h<9?"清晨":h<12?"上午":h<14?"中午":h<18?"下午":h<22?"晚上":"深夜"})()}。距离上条消息已过去 ${timeAgoStr}。请根据这个时间间隔来调整角色的语气和反应——刚说完话和隔了很久再说话，情绪和表达方式是不同的。\n\n`; }
       }
 
       // --- 行动指令 ---
@@ -1377,7 +1380,7 @@
       const summaryPromptS = buildSummaryPrompt(); if(summaryPromptS) systemPrompt += summaryPromptS;
       if(historyStr){
         systemPrompt += `## 对话记录\n以下是最近的聊天记录。标注说明：[自动回复] = 你主动发送的消息；[引用了xxx的消息："..."] = 发言者在针对被引用的内容回复；[已撤回] = 该消息已被撤回。\n${historyStr}\n\n`;
-        if(apiSettings.timePerceptionEnabled && lastTs){ systemPrompt += `## 时间感知\n现在是 ${new Date().toLocaleTimeString("zh-CN",{hour:"2-digit",minute:"2-digit",hour12:false})}，${new Date().getHours()>=6&&new Date().getHours()<18?"白天":"夜晚"}。距离上条消息已过去 ${timeAgoStr}。请根据这个时间间隔来调整你的语气和反应——刚说完话和隔了很久再说话，情绪和表达方式是不同的。\n\n`; }
+        if(apiSettings.timePerceptionEnabled && lastTs){ systemPrompt += `## 时间感知\n现在是 ${new Date().toLocaleTimeString("zh-CN",{hour:"2-digit",minute:"2-digit",hour12:false})}，${(()=>{const h=new Date().getHours();return h<6?"深夜":h<9?"清晨":h<12?"上午":h<14?"中午":h<18?"下午":h<22?"晚上":"深夜"})()}。距离上条消息已过去 ${timeAgoStr}。请根据这个时间间隔来调整你的语气和反应——刚说完话和隔了很久再说话，情绪和表达方式是不同的。\n\n`; }
       }
 
       // --- 行动指令 ---
@@ -1491,6 +1494,13 @@
           }));
         }
         const { recalledIds } = processAiRecall(finalContent, newSegments); if (recalledIds.length > 0) showRecallHint(recalledIds);
+        if(newSegments.length === 0 && skipReasons.length === 0){
+          if(!skipUI && loadingWrapper) loadingWrapper.remove();
+          if(!skipUI) addCenteredHint('AI 本轮没有输出有效消息');
+          waiting=false; if(!skipUI){ sendBtn.disabled=false; retryBtn.disabled=false; }
+          if(currentAutoReplyLog){ currentAutoReplyLog.response = finalContent; currentAutoReplyLog.skipped = false; currentAutoReplyLog = null; }
+          return;
+        }
         const now = Date.now(); let lastTs = chatMessages.length>0 ? (chatMessages[chatMessages.length-1].timestamp||0) : 0; const fragment = skipUI ? null : document.createDocumentFragment();
         const reasoningSenders = new Set();
         newSegments.forEach((seg, idx) => {
@@ -1507,6 +1517,12 @@
         if (skipReasons.length > 0) {
           showAutoSkipHint(skipReasons.join('；'));
         }
+        if(newSegments.length === 0 && !skipUI){
+          const hintMsg = '（AI 本轮未产生有效回复）';
+          const hintId = 'msg_'+Date.now().toString(36)+Math.random().toString(36).substr(2,5);
+          chatMessages.push({id:hintId, role:'hint', text:hintMsg, timestamp:Date.now()});
+          if(fragment) { const hintDiv = document.createElement('div'); hintDiv.className='time-stamp'; hintDiv.textContent=hintMsg; fragment.appendChild(hintDiv); }
+        }
         messageHistory.push({role:'assistant',content:finalContent||''}); saveChatHistory();
         if (!skipUI && loadingWrapper) { loadingWrapper.replaceWith(fragment); } else if (loadingWrapper) { loadingWrapper.remove(); }
         if(currentAutoReplyLog){ currentAutoReplyLog.response = finalContent; currentAutoReplyLog.skipped = false; currentAutoReplyLog = null; }
@@ -1519,7 +1535,7 @@
       if (!skipUI) { setTimeout(()=>{ const reply = getRandomReply(); const msgId = 'msg_'+Date.now().toString(36)+Math.random().toString(36).substr(2,5); const ts = Date.now(); messageHistory.push({role:'assistant',content:reply}); chatMessages.push({id:msgId,role:'dog',text:reply,reasoning:null,timestamp:ts, isAutoReply: isAutoReply || false, senderId: null, senderName: null}); saveChatHistory(); if (isAutoReply && (document.visibilityState !== 'visible' || !isActiveChat)) { unreadCount += 1; saveGlobalsToActiveChar(); updateUnreadDisplay(); if (messageListViewWrap.classList.contains('active')) renderCharacterList(); sendAutoReplyNotifications([reply]); } },600) }
     }
   }
-  function sendMessageOnly(){ if(waiting) return; const text = messageInput.value.trim(); if(!text) return; apiSettings.autoReplyConsecutiveCount = 0; saveGlobalsToActiveChar(); const userMsgId = 'msg_'+Date.now().toString(36)+Math.random().toString(36).substr(2,5); const ts = Date.now(); const quote = currentQuote; const mention = currentMention; const senderId = (chatType==='group') ? currentUserPersonaId : null; chatMessages.push({id:userMsgId,role:'user',text,quoteText:quote?.text,quoteRole:quote?.role,quoteId:quote?.id,mentionName:mention?.name||null,mentionId:mention?.id||null,timestamp:ts, isAutoReply: false, senderId: senderId, senderName: null}); const mentionTag = getMentionTag(); messageHistory.push({role:'user',content:mentionTag+getFormattedUserContent(text,quote?.text)}); pendingUserMessages.push(text); currentQuote=null; updateQuoteHint(); currentMention=null; if(mentionHint) mentionHint.style.display='none'; updateSendHint(); saveChatHistory(); const lastMsgEl = chatArea.querySelector('.msg-wrapper:last-child'); let lastTs=0; if(lastMsgEl){ const lastId = lastMsgEl.id.replace('msg-',''); const lastMsg = chatMessages.find(m=>m.id===lastId); if(lastMsg) lastTs=lastMsg.timestamp||0 } if(lastTs===0||(ts-lastTs)>=300000) chatArea.appendChild(createTimeStampDiv(ts)); chatArea.appendChild(createUserMsg(text,userMsgId,quote?.text,quote?.role,quote?.id,senderId)); chatArea.scrollTop = chatArea.scrollHeight; messageInput.value=''; messageInput.style.height='auto'; messageInput.style.height='38px'; autoResizeTextarea(messageInput); }
+  function sendMessageOnly(){ if(waiting) return; const text = messageInput.value.trim(); if(!text) return; apiSettings.autoReplyConsecutiveCount = 0; saveGlobalsToActiveChar(); const userMsgId = 'msg_'+Date.now().toString(36)+Math.random().toString(36).substr(2,5); const ts = Date.now(); const quote = currentQuote; const mention = currentMention; const senderId = (chatType==='group') ? currentUserPersonaId : null; chatMessages.push({id:userMsgId,role:'user',text,quoteText:quote?.text,quoteRole:quote?.role,quoteId:quote?.id,mentionName:mention?.name||null,mentionId:mention?.id||null,timestamp:ts, isAutoReply: false, senderId: senderId, senderName: null}); const mentionTag = getMentionTag(); messageHistory.push({role:'user',content:mentionTag+getFormattedUserContent(text,quote?.text)}); pendingUserMessages.push(text); currentQuote=null; updateQuoteHint(); currentMention=null; if(mentionHint) mentionHint.style.display='none'; updateSendHint(); saveChatHistory(); const lastMsgEl = chatArea.querySelector('.msg-wrapper:last-child'); let lastTs=0; if(lastMsgEl){ const lastId = lastMsgEl.id.replace('msg-',''); const lastMsg = chatMessages.find(m=>m.id===lastId); if(lastMsg) lastTs=lastMsg.timestamp||0 } if(lastTs===0||(ts-lastTs)>=300000) chatArea.appendChild(createTimeStampDiv(ts)); chatArea.appendChild(createUserMsg(text,userMsgId,quote?.text,quote?.role,quote?.id,senderId,false,mention?.name||null)); chatArea.scrollTop = chatArea.scrollHeight; messageInput.value=''; messageInput.style.height='auto'; messageInput.style.height='38px'; autoResizeTextarea(messageInput); }
   function handleSendClick(){ if(waiting) return; sendMessageOnly(); clickCount++; if(clickCount===1) clickTimer = setTimeout(()=>{clickCount=0},600); if(clickCount===3){ clearTimeout(clickTimer); clickCount=0; if(pendingUserMessages.length>0){ triggerAiReply(false); pendingUserMessages=[]; updateSendHint() } } }
   sendBtn.addEventListener('click',handleSendClick); messageInput.addEventListener('keypress',e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendMessageOnly() } });
   quoteCancelBtn.addEventListener('click',()=>{ currentQuote=null; updateQuoteHint() });
@@ -1548,6 +1564,15 @@
   function showWorld(){ settingsPanel.classList.add('world-panel'); settingsPanel.classList.remove('character-panel','preset-panel','log-panel','persona-panel'); settingsMain.style.display='none'; settingsProfile.style.display='none'; settingsCharacter.style.display='none'; settingsApi.style.display='none'; settingsPreset.style.display='none'; settingsWorld.style.display='block'; settingsLog.style.display='none'; renderWorlds(); setTimeout(()=>{ autoResizeTextarea(document.getElementById('worldKeyInput')); autoResizeTextarea(document.getElementById('worldContentInput')) },10); const title = document.querySelector('#settingsWorld h3'); if(title) title.textContent = chatType==='group' ? '群聊专属世界书' : '世界书（角色专属）'; }
   function showLog(){ settingsPanel.classList.add('log-panel'); settingsPanel.classList.remove('character-panel','preset-panel','world-panel','persona-panel'); settingsMain.style.display='none'; settingsProfile.style.display='none'; settingsCharacter.style.display='none'; settingsApi.style.display='none'; settingsPreset.style.display='none'; settingsWorld.style.display='none'; settingsLog.style.display='block'; autoReplyLogContainer.style.display='none'; }
   document.getElementById('goProfile').addEventListener('click',showProfile); document.getElementById('goCharacter').addEventListener('click',showCharacter); document.getElementById('goApi').addEventListener('click',showApi); document.getElementById('goPreset').addEventListener('click',showPreset); document.getElementById('goWorld').addEventListener('click',showWorld); document.getElementById('goLog').addEventListener('click',showLog);
+  document.getElementById('goSummaryFromMenu').addEventListener('click',()=>{
+    summaryTitle.textContent = chatType==='group' ? '当我们对视时' : '你与我，在那一天...';
+    summaryEnabledCheck.checked = apiSettings.summaryEnabled||false;
+    summaryTriggerInput.value = apiSettings.summaryTriggerCount||20;
+    summaryWordCountInput.value = apiSettings.summaryWordCount||300;
+    summaryFormatSelect.value = apiSettings.summaryFormat||'text';
+    summarySendCountInput.value = apiSettings.summarySendCount||3;
+    renderSummaryList(); summaryOverlay.classList.add('show');
+  });
   document.getElementById('backFromProfile').addEventListener('click',showMain); document.getElementById('backFromCharacter').addEventListener('click',showMain); document.getElementById('backFromApi').addEventListener('click',showMain); document.getElementById('backFromPreset').addEventListener('click',showMain); document.getElementById('backFromWorld').addEventListener('click',showMain); document.getElementById('backFromLog').addEventListener('click',showMain);
   document.getElementById('settingsBtn').addEventListener('click',()=>{ showMain(); settingsModal.classList.add('show') }); settingsModal.addEventListener('click',e=>{ if(e.target===settingsModal) settingsModal.classList.remove('show') });
   document.getElementById('copyLogBtn').addEventListener('click',()=>{ navigator.clipboard.writeText(document.getElementById('logTextarea').value).then(()=>alert('日志已复制')).catch(()=>alert('复制失败')) });
@@ -1807,8 +1832,8 @@
         const count = Math.floor(Math.random() * (char.apiSettings.autoReplyDailyMax - char.apiSettings.autoReplyDailyMin + 1)) + char.apiSettings.autoReplyDailyMin;
         if (char.apiSettings.autoReplyTodayCount >= count) continue;
 
-        apiSettings.autoReplyTodayCount++;
-        saveGlobalsToActiveChar();
+        char.apiSettings.autoReplyTodayCount++;
+        saveAllData();
 
         if (char.type === 'group') {
           await handleGroupAutoReply(char, currentActiveCharId);
