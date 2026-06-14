@@ -1093,7 +1093,6 @@
     const userName = activePersona?.name || '用户';
     let systemPrompt = '';
 
-    // ===== 时间差计算 =====
     const lastMsg = chatMessages.length>0 ? chatMessages[chatMessages.length-1] : null;
     const lastTs = lastMsg ? (lastMsg.timestamp || 0) : 0;
     const minutesAgo = lastTs ? Math.floor((Date.now()-lastTs)/60000) : 0;
@@ -1103,84 +1102,126 @@
     else timeAgoStr = `${Math.floor(minutesAgo/1440)} 天`;
     const lastSender = lastMsg ? (lastMsg.role==='user' ? userName : (lastMsg.senderName || charName)) : '未知';
     const lastPreview = lastMsg ? (lastMsg.text||'').substring(0,50) : '';
+    const allGlobalPresets = globalPresetsEnabled.map(p=>p.content).join('\n');
+    const allCharPresets = charPresetsEnabled.map(p=>p.content).join('\n');
+    const allGlobalWorlds = globalWorldsEnabled.map(w=>`${w.key}: ${w.content}`).join('\n');
+    const allCharWorlds = charWorldsEnabled.map(w=>`${w.key}: ${w.content}`).join('\n');
+    let timeWeatherStr = `当前时间：${new Date().toLocaleString('zh-CN',{hour12:false})}`;
+    if(apiSettings.weatherEnabled && apiSettings.weatherLat!=null && apiSettings.weatherLon!=null){ try{ const weatherInfo = await getWeatherInfo(); if(weatherInfo) timeWeatherStr += '\n'+getWeatherString(weatherInfo); } catch(e){} }
+    const historyStr = buildHistoryString(true);
 
     if(chatType==='group'){
-      // ========== 群聊模式 ==========
-      if(globalPresetsEnabled.length>0) systemPrompt += '[全局预设]\n'+globalPresetsEnabled.map(p=>p.content).join('\n')+'\n\n';
-      if(charPresetsEnabled.length>0) systemPrompt += '[群聊预设]\n'+charPresetsEnabled.map(p=>p.content).join('\n')+'\n\n';
-      const memberDescs = members.map(m=> `- ${m.name}：${m.charSettings?.prompt || '无特殊设定'}`).join('\n');
-      systemPrompt += `[群聊设定]\n这是一个群聊对话。\n\n`;
-      systemPrompt += `[群聊AI角色]\n${memberDescs}\n\n`;
-      const userPersonaDescs = selectedUserPersonaIds.map(id=>{ const p = userPersonas.find(x=>x.id===id); return p ? `- ${p.name}（用户扮演）：${p.persona||'无设定'}` : ''; }).filter(Boolean).join('\n');
-      if(userPersonaDescs) systemPrompt += `[群聊用户角色]\n${userPersonaDescs}\n\n`;
-      if(globalWorldsEnabled.length>0) systemPrompt += '[全局世界书]\n'+globalWorldsEnabled.map(w=>`${w.key}: ${w.content}`).join('\n')+'\n\n';
-      if(charWorldsEnabled.length>0) systemPrompt += '[群聊世界书]\n'+charWorldsEnabled.map(w=>`${w.key}: ${w.content}`).join('\n')+'\n\n';
-      const nowTime = new Date(); systemPrompt += `[当前时间] ${nowTime.toLocaleString('zh-CN',{hour12:false})}\n`;
-      if(apiSettings.weatherEnabled && apiSettings.weatherLat!=null && apiSettings.weatherLon!=null){ try{ const weatherInfo = await getWeatherInfo(); if(weatherInfo) systemPrompt += getWeatherString(weatherInfo)+'\n'; } catch(e){} }
+      // ========================
+      //      群聊模式
+      // ========================
+      const memberDescs = members.map(m=> `「${m.name}」${m.charSettings?.prompt || '无特殊设定'}`).join('\n');
+      const userDescs = selectedUserPersonaIds.map(id=>{ const p = userPersonas.find(x=>x.id===id); return p ? `「${p.name}」（用户扮演）${p.persona||'无设定'}` : ''; }).filter(Boolean).join('\n');
+
+      // --- 背景信息 ---
+      systemPrompt += '===== 背景信息 =====\n\n';
+      if(allGlobalPresets || allCharPresets){
+        systemPrompt += '## 预设\n';
+        if(allGlobalPresets) systemPrompt += allGlobalPresets+'\n';
+        if(allCharPresets) systemPrompt += allCharPresets+'\n';
+        systemPrompt += '\n';
+      }
+      systemPrompt += `## 群聊角色\nAI成员：\n${memberDescs}\n`;
+      if(userDescs) systemPrompt += `\n用户角色：\n${userDescs}\n`;
       systemPrompt += '\n';
-      const historyStr = buildHistoryString(true);
-      if(historyStr) systemPrompt += `[历史聊天记录]\n${historyStr}\n\n`;
-      systemPrompt += `[引用功能]\n当消息前有 [引用了xxx的消息："..."] 标注时，表示发言者是针对那条被引用的消息在回复，请基于引用内容理解意图并回应。\n\n`;
-      const lengthHint = apiSettings.chatModeSubtype==='long'?'约100个汉字':'约20个汉字';
-      systemPrompt += `[对话模式]\n你们正在进行线上群聊文字对话，请模拟真实的群聊交流方式。每条消息的字数请控制在${lengthHint}左右。\n\n`;
+      if(allGlobalWorlds || allCharWorlds){
+        systemPrompt += '## 世界观\n';
+        if(allGlobalWorlds) systemPrompt += allGlobalWorlds+'\n';
+        if(allCharWorlds) systemPrompt += allCharWorlds+'\n';
+        systemPrompt += '\n';
+      }
+      systemPrompt += `## 当前情境\n${timeWeatherStr}\n\n`;
+      if(historyStr){
+        systemPrompt += `## 对话记录\n以下是最近的聊天记录。标注说明：[自动回复] = AI主动发送的消息；[引用了xxx的消息："..."] = 发言者在针对被引用的内容回复；[已撤回] = 该消息已被撤回。\n${historyStr}\n\n`;
+      }
+
+      // --- 行动指令 ---
+      systemPrompt += '===== 行动指令 =====\n\n';
+      const lengthHint = apiSettings.chatModeSubtype==='long'?'约100字':'约20字';
+      systemPrompt += `## 对话规则\n模式：线上群聊。每条消息控制在${lengthHint}左右。\n\n`;
       if(options.allowedMemberIds && options.allowedMemberIds.length > 0){
         const min = overrideMinMsgs!==null ? overrideMinMsgs : apiSettings.minMsgs; const max = overrideMaxMsgs!==null ? overrideMaxMsgs : apiSettings.maxMsgs;
-        if(min===max) systemPrompt += `[回复条数]\n请发送恰好 ${min} 条消息，每条消息之间用双换行分隔。\n\n`;
-        else systemPrompt += `[回复条数]\n请发送 ${min} 到 ${max} 条消息，每条消息之间用双换行分隔。\n\n`;
+        if(min!==max) systemPrompt += `每人每轮发送 ${min}~${max} 条消息，用空行分隔。\n\n`;
+        else if(min>1) systemPrompt += `每人每轮发送 ${min} 条消息，用空行分隔。\n\n`;
       }
-      if(options.phase === 'initiate' && options.allowedMemberIds && options.allowedMemberIds.length > 0){
-        const targetMember = members.find(m=>m.id===options.allowedMemberIds[0]);
-        if(targetMember) systemPrompt += `[群聊发言]\n现在你是【${targetMember.name}】，请以这个角色的人设来决定是否主动发言。\n如果想发言，请以格式 [${targetMember.name}]: 消息内容 输出。\n如果不想发言，请只输出 [AUTO_SKIP] 理由\n\n`;
-      } else if(options.phase === 'response' && options.allowedMemberIds && options.allowedMemberIds.length > 0){
-        const targetMember = members.find(m=>m.id===options.allowedMemberIds[0]);
-        const initiatorMsg = options.initiatorMsg || '';
-        if(targetMember) systemPrompt += `[群聊回应]\n刚刚群聊中有人说：「${initiatorMsg}」\n现在你是【${targetMember.name}】，请以这个角色的人设来决定是否要回应。\n如果想回应，请以格式 [${targetMember.name}]: 消息内容 输出。\n如果不想回应，请只输出 [AUTO_SKIP] 理由\n\n`;
+
+      // 群聊角色行动指令
+      if(options.phase === 'initiate' && options.allowedMemberIds?.length > 0){
+        const t = members.find(m=>m.id===options.allowedMemberIds[0]);
+        if(t) systemPrompt += `## 你的角色\n你现在是「${t.name}」。请以这个角色的人设判断是否主动发言。\n想说话 → 用格式 [${t.name}]: 消息内容\n不想说 → 输出 [AUTO_SKIP] 理由\n\n`;
+      } else if(options.phase === 'response' && options.allowedMemberIds?.length > 0){
+        const t = members.find(m=>m.id===options.allowedMemberIds[0]);
+        if(t) systemPrompt += `## 你的角色\n你现在是「${t.name}」。刚才群里有人说了：「${options.initiatorMsg||''}」\n请以你的人设判断是否回应。\n想回应 → 用格式 [${t.name}]: 消息内容\n不想回应 → 输出 [AUTO_SKIP] 理由\n\n`;
       } else {
-        systemPrompt += `[群聊对话]\n请以各个AI成员的身份自由对话。每个成员根据自己的人设判断是否发言，允许多人发言，也允许全部沉默，也允许AI角色之间互相对话。\n发言格式：[成员名]: 消息内容（每条发言用空行分隔）\n不发言格式：[成员名]: [AUTO_SKIP] 理由\n\n`;
+        systemPrompt += `## 群聊发言\n每个AI成员根据自己的人设自由判断是否发言。允许多人说话，允许互相对话，也允许全部沉默。\n发言 → [成员名]: 消息内容（每条用空行分隔）\n不发言 → [成员名]: [AUTO_SKIP] 理由\n\n`;
       }
-      systemPrompt += `[心声指令]\n每次回复时，请在开头用"【思考过程】"和"【思考结束】"包裹你所扮演角色此刻的内心心声——那些不好意思说出口、想说又没说、或不方便发出来的真实想法和感受。这些心声不会被其他角色看到，只有读者能看到。请用角色的口吻来写心声，体现角色的性格和情感。\n\n`;
-      systemPrompt += `[撤回功能]\n你可以撤回自己角色之前发送过的消息。消息编号规则（仅计数你自己角色的消息，不能撤回别人的消息）：\n- 本轮输出的第1条 = 0，第2条 = -1，第3条 = -2 ...\n- 历史记录中你的上一条 = 1，再上一条 = 2，以此类推\n如需撤回，在回复中插入 [RECALL:编号]，如 [RECALL:1] 表示撤回你在历史记录中的上一条消息。不想撤回则正常回复。\n\n`;
+
+      systemPrompt += `## 心声\n在回复开头用「【思考过程】」和「【思考结束】」包裹角色此刻的内心心声——不好意思说出口的、想说又没说的真实想法。用角色口吻来写，体现性格和情感。这些心声只有读者能看到，其他角色看不到。\n\n`;
+      systemPrompt += `## 撤回\n可以撤回自己角色之前的消息（不能撤回别人的）。\n你的最近一条历史消息 → [RECALL:1]，再上一条 → [RECALL:2]，以此类推\n本轮你输出的第1条 → [RECALL:0]，第2条 → [RECALL:-1]，以此类推\n如需撤回就在回复中插入对应指令，不需要就正常回复。\n\n`;
+
       if(isAutoReply){
         if(options.phase === 'initiate'){
-          const targetMember = members.find(m=>m.id===options.allowedMemberIds?.[0]);
-          systemPrompt += `[群聊自动回复触发]\n群聊中已经 ${timeAgoStr} 没有人发送消息了。最后一条消息是 ${lastSender} 发送的「${lastPreview}」，在此之后没有任何人发送新消息。\n现在你是【${targetMember?.name||'成员'}】，请以这个角色的人设自由判断：你是否想要主动打破沉默，给群里发一条消息？\n如果想发，按正常格式回复；如果不想发，请输出 [AUTO_SKIP] 并说明理由。\n\n`;
+          const t = members.find(m=>m.id===options.allowedMemberIds?.[0]);
+          systemPrompt += `## 自动回复\n群聊已经 ${timeAgoStr} 没有人说话了。最后一条消息是「${lastSender}」发的：「${lastPreview}」\n你是「${t?.name||'成员'}」，请以你的人设判断：想打破沉默吗？\n想说 → 按正常格式回复\n不想说 → 输出 [AUTO_SKIP] 理由\n\n`;
         } else if(options.phase === 'response'){
-          const targetMember = members.find(m=>m.id===options.allowedMemberIds?.[0]);
-          const initiatorMsg = options.initiatorMsg || '';
-          systemPrompt += `[群聊自动回复后续]\n刚才有人在群聊中主动发了消息：「${initiatorMsg}」\n现在你是【${targetMember?.name||'成员'}】，请判断是否要回应这条消息。此环节只询问一次。\n如果想回应，按正常格式回复；如果不想回应，请输出 [AUTO_SKIP] 并说明理由。\n\n`;
+          const t = members.find(m=>m.id===options.allowedMemberIds?.[0]);
+          systemPrompt += `## 自动回复跟进\n刚才「${options.initiatorMsg||''}」有人说了话。你是「${t?.name||'成员'}」，要回应吗？（此环节只问一次）\n想回应 → 按正常格式回复\n不想回应 → 输出 [AUTO_SKIP] 理由\n\n`;
         } else {
-          systemPrompt += `[群聊自动回复触发]\n群聊中已经 ${timeAgoStr} 没有人发送消息了。最后一条消息是 ${lastSender} 发送的「${lastPreview}」。\n请各成员根据自己的人设自由判断是否要主动发言。\n\n`;
+          systemPrompt += `## 自动回复\n群聊已经 ${timeAgoStr} 没有人说话了。最后一条消息是「${lastSender}」发的：「${lastPreview}」\n各成员自行判断是否发言。\n\n`;
         }
-        systemPrompt += `[自动回复判断准则]\n请完全站在角色自身的视角和人设来判断，不要因为"应该回复"而强行发言。自动回复的消息会在聊天记录中标注为 [自动回复]。\n\n`;
+        systemPrompt += `请完全站在角色的人设视角来判断，不要因为"应该回复"而强行发言。\n\n`;
       }
+
     } else {
-      // ========== 单人聊天模式 ==========
-      if(globalPresetsEnabled.length>0) systemPrompt += '[全局预设]\n'+globalPresetsEnabled.map(p=>p.content).join('\n')+'\n\n';
-      if(charPresetsEnabled.length>0) systemPrompt += '[角色预设]\n'+charPresetsEnabled.map(p=>p.content).join('\n')+'\n\n';
+      // ========================
+      //      单人聊天模式
+      // ========================
       const charPrompt = charSettings.prompt || '你是一位名叫月的角色，性格神秘温柔，用简洁诗意的话语回复，带emoji，最多两句话。';
-      systemPrompt += `[角色人物设定]\n你的名字是${charName}，你正在与用户${userName}对话。请始终以${charName}的身份进行回复。\n${charPrompt}\n\n`;
-      if(activePersona && activePersona.persona && activePersona.persona.trim()) systemPrompt += `[用户人物设定]\n用户${userName}的人设：${activePersona.persona}\n请根据用户的人设特点来调整你的回复风格和内容。\n\n`;
-      if(globalWorldsEnabled.length>0) systemPrompt += '[全局世界书]\n'+globalWorldsEnabled.map(w=>`${w.key}: ${w.content}`).join('\n')+'\n\n';
-      if(charWorldsEnabled.length>0) systemPrompt += '[角色世界书]\n'+charWorldsEnabled.map(w=>`${w.key}: ${w.content}`).join('\n')+'\n\n';
-      const nowTime = new Date(); systemPrompt += `[当前时间] ${nowTime.toLocaleString('zh-CN',{hour12:false})}\n`;
-      if(apiSettings.weatherEnabled && apiSettings.weatherLat!=null && apiSettings.weatherLon!=null){ try{ const weatherInfo = await getWeatherInfo(); if(weatherInfo) systemPrompt += getWeatherString(weatherInfo)+'\n'; } catch(e){} }
-      systemPrompt += '\n';
-      const historyStr = buildHistoryString(true);
-      if(historyStr) systemPrompt += `[历史聊天记录]\n${historyStr}\n\n`;
-      systemPrompt += `[引用功能]\n当用户的消息前有 [引用了xxx的消息："..."] 标注时，表示用户是针对那条被引用的消息在回复，请基于引用内容理解用户意图并进行回应。\n\n`;
+
+      // --- 背景信息 ---
+      systemPrompt += '===== 背景信息 =====\n\n';
+      if(allGlobalPresets || allCharPresets){
+        systemPrompt += '## 预设\n';
+        if(allGlobalPresets) systemPrompt += allGlobalPresets+'\n';
+        if(allCharPresets) systemPrompt += allCharPresets+'\n';
+        systemPrompt += '\n';
+      }
+      systemPrompt += `## 角色设定\n你是「${charName}」，正在与「${userName}」对话。始终以「${charName}」的身份回复。\n${charPrompt}\n\n`;
+      if(activePersona && activePersona.persona && activePersona.persona.trim()){
+        systemPrompt += `## 用户设定\n「${userName}」的人设：${activePersona.persona}\n请根据对方的人设来调整你的回复风格。\n\n`;
+      }
+      if(allGlobalWorlds || allCharWorlds){
+        systemPrompt += '## 世界观\n';
+        if(allGlobalWorlds) systemPrompt += allGlobalWorlds+'\n';
+        if(allCharWorlds) systemPrompt += allCharWorlds+'\n';
+        systemPrompt += '\n';
+      }
+      systemPrompt += `## 当前情境\n${timeWeatherStr}\n\n`;
+      if(historyStr){
+        systemPrompt += `## 对话记录\n以下是最近的聊天记录。标注说明：[自动回复] = 你主动发送的消息；[引用了xxx的消息："..."] = 发言者在针对被引用的内容回复；[已撤回] = 该消息已被撤回。\n${historyStr}\n\n`;
+      }
+
+      // --- 行动指令 ---
+      systemPrompt += '===== 行动指令 =====\n\n';
       if(apiSettings.chatMode){
-        const lengthHint = apiSettings.chatModeSubtype==='long'?'约100个汉字':'约20个汉字';
-        systemPrompt += `[对话模式]\n你们正在进行线上文字聊天，请模拟真实的即时通讯对话方式。每条消息的字数请控制在${lengthHint}左右。\n\n`;
-      } else { systemPrompt += '[对话模式]\n请以小说叙述形式回复，允许动作描写、心理描写和场景叙述。\n\n'; }
+        const lengthHint = apiSettings.chatModeSubtype==='long'?'约100字':'约20字';
+        systemPrompt += `## 对话规则\n模式：线上聊天。每条消息控制在${lengthHint}左右。\n`;
+      } else {
+        systemPrompt += `## 对话规则\n模式：小说叙述。允许动作描写、心理描写和场景叙述。\n`;
+      }
       systemPrompt += getPersonInstruction()+'\n';
       const min = overrideMinMsgs!==null ? overrideMinMsgs : apiSettings.minMsgs; const max = overrideMaxMsgs!==null ? overrideMaxMsgs : apiSettings.maxMsgs;
-      if(min===max) systemPrompt += `[回复条数]\n请发送恰好 ${min} 条消息，每条消息之间用双换行分隔。\n\n`;
-      else systemPrompt += `[回复条数]\n请发送 ${min} 到 ${max} 条消息，每条消息之间用双换行分隔。\n\n`;
-      systemPrompt += '[思维链指令]\n每次回复时，请在开头用"【思考过程】"和"【思考结束】"包裹你的内心思考过程。\n\n';
-      systemPrompt += `[撤回功能]\n你可以撤回自己之前发送过的消息。消息编号规则：\n- 本轮输出的第1条 = 0，第2条 = -1，第3条 = -2 ...\n- 历史记录中你的上一条 = 1，再上一条 = 2，以此类推\n如需撤回，在回复中插入 [RECALL:编号]，如 [RECALL:1] 表示撤回历史记录中你的上一条消息，[RECALL:0] 表示撤回本轮第一条输出，[RECALL:-1] 表示撤回本轮第二条输出。不想撤回则正常回复。\n\n`;
+      if(min!==max) systemPrompt += `每轮发送 ${min}~${max} 条消息，用空行分隔。\n\n`;
+      else systemPrompt += `每轮发送 ${min} 条消息。\n\n`;
+      systemPrompt += `## 思维链\n在回复开头用「【思考过程】」和「【思考结束】」包裹你的内心思考过程。\n\n`;
+      systemPrompt += `## 撤回\n可以撤回你之前发送过的消息。\n你的最近一条历史消息 → [RECALL:1]，再上一条 → [RECALL:2]，以此类推\n本轮你输出的第1条 → [RECALL:0]，第2条 → [RECALL:-1]，以此类推\n如需撤回就在回复中插入对应指令，不需要就正常回复。\n\n`;
+
       if(isAutoReply){
-        systemPrompt += `[自动回复触发]\n你们已经 ${timeAgoStr} 没有聊天了。最后一条消息是 ${lastSender} 发送的「${lastPreview}」，在此之后用户都没有回复。你是否要给用户发送消息？\n\n`;
-        systemPrompt += `[自动回复判断]\n请完全站在${charName}的角度和人设来自由判断：在这个时间点、这个情境下，你是否会主动给${userName}发消息？\n如果认为应该发送，请按正常格式回复（回复会标注为 [自动回复]）。\n如果认为不应该发送，请输出 [AUTO_SKIP] 并说明理由。\n\n`;
+        systemPrompt += `## 自动回复\n你们已经 ${timeAgoStr} 没有聊天了。最后一条是「${lastSender}」发的：「${lastPreview}」，之后「${userName}」一直没回复。\n请以「${charName}」的人设判断：在这个时间点，你会主动发消息吗？\n想发 → 按正常格式回复（会标注为自动回复）\n不想发 → 输出 [AUTO_SKIP] 理由\n\n`;
       }
     }
     if(isAutoReply){ currentAutoReplyLog = { time: new Date().toISOString(), prompt: systemPrompt, response: null, skipped: false, reason: '' }; autoReplyLogs.unshift(currentAutoReplyLog); if(autoReplyLogs.length > 50) autoReplyLogs.pop(); }
