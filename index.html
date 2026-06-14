@@ -1149,7 +1149,13 @@
       if(msg.recalled) tags.push('[已撤回]');
       let quoteTag = '';
       if(msg.quoteText){
-        const qWho = msg.quoteRole==='user' ? userName : (msg.senderName || charName);
+        let qWho = userName;
+        if(msg.quoteRole !== 'user'){
+          if(chatType==='group' && msg.quoteId){
+            const qm = chatMessages.find(x=>x.id===msg.quoteId);
+            qWho = qm?.senderName || (qm?.senderId ? getMemberById(qm.senderId)?.name : null) || charName;
+          } else { qWho = charName; }
+        }
         quoteTag = ` [引用了${qWho}的消息："${(msg.quoteText||'').substring(0,40)}"]`;
       }
       const tagStr = tags.length>0 ? ' '+tags.join(' ') : '';
@@ -1268,15 +1274,19 @@
         else if(min>1) systemPrompt += `每人每轮发送 ${min} 条消息，用空行分隔。\n\n`;
       }
 
-      // 群聊角色行动指令
+      // 群聊角色行动指令 + 格式强化
+      const memberNames = members.map(m=>m.name);
+      const fmtExample = memberNames.length>=2 ? `示例：\n[${memberNames[0]}]: 你好呀～\n\n[${memberNames[1]}]: 嗨！今天怎么样？` : (memberNames.length===1 ? `示例：\n[${memberNames[0]}]: 你好呀～` : '');
+      const fmtStrict = `\n\n⚠️ 格式要求（严格遵守）：\n1. 每条消息必须独占一段，以 [角色名]: 开头（方括号+冒号+空格）\n2. 不同消息之间用空行分隔\n3. 绝对不要把多个角色的话合并成一段\n4. 不要在消息中使用旁白、括号动作描写或第三人称叙述\n5. 每条消息就是该角色发出的一条聊天内容\n${fmtExample}\n\n`;
+
       if(options.phase === 'initiate' && options.allowedMemberIds?.length > 0){
         const t = members.find(m=>m.id===options.allowedMemberIds[0]);
-        if(t) systemPrompt += `## 你的角色\n你现在是「${t.name}」。请以这个角色的人设判断是否主动发言。\n想说话 → 用格式 [${t.name}]: 消息内容\n不想说 → 输出 [AUTO_SKIP] 理由\n\n`;
+        if(t) systemPrompt += `## 你的角色\n你现在是「${t.name}」。请以这个角色的人设判断是否主动发言。\n想说话 → 用格式 [${t.name}]: 消息内容\n不想说 → 输出 [AUTO_SKIP] 理由${fmtStrict}`;
       } else if(options.phase === 'response' && options.allowedMemberIds?.length > 0){
         const t = members.find(m=>m.id===options.allowedMemberIds[0]);
-        if(t) systemPrompt += `## 你的角色\n你现在是「${t.name}」。刚才群里有人说了：「${options.initiatorMsg||''}」\n请以你的人设判断是否回应。\n想回应 → 用格式 [${t.name}]: 消息内容\n不想回应 → 输出 [AUTO_SKIP] 理由\n\n`;
+        if(t) systemPrompt += `## 你的角色\n你现在是「${t.name}」。刚才群里有人说了：「${options.initiatorMsg||''}」\n请以你的人设判断是否回应。\n想回应 → 用格式 [${t.name}]: 消息内容\n不想回应 → 输出 [AUTO_SKIP] 理由${fmtStrict}`;
       } else {
-        systemPrompt += `## 群聊发言\n每个AI成员根据自己的人设自由判断是否发言。允许多人说话，允许互相对话，也允许全部沉默。\n发言 → [成员名]: 消息内容（每条用空行分隔）\n不发言 → [成员名]: [AUTO_SKIP] 理由\n\n`;
+        systemPrompt += `## 群聊发言\n每个AI成员根据自己的人设自由判断是否发言。允许多人说话，允许互相对话，也允许全部沉默。\n发言 → [成员名]: 消息内容\n不发言 → [成员名]: [AUTO_SKIP] 理由${fmtStrict}`;
       }
 
       systemPrompt += `## 心声\n在回复开头用「【思考过程】」和「【思考结束】」包裹角色此刻的内心心声——不好意思说出口的、想说又没说的真实想法。用角色口吻来写，体现性格和情感。这些心声只有读者能看到，其他角色看不到。\n\n`;
@@ -1464,7 +1474,7 @@
   if (changeBgBtn) { changeBgBtn.addEventListener('click', () => { if (bgFileInput) bgFileInput.click(); }); }
   if (bgFileInput) { bgFileInput.addEventListener('change', function(e) { const file = e.target.files[0]; if (!file) return; openCropModal('bg', file); this.value = ''; }); }
   if (clearBgBtn) { clearBgBtn.addEventListener('click', () => { charSettings.bgImage = ''; chatArea.style.backgroundImage = ''; saveGlobalsToActiveChar(); }); }
-  function openDeleteModal(){ const modal = document.getElementById('deleteModal'), list = document.getElementById('deleteList'); const roleName = remarkVal||'月'; list.innerHTML = chatMessages.map(m=>`<div class="entry-item"><label><input type="checkbox" value="${escapeHtml(m.id)}" class="delete-check"> ${escapeHtml(m.role==='user'?'我':(m.role==='hint'?'💬':roleName))}: ${escapeHtml((m.text||'').substring(0,30))}${(m.text||'').length>30?'...':''}</label></div>`).join(''); modal.classList.add('show'); list.scrollTop = list.scrollHeight; document.getElementById('deleteConfirmBtn').onclick = ()=>{ const checked = Array.from(list.querySelectorAll('.delete-check:checked')).map(cb=>cb.value); if(checked.length===0){ alert('请至少选择一条消息'); return } chatMessages = chatMessages.filter(m=>!checked.includes(m.id)); syncHistoryFromChat(); saveChatHistory(); reloadChatUI(); modal.classList.remove('show') }; document.getElementById('deleteCancelBtn').onclick = ()=> modal.classList.remove('show'); modal.addEventListener('click',e=>{ if(e.target===modal) modal.classList.remove('show') }) }
+  function openDeleteModal(){ const modal = document.getElementById('deleteModal'), list = document.getElementById('deleteList'); const roleName = remarkVal||'月'; list.innerHTML = chatMessages.map(m=>{let who='我'; if(m.role==='hint') who='💬'; else if(m.role!=='user') who=(chatType==='group'&&m.senderName)?m.senderName:roleName; return `<div class="entry-item"><label><input type="checkbox" value="${escapeHtml(m.id)}" class="delete-check"> ${escapeHtml(who)}: ${escapeHtml((m.text||'').substring(0,30))}${(m.text||'').length>30?'...':''}</label></div>`}).join(''); modal.classList.add('show'); list.scrollTop = list.scrollHeight; document.getElementById('deleteConfirmBtn').onclick = ()=>{ const checked = Array.from(list.querySelectorAll('.delete-check:checked')).map(cb=>cb.value); if(checked.length===0){ alert('请至少选择一条消息'); return } chatMessages = chatMessages.filter(m=>!checked.includes(m.id)); syncHistoryFromChat(); saveChatHistory(); reloadChatUI(); modal.classList.remove('show') }; document.getElementById('deleteCancelBtn').onclick = ()=> modal.classList.remove('show'); modal.addEventListener('click',e=>{ if(e.target===modal) modal.classList.remove('show') }) }
   function showMain(){ settingsPanel.classList.remove('character-panel','preset-panel','world-panel','log-panel','persona-panel'); settingsMain.style.display='block'; settingsProfile.style.display='none'; settingsCharacter.style.display='none'; settingsApi.style.display='none'; settingsPreset.style.display='none'; settingsWorld.style.display='none'; settingsLog.style.display='none' }
   function showProfile(){ settingsPanel.classList.remove('character-panel','preset-panel','world-panel','log-panel','persona-panel'); settingsMain.style.display='none'; settingsProfile.style.display='block'; settingsCharacter.style.display='none'; settingsApi.style.display='none'; settingsPreset.style.display='none'; settingsWorld.style.display='none'; settingsLog.style.display='none'; updatePersonaDisplay(); if(chatType==='group'){ if(groupPersonaSection) groupPersonaSection.style.display='block'; if(groupPersonaSelectList) groupPersonaSelectList.style.display='block'; renderGroupPersonaList(); } else { if(groupPersonaSection) groupPersonaSection.style.display='none'; if(groupPersonaSelectList) groupPersonaSelectList.style.display='none'; } }
   function showCharacter(){ settingsPanel.classList.add('character-panel'); settingsPanel.classList.remove('preset-panel','world-panel','log-panel','persona-panel'); settingsMain.style.display='none'; settingsProfile.style.display='none'; settingsCharacter.style.display='block'; settingsApi.style.display='none'; settingsPreset.style.display='none'; settingsWorld.style.display='none'; settingsLog.style.display='none'; setTimeout(()=>{ autoResizeTextarea(charDetailsInput); autoResizeTextarea(charPromptInput) },0) }
