@@ -1145,7 +1145,7 @@
     wrapper.appendChild(row);
     return wrapper;
   }
-  function saveChatHistory(){ save('messageHistory',messageHistory); save('chatMessages',chatMessages); saveGlobalsToActiveChar() }
+  function saveChatHistory(){ saveGlobalsToActiveChar() }
   function syncHistoryFromChat(){ messageHistory = chatMessages.filter(m=>m.role!=='hint').map(m=>{ if(m.role==='user' && m.recalled) return {role:'user', content:'[用户撤回了一条消息]'}; if(m.role==='dog' && m.recalled) return {role:'assistant', content:'[AI撤回了一条消息]'}; return {role: m.role==='user'?'user':'assistant', content: m.text} }); save('messageHistory',messageHistory) }
   function createTimeStampDiv(ts){ const div = document.createElement('div'); div.className='time-stamp'; div.dataset.timestamp = ts; div.textContent = formatTimeDivider(ts,Date.now()); return div }
   function addCenteredHint(text){ const div = document.createElement('div'); div.className='time-stamp'; div.textContent = text; chatArea.appendChild(div); chatArea.scrollTop = chatArea.scrollHeight; }
@@ -1203,11 +1203,12 @@
     }
     return historyStr.trim();
   }
+  let lastTurnRecalledIds = [];
   function recallDogMessageById(msgId) { const msg = chatMessages.find(m => m.id === msgId && m.role === 'dog'); if (!msg || msg.recalled) return false; msg.recalled = true; msg.recalledText = msg.text; msg.text = ''; return true; }
   function updateDogMsgBubble(msgId) { const wrapper = document.getElementById('msg-' + msgId); if (!wrapper) return; const bubble = wrapper.querySelector('.bubble-left'); if (!bubble) return; bubble.classList.add('recalled-bubble'); bubble.style.cursor = 'pointer'; bubble.innerHTML = `<div class="msg-text">对方撤回了一条消息</div>`; const msg = chatMessages.find(m => m.id === msgId); bubble.addEventListener('click', (e) => { e.stopPropagation(); if (msg && msg.recalledText) alert('被撤回的内容：\n' + msg.recalledText); }); }
-  function recallDogMessage(n) { if (n < 1) return null; const dogMsgs = chatMessages.filter(m => m.role === 'dog' && !m.recalled); if (dogMsgs.length === 0) return null; const index = dogMsgs.length - n; if (index < 0) return null; const msg = dogMsgs[index]; if (!recallDogMessageById(msg.id)) return null; updateDogMsgBubble(msg.id); syncHistoryFromChat(); saveChatHistory(); return msg.id; }
+  function recallDogMessage(n, senderId) { if (n < 1) return null; let dogMsgs; if(chatType==='group' && senderId){ dogMsgs = chatMessages.filter(m => m.role === 'dog' && !m.recalled && m.senderId === senderId); } else { dogMsgs = chatMessages.filter(m => m.role === 'dog' && !m.recalled); } if (dogMsgs.length === 0) return null; const index = dogMsgs.length - n; if (index < 0) return null; const msg = dogMsgs[index]; if (!recallDogMessageById(msg.id)) return null; updateDogMsgBubble(msg.id); syncHistoryFromChat(); saveChatHistory(); return msg.id; }
   function showRecallHint(recalledIds) { if (!recalledIds || recalledIds.length === 0) return; const count = recalledIds.length; const hint = document.createElement('div'); hint.className = 'recall-system-hint'; hint.textContent = `对方撤回了 ${count} 条消息`; const firstId = recalledIds[0]; hint.addEventListener('click', () => { if (hint.parentNode) hint.parentNode.removeChild(hint); if (firstId) scrollToMessage(firstId); }); chatArea.appendChild(hint); }
-  function processAiRecall(content, newSegments) { const regex = /\[RECALL:(-?\d+)\]/g; let match; let cleanContent = content; const recalledIds = []; while ((match = regex.exec(content)) !== null) { const n = parseInt(match[1]); cleanContent = cleanContent.replace(match[0], ''); if (isNaN(n)) continue; if (n >= 1) { const msgId = recallDogMessage(n); if (msgId) recalledIds.push(msgId); } else if (n <= 0) { const idx = Math.abs(n); if (idx < newSegments.length) { const seg = newSegments[idx]; seg.recalled = true; seg.recalledText = seg.text; seg.text = ''; recalledIds.push(seg.id); } } } return { content: cleanContent.trim(), recalledIds }; }
+  function processAiRecall(content, newSegments, senderId) { const regex = /\[RECALL:(-?\d+)\]/g; let match; let cleanContent = content; const recalledIds = []; while ((match = regex.exec(content)) !== null) { const n = parseInt(match[1]); cleanContent = cleanContent.replace(match[0], ''); if (isNaN(n)) continue; if (n >= 1) { const msgId = recallDogMessage(n, senderId); if (msgId) recalledIds.push(msgId); } else if (n <= 0) { const idx = Math.abs(n); if (idx < newSegments.length) { const seg = newSegments[idx]; seg.recalled = true; seg.recalledText = seg.text; seg.text = ''; recalledIds.push(seg.id); } } } lastTurnRecalledIds = recalledIds; return { content: cleanContent.trim(), recalledIds }; }
 
   function parseGroupResponse(content){
     const segments = [];
@@ -1318,7 +1319,7 @@
       const memberNames = members.map(m=>m.name);
       const fmtExample = memberNames.length>=2 ? `示例：\n[${memberNames[0]}]: 你好呀～\n\n[${memberNames[1]}]: 嗨！今天怎么样？` : (memberNames.length===1 ? `示例：\n[${memberNames[0]}]: 你好呀～` : '');
       const rule4 = apiSettings.faceToFaceEnabled ? '4. 见面模式下允许在消息中加入动作和表情描写（用*号包裹动作）' : '4. 不要在消息中使用旁白、括号动作描写或第三人称叙述';
-      const fmtStrict = `\n\n⚠️ 格式要求（严格遵守）：\n1. 每条消息必须独占一段，以 [角色名]: 开头（方括号+冒号+空格）\n2. 不同消息之间用空行分隔\n3. 绝对不要把多个角色的话合并成一段\n${rule4}\n5. 每条消息就是该角色发出的一条聊天内容\n6. 即使不确定说什么，也要输出至少一条消息，不要给出空回复\n${fmtExample}\n\n`;
+      const fmtStrict = `\n\n⚠️ 格式要求（严格遵守）：\n1. 每条消息必须独占一段，以 [角色名]: 开头（方括号+冒号+空格）\n2. 不同消息之间用空行分隔\n3. 绝对不要把多个角色的话合并成一段\n${rule4}\n5. 每条消息就是该角色发出的一条聊天内容\n6. 如果不想发言请正确使用 [AUTO_SKIP] 格式，但如果决定发言就必须输出实际内容\n${fmtExample}\n\n`;
 
       if(options.phase === 'initiate' && options.allowedMemberIds?.length > 0){
         const t = members.find(m=>m.id===options.allowedMemberIds[0]);
@@ -1332,6 +1333,8 @@
 
       if(options.allowedMemberIds && options.allowedMemberIds.length > 0){
         systemPrompt += `## 心声\n在回复开头用「【思考过程】」和「【思考结束】」包裹你当前角色此刻的内心心声——不好意思说出口的、想说又没说的真实想法。\n⚠️ 重要：这不是AI的推理！是角色的内心独白。只写你当前角色的心声，用第一人称口吻（"我..."），不要出现角色名前缀。\n\n`;
+      } else {
+        systemPrompt += `## 心声\n每个发言角色在自己的消息前，用「【思考过程】」和「【思考结束】」写出该角色的内心心声。每个角色单独写自己的心声，不要合并。\n格式示例：\n【思考过程】（角色A心里想：我其实有点紧张...）【思考结束】\n[角色A]: 消息内容\n\n【思考过程】（角色B心里想：他在说什么呀...）【思考结束】\n[角色B]: 消息内容\n\n⚠️ 这不是AI推理，是角色的内心独白，用角色自己的口吻写。\n\n`;
       }
       systemPrompt += `## 撤回\n可以撤回自己角色之前的消息（不能撤回别人的）。\n你的最近一条历史消息 → [RECALL:1]，再上一条 → [RECALL:2]，以此类推\n本轮你输出的第1条 → [RECALL:0]，第2条 → [RECALL:-1]，以此类推\n如需撤回就在回复中插入对应指令，不需要就正常回复。\n\n`;
       systemPrompt += `## @提及\n当消息前有 [@角色名] 标注时，表示发言者在点名对那个角色说话。你也可以在回复中使用 @角色名 来指定对谁说。\n\n`;
@@ -1428,7 +1431,14 @@
         const res = await fetch(buildChatUrl(apiSettings.url),{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiSettings.key}`},body:JSON.stringify({model:apiSettings.model,messages,temperature:0.9,max_tokens:1024})});
         if(!res.ok) throw new Error(`HTTP ${res.status}`); const data = await res.json(); const choice = data.choices?.[0]?.message; const content = choice?.content?.trim(), apiReasoning = choice?.reasoning_content?.trim();
         if(!content && !apiReasoning) throw new Error('AI 返回内容为空'); let finalContent = content||''; let finalReasoning = apiReasoning||null;
-        const thinkRegex = /【思考过程】\s*([\s\S]*?)\s*【思考结束】/i; const thinkMatch = finalContent.match(thinkRegex); if(thinkMatch){ if(chatType==='group') finalReasoning = thinkMatch[1].trim(); else if(!finalReasoning) finalReasoning = thinkMatch[1].trim(); finalContent = finalContent.replace(thinkRegex,'').trim() }
+        const thinkRegex = /【思考过程】\s*([\s\S]*?)\s*【思考结束】/gi;
+        let allThinkBlocks = []; let tm;
+        while((tm = thinkRegex.exec(finalContent)) !== null){ allThinkBlocks.push(tm[1].trim()); }
+        if(allThinkBlocks.length > 0){
+          if(chatType==='group') finalReasoning = allThinkBlocks[0];
+          else if(!finalReasoning) finalReasoning = allThinkBlocks[0];
+          finalContent = finalContent.replace(/【思考过程】\s*[\s\S]*?\s*【思考结束】/gi,'').trim();
+        }
         if(isAutoReply && finalContent.startsWith('[AUTO_SKIP]')){
           let reason = finalContent.substring('[AUTO_SKIP]'.length).trim();
           if (!reason) reason = '未提供具体理由';
@@ -1507,7 +1517,8 @@
             recalledText: ''
           }));
         }
-        const { recalledIds } = processAiRecall(finalContent, newSegments); if (recalledIds.length > 0) showRecallHint(recalledIds);
+        const recallSenderId = options.allowedMemberIds?.length===1 ? options.allowedMemberIds[0] : null;
+        const { recalledIds } = processAiRecall(finalContent, newSegments, recallSenderId); if (recalledIds.length > 0) showRecallHint(recalledIds);
         if(newSegments.length === 0 && skipReasons.length === 0){
           if(!skipUI && loadingWrapper) loadingWrapper.remove();
           if(!skipUI) addCenteredHint('AI 本轮没有输出有效消息');
@@ -1516,11 +1527,16 @@
           return;
         }
         const now = Date.now(); let lastTs = chatMessages.length>0 ? (chatMessages[chatMessages.length-1].timestamp||0) : 0; const fragment = skipUI ? null : document.createDocumentFragment();
-        const reasoningSenders = new Set();
+        const reasoningSenders = new Set(); let thinkIdx = 0;
         newSegments.forEach((seg, idx) => {
           seg.timestamp = now + idx;
           const sKey = seg.senderId || '__solo__';
-          if(finalReasoning && !reasoningSenders.has(sKey)){ seg.reasoning = finalReasoning; reasoningSenders.add(sKey); } else { seg.reasoning = null; }
+          if(!reasoningSenders.has(sKey)){
+            if(allThinkBlocks.length > 1) seg.reasoning = allThinkBlocks[thinkIdx++] || null;
+            else if(allThinkBlocks.length === 1 && thinkIdx === 0){ seg.reasoning = allThinkBlocks[0]; thinkIdx++; }
+            else seg.reasoning = finalReasoning && thinkIdx===0 ? (thinkIdx++,finalReasoning) : null;
+            reasoningSenders.add(sKey);
+          } else { seg.reasoning = null; }
           chatMessages.push(seg);
           if (!skipUI) {
             if(lastTs===0||(seg.timestamp-lastTs)>=300000){ fragment.appendChild(createTimeStampDiv(seg.timestamp)); lastTs = seg.timestamp; }
@@ -1553,7 +1569,7 @@
   function handleSendClick(){ if(waiting) return; sendMessageOnly(); clickCount++; if(clickCount===1) clickTimer = setTimeout(()=>{clickCount=0},600); if(clickCount===3){ clearTimeout(clickTimer); clickCount=0; if(pendingUserMessages.length>0){ triggerAiReply(false); pendingUserMessages=[]; updateSendHint() } } }
   sendBtn.addEventListener('click',handleSendClick); messageInput.addEventListener('keypress',e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendMessageOnly() } });
   quoteCancelBtn.addEventListener('click',()=>{ currentQuote=null; updateQuoteHint() });
-  async function retryLastAiReply(){ const ok = await showConfirmDialog('确定要重说上次AI回复吗？'); if(!ok) return; if(waiting) return; let lastUserIdx=-1; for(let i=chatMessages.length-1;i>=0;i--){ if(chatMessages[i].role==='user' && !chatMessages[i].recalled){ lastUserIdx=i; break } } if(lastUserIdx===-1){ alert('没有用户消息，无法重说'); return } chatMessages = chatMessages.slice(0,lastUserIdx+1); syncHistoryFromChat(); saveChatHistory(); reloadChatUI(); pendingUserMessages=[]; updateSendHint(); triggerAiReply(false) }
+  async function retryLastAiReply(){ const ok = await showConfirmDialog('确定要重说上次AI回复吗？'); if(!ok) return; if(waiting) return; lastTurnRecalledIds.forEach(id=>{ const msg = chatMessages.find(m=>m.id===id); if(msg && msg.recalled){ msg.text = msg.recalledText||''; msg.recalled = false; msg.recalledText = ''; } }); lastTurnRecalledIds = []; let lastUserIdx=-1; for(let i=chatMessages.length-1;i>=0;i--){ if(chatMessages[i].role==='user' && !chatMessages[i].recalled){ lastUserIdx=i; break } } if(lastUserIdx===-1){ alert('没有用户消息，无法重说'); return } chatMessages = chatMessages.slice(0,lastUserIdx+1); syncHistoryFromChat(); saveChatHistory(); reloadChatUI(); pendingUserMessages=[]; updateSendHint(); triggerAiReply(false) }
   retryBtn.addEventListener('click',retryLastAiReply);
   chatArea.addEventListener('click',function(e){ const target = e.target; if(!target.classList.contains('action-edit')&&!target.classList.contains('action-copy')&&!target.classList.contains('action-quote')&&!target.classList.contains('action-regenerate')&&!target.classList.contains('action-recall')&&!target.classList.contains('action-delete')&&!target.classList.contains('action-branch')&&!target.classList.contains('action-mention')) return; e.stopPropagation(); const msgId = target.dataset.msgId; const msg = chatMessages.find(m=>m.id===msgId); if(!msg||msg.recalled) return; if(target.classList.contains('action-mention')){ const name = msg.senderName || (msg.role==='user' ? (getActiveUserPersona()?.name||'用户') : remarkVal); const id = msg.senderId || null; setMention(name, id); messageInput.focus(); } else if(target.classList.contains('action-edit')){ startInlineEdit(msgId) } else if(target.classList.contains('action-copy')){ navigator.clipboard.writeText(msg.text).then(()=>alert('已复制')).catch(()=>alert('复制失败')) } else if(target.classList.contains('action-quote')){ currentQuote = {id:msg.id,text:msg.text,role:msg.role}; updateQuoteHint() } else if(target.classList.contains('action-regenerate')){ const index = chatMessages.findIndex(m=>m.id===msgId); if(index===-1||chatMessages[index].role!=='dog') return; let lastUserIdx=-1; for(let i=index-1;i>=0;i--){ if(chatMessages[i].role==='user'&&!chatMessages[i].recalled){ lastUserIdx=i; break } } if(lastUserIdx===-1){ alert('前面没有用户消息'); return } if(!confirm('重说将重新生成这一轮AI回复，确定吗？')) return; chatMessages = chatMessages.slice(0,lastUserIdx+1); syncHistoryFromChat(); saveChatHistory(); reloadChatUI(); pendingUserMessages=[]; updateSendHint(); triggerAiReply(false) } else if(target.classList.contains('action-recall')){ const index = chatMessages.findIndex(m=>m.id===msgId); if(index===-1||chatMessages[index].role!=='user'||chatMessages[index].recalled) return; if(!confirm('确定要撤回这条消息吗？')) return; chatMessages[index].text = '你撤回了一条消息'; chatMessages[index].recalled = true; syncHistoryFromChat(); saveChatHistory(); reloadChatUI() } else if(target.classList.contains('action-branch')){ branchConversation(msgId) } else if(target.classList.contains('action-delete')){ openDeleteModal() } });
   chatArea.addEventListener('click',function(e){ const bubble = e.target.closest('.bubble-left, .bubble-right'); if(!bubble || bubble.classList.contains('recalled-bubble') || e.target.closest('.message-actions') || e.target.closest('.reasoning-btn')) return; document.querySelectorAll('.bubble-left.show-actions, .bubble-right.show-actions').forEach(b=>{ if(b!==bubble) b.classList.remove('show-actions') }); bubble.classList.toggle('show-actions') });
