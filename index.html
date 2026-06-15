@@ -418,8 +418,8 @@
     </div>
     <div class="toggle-row" style="margin-top:18px;border-top:.5px solid #e0e0e0;padding-top:12px"><label>⏰ 时间感知强化</label><label class="switch"><input type="checkbox" id="timePerceptionCheck"><span class="slider"></span></label></div><div class="hint-text" style="font-size:11px;color:#bbb;margin-top:-6px">我晚点回你怎么了？</div>
     <div class="toggle-row" style="margin-top:12px;border-top:.5px solid #e0e0e0;padding-top:12px"><label>🤝 我们见一面吧</label><label class="switch"><input type="checkbox" id="faceToFaceCheck"><span class="slider"></span></label></div><div class="hint-text" style="font-size:11px;color:#bbb;margin-top:-6px">你那里天气好不好，我们见一面好不好</div>
-    <div id="groupOnlySettings" style="display:none">
     <div class="toggle-row" style="margin-top:12px;border-top:.5px solid #e0e0e0;padding-top:12px"><label>🔗 群聊私聊互通</label><label class="switch"><input type="checkbox" id="crossChatCheck"><span class="slider"></span></label></div><div class="hint-text" style="font-size:11px;color:#bbb;margin-top:-6px">人类该有手机自由的</div>
+    <div id="groupOnlySettings" style="display:none">
     <div class="toggle-row" style="margin-top:12px;border-top:.5px solid #e0e0e0;padding-top:12px"><label>✏️ AI修改群名片</label><label class="switch"><input type="checkbox" id="nicknameCheck"><span class="slider"></span></label></div><div class="hint-text" style="font-size:11px;color:#bbb;margin-top:-6px">让AI角色自由修改自己的群聊显示名</div>
     </div>
     </div><div class="toggle-row" style="margin-top:18px;border-top:.5px solid #e0e0e0;padding-top:16px"><label>🌤️ 启用天气信息</label><label class="switch"><input type="checkbox" id="weatherEnableCheck"><span class="slider"></span></label></div><div class="hint-text" style="margin-top:2px">开启后，AI回复时将自动获取您所在地的天气信息</div><div id="weatherSettingsContainer" style="display:none"><div class="weather-status-row" id="weatherStatusRow"><span class="weather-icon" id="weatherStatusIcon">📍</span><div class="weather-info"><div class="weather-city" id="weatherStatusCity">未获取位置</div><div class="weather-detail" id="weatherStatusDetail">请先获取位置信息</div></div><span class="weather-status-badge idle" id="weatherStatusBadge">待获取</span></div><div class="weather-location-row"><input type="text" id="weatherCityInput" placeholder="城市名称（可选）" style="flex:1"><button class="fetch-location-btn" id="fetchLocationBtn">📍 获取位置</button></div><div class="hint-text" style="margin-top:4px">点击"获取位置"将请求浏览器定位权限，用于获取当地天气</div><div class="setting-row" style="margin-top:6px"><label>纬度</label><input type="text" id="weatherLatDisplay" readonly style="background:#f5f5f5;font-size:11px;color:#888"><label>经度</label><input type="text" id="weatherLonDisplay" readonly style="background:#f5f5f5;font-size:11px;color:#888"></div><button class="gen-btn" id="refreshWeatherBtn" style="margin-top:6px;width:100%">🔄 手动刷新天气</button></div></div></div><div class="settings-sub" id="settingsPreset" style="display:none"><div class="back-row" id="backFromPreset"><span>‹</span><span>返回</span></div><h3>预设（角色专属）</h3><div class="section-title">关联当前角色（勾选生效）</div><div class="entry-list" id="presetList"></div><div class="entry-add"><textarea id="presetNameInput" placeholder="名称" style="width:30%" class="auto-resize"></textarea><textarea id="presetContentInput" placeholder="内容" class="auto-resize"></textarea><button id="addPresetBtn">添加</button></div><div class="import-export-row"><button id="exportPresetsBtn">导出</button><button id="importPresetsBtn">导入</button><input type="file" id="presetImportFile" accept=".json" style="display:none"></div></div><div class="settings-sub" id="settingsWorld" style="display:none"><div class="back-row" id="backFromWorld"><span>‹</span><span>返回</span></div><h3>世界书（角色专属）</h3><div class="section-title">关联当前角色（勾选生效）</div><div class="entry-list" id="worldList"></div><div class="entry-add"><textarea id="worldKeyInput" placeholder="关键词" style="width:30%" class="auto-resize"></textarea><textarea id="worldContentInput" placeholder="内容" class="auto-resize"></textarea><button id="addWorldBtn">添加</button></div><div class="import-export-row"><button id="exportWorldsBtn">导出</button><button id="importWorldsBtn">导入</button><input type="file" id="worldImportFile" accept=".json" style="display:none"></div></div><div class="settings-sub" id="settingsLog" style="display:none"><div class="back-row" id="backFromLog"><span>‹</span><span>返回</span></div><h3>运行日志</h3><textarea id="logTextarea" class="log-textarea" readonly></textarea><button class="copy-btn" id="copyLogBtn">复制全部日志</button><button class="gen-btn" id="showAutoReplyLogBtn" style="margin-top:10px;">🤖 自动回复日志</button><div id="autoReplyLogContainer" style="display:none; max-height:300px; overflow-y:auto; margin-top:10px; border:1px solid #ddd; padding:8px; border-radius:6px;"></div></div></div></div>
@@ -1402,6 +1402,14 @@
       systemPrompt += `## 思维链\n在回复开头用「【思考过程】」和「【思考结束】」包裹你的内心思考过程。\n\n`;
       systemPrompt += `## 撤回\n可以撤回你之前发送过的消息。\n你的最近一条历史消息 → [RECALL:1]，再上一条 → [RECALL:2]，以此类推\n本轮你输出的第1条 → [RECALL:0]，第2条 → [RECALL:-1]，以此类推\n如需撤回就在回复中插入对应指令，不需要就正常回复。\n\n`;
 
+      if(apiSettings.crossChatEnabled){
+        const myGroups = characters.filter(c=>c.type==='group' && c.members && c.members.some(m=>m.name===charName)).map(c=>c.name);
+        const curMode = apiSettings.faceToFaceEnabled ? '面对面见面' : '私聊';
+        if(myGroups.length>0){
+          systemPrompt += `## 场景切换\n当前场景：${curMode}。你也在以下群聊中：${myGroups.join('、')}\n如果想转到群聊发言，在消息末尾插入 [切换:群聊:群名]。\n请根据剧情自由判断，不要频繁切换。\n\n`;
+        }
+      }
+
       if(isAutoReply){
         systemPrompt += `## 自动回复\n你们已经 ${timeAgoStr} 没有聊天了。最后一条是「${lastSender}」发的：「${lastPreview}」，之后「${userName}」一直没回复。\n请以「${charName}」的人设判断：在这个时间点，你会主动发消息吗？\n想发 → 按正常格式回复（会标注为自动回复）\n不想发 → 输出 [AUTO_SKIP] 理由\n\n`;
       }
@@ -1442,8 +1450,8 @@
         }
         let cleanedForSeg = cleanText.replace(/\[改名[：:].+?\]/g,'').replace(/\[切换[：:](?:私聊|见面)[：:].+?\]/g,'').trim();
         // 跨聊转发处理
-        if(chatType==='group' && apiSettings.crossChatEnabled){
-          const sName = options.allowedMemberIds?.length===1 ? members.find(x=>x.id===options.allowedMemberIds[0])?.name : null;
+        if(apiSettings.crossChatEnabled){
+          const sName = chatType==='group' && options.allowedMemberIds?.length===1 ? members.find(x=>x.id===options.allowedMemberIds[0])?.name : remarkVal;
           cleanedForSeg = processCrossChatSwitch(cleanText, sName, options.allowedMemberIds?.[0]);
           cleanedForSeg = cleanedForSeg.replace(/\[改名[：:].+?\]/g,'').trim();
         }
@@ -1648,24 +1656,30 @@
   }
   function getMemberDisplayName(member){ return member?.displayName || member?.name || '成员'; }
   function processCrossChatSwitch(content, senderName, senderId){
-    if(!apiSettings.crossChatEnabled || chatType!=='group') return content;
-    const regex = /\[切换[:：](私聊|见面)[:：](.+?)\]/g; let match; let cleaned = content;
+    if(!apiSettings.crossChatEnabled) return content;
+    const regex = /\[切换[:：](私聊|见面|群聊)[:：](.+?)\]/g; let match; let cleaned = content;
     while((match = regex.exec(content)) !== null){
       const mode = match[1], targetName = match[2].trim();
-      const targetChar = characters.find(c=> c.type!=='group' && c.name === targetName);
+      let targetChar = null;
+      if(mode === '群聊'){
+        targetChar = characters.find(c=> c.type==='group' && c.name === targetName);
+      } else {
+        targetChar = characters.find(c=> c.type!=='group' && c.name === targetName);
+      }
       if(targetChar){
         const msgText = cleaned.replace(match[0],'').trim();
         if(msgText){
           const msgId = 'msg_'+Date.now().toString(36)+Math.random().toString(36).substr(2,5);
           const ts = Date.now();
           targetChar.chatMessages = targetChar.chatMessages || [];
-          targetChar.chatMessages.push({id:msgId, role:'dog', text:`[来自群聊·${senderName||'成员'}] ${msgText}`, reasoning:null, timestamp:ts, isAutoReply:false, senderId:null, senderName:senderName});
+          const prefix = chatType==='group' ? `[来自群聊·${senderName||'成员'}]` : `[来自私聊·${senderName||remarkVal}]`;
+          targetChar.chatMessages.push({id:msgId, role:'dog', text:`${prefix} ${msgText}`, reasoning:null, timestamp:ts, isAutoReply:false, senderId:null, senderName:senderName||remarkVal});
           targetChar.unreadCount = (targetChar.unreadCount||0) + 1;
-          if(mode==='见面') targetChar.apiSettings = targetChar.apiSettings||{}; 
           saveAllData();
         }
-        addCenteredHint(`${senderName||'成员'} 转去和 ${targetName} ${mode}了`);
-        chatMessages.push({id:'msg_'+Date.now().toString(36)+Math.random().toString(36).substr(2,5), role:'hint', text:`${senderName||'成员'} 转去和 ${targetName} ${mode}了`, timestamp:Date.now()});
+        const hintText = `${senderName||remarkVal} 转去${mode === '群聊' ? '群聊「'+targetName+'」' : '和 '+targetName+' '+mode}了`;
+        addCenteredHint(hintText);
+        chatMessages.push({id:'msg_'+Date.now().toString(36)+Math.random().toString(36).substr(2,5), role:'hint', text:hintText, timestamp:Date.now()});
         saveChatHistory();
       }
       cleaned = cleaned.replace(match[0], '');
