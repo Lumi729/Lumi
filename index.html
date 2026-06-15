@@ -1333,7 +1333,9 @@
       systemPrompt += `## @提及\n当消息前有 [@角色名] 标注时，表示发言者在点名对那个角色说话。你也可以在回复中使用 @角色名 来指定对谁说。\n\n`;
       if(apiSettings.crossChatEnabled){
         const curMode = apiSettings.faceToFaceEnabled ? '面对面见面' : '群聊';
-        systemPrompt += `## 场景切换\n当前场景：${curMode}。你可以选择离开群聊，去和某人私聊或单独见面。\n如果想切换，请在消息末尾插入 [切换:私聊:对方名字] 或 [切换:见面:对方名字]，消息内容会被转发到对应的聊天中。\n请根据剧情和角色人设自由判断，不要频繁切换。\n\n`;
+        const singleCharNames = characters.filter(c=>c.type!=='group').map(c=>c.name);
+        const availTargets = singleCharNames.length>0 ? '可转到的私聊角色：'+singleCharNames.join('、') : '';
+        systemPrompt += `## 场景切换\n当前场景：${curMode}。你可以选择暂时离开群聊，转到自己的私聊频道和用户单独互动。\n${availTargets}\n如果想切换，在消息末尾插入 [切换:私聊:你自己的角色名] 或 [切换:见面:你自己的角色名]。\n例如你是「月」，就写 [切换:私聊:月]，你的消息会出现在「月」的私聊中。\n请根据剧情自由判断，不要频繁切换。\n\n`;
       }
       if(apiSettings.nicknameChangeEnabled){
         systemPrompt += `## 群名片\n你可以修改自己在群聊中的显示名。如果觉得有必要，在消息中插入 [改名:新名字] 即可。这只是群聊昵称，不影响你的真实身份。请根据角色人设自由判断要不要改。\n\n`;
