@@ -132,7 +132,6 @@
         .history-item .edit-name-group .cancel-name-btn{background:#e0e0e0;color:#000}
         .settings-panel.character-panel,.settings-panel.preset-panel,.settings-panel.world-panel,.settings-panel.log-panel,.settings-panel.persona-panel{max-width:380px;width:92%;max-height:85vh}
         .settings-main h3,.settings-sub h3{text-align:center;margin-bottom:20px;font-size:18px;font-weight:600}
-        .settings-sub{background:#fff;}
         .settings-sub .back-row{display:flex;align-items:center;margin-bottom:15px;cursor:pointer;font-size:15px;color:#000}
         .settings-sub .back-row span{margin-left:4px}
         .settings-item{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:.5px solid #f0f0f0;cursor:pointer}
@@ -333,9 +332,9 @@
         .char-action-sheet .action-cancel{margin-top:4px;font-weight:600;color:#007aff}
         .char-card.pinned{background:rgba(0,0,0,.03)}
         .pin-badge{font-size:10px;color:#999;margin-left:2px}
-        .phone.css-fullscreen{position:fixed!important;top:0;left:0;width:100vw!important;height:100vh!important;height:100dvh!important;max-width:none!important;border-radius:0!important;z-index:9999;border:none!important;box-shadow:none!important}
-        @media(min-width:500px){.phone.css-fullscreen{width:375px!important;max-width:375px!important;left:50%!important;transform:translateX(-50%)!important;border-radius:24px!important;box-shadow:0 8px 24px rgba(0,0,0,.2)!important}}
-        .phone.css-fullscreen .status-bar{border-radius:0}
+        .main-container.css-fullscreen{position:fixed!important;top:0;left:0;width:100vw!important;height:100vh!important;height:100dvh!important;max-width:none!important;border-radius:0!important;z-index:9999;border:none!important;box-shadow:none!important}
+        .main-container.css-fullscreen .phone{width:100%!important;max-width:none!important}
+        .main-container.css-fullscreen .status-bar{border-radius:0}
         .summary-overlay{display:none;position:absolute;top:0;left:0;width:100%;height:100%;background:var(--bg,#f5f5f5);z-index:200;flex-direction:column;overflow-y:auto}
         .summary-overlay.show{display:flex}
         .summary-header{padding:15px;text-align:center;font-size:16px;color:#666;font-style:italic;border-bottom:.5px solid #e0e0e0}
@@ -421,9 +420,9 @@
     <div class="toggle-row" style="margin-top:12px;border-top:.5px solid #e0e0e0;padding-top:12px"><label>🤝 我们见一面吧</label><label class="switch"><input type="checkbox" id="faceToFaceCheck"><span class="slider"></span></label></div><div class="hint-text" style="font-size:11px;color:#bbb;margin-top:-6px">你那里天气好不好，我们见一面好不好</div>
     <div class="toggle-row" style="margin-top:12px;border-top:.5px solid #e0e0e0;padding-top:12px"><label>🔗 群聊私聊互通</label><label class="switch"><input type="checkbox" id="crossChatCheck"><span class="slider"></span></label></div><div class="hint-text" style="font-size:11px;color:#bbb;margin-top:-6px">人类该有手机自由的</div>
     <div id="groupOnlySettings" style="display:none">
-    <div class="toggle-row" style="margin-top:12px;border-top:.5px solid #e0e0e0;padding-top:12px"><label>✏️ 群成员修改名片</label><label class="switch"><input type="checkbox" id="nicknameCheck"><span class="slider"></span></label></div><div class="hint-text" style="font-size:11px;color:#bbb;margin-top:-6px">我改自己名字不犯法</div>
+    <div class="toggle-row" style="margin-top:12px;border-top:.5px solid #e0e0e0;padding-top:12px"><label>✏️ AI修改群名片</label><label class="switch"><input type="checkbox" id="nicknameCheck"><span class="slider"></span></label></div><div class="hint-text" style="font-size:11px;color:#bbb;margin-top:-6px">让AI角色自由修改自己的群聊显示名</div>
     </div>
-    </div><div class="toggle-row" style="margin-top:18px;border-top:.5px solid #e0e0e0;padding-top:16px"><label>🌤️ 启用天气信息</label><label class="switch"><input type="checkbox" id="weatherEnableCheck"><span class="slider"></span></label></div><div class="hint-text" style="margin-top:2px">开启后，AI回复时将自动获取您所在地的天气信息</div><div id="weatherSettingsContainer" style="display:none"><div class="weather-status-row" id="weatherStatusRow"><span class="weather-icon" id="weatherStatusIcon">📍</span><div class="weather-info"><div class="weather-city" id="weatherStatusCity">未获取位置</div><div class="weather-detail" id="weatherStatusDetail">请先获取位置信息</div></div><span class="weather-status-badge idle" id="weatherStatusBadge">待获取</span></div><div class="weather-location-row"><input type="text" id="weatherCityInput" placeholder="城市名称（可选）" style="flex:1"><button class="fetch-location-btn" id="fetchLocationBtn">📍 获取位置</button></div><div class="hint-text" style="margin-top:4px">点击"获取位置"将请求浏览器定位权限，用于获取当地天气</div><div class="setting-row" style="margin-top:6px"><label>纬度</label><input type="text" id="weatherLatDisplay" readonly style="background:#f5f5f5;font-size:11px;color:#888"><label>经度</label><input type="text" id="weatherLonDisplay" readonly style="background:#f5f5f5;font-size:11px;color:#888"></div><button class="gen-btn" id="refreshWeatherBtn" style="margin-top:6px;width:100%">🔄 手动刷新天气</button></div></div><div class="settings-sub" id="settingsPreset" style="display:none"><div class="back-row" id="backFromPreset"><span>‹</span><span>返回</span></div><h3>预设（角色专属）</h3><div class="section-title">关联当前角色（勾选生效）</div><div class="entry-list" id="presetList"></div><div class="entry-add"><textarea id="presetNameInput" placeholder="名称" style="width:30%" class="auto-resize"></textarea><textarea id="presetContentInput" placeholder="内容" class="auto-resize"></textarea><button id="addPresetBtn">添加</button></div><div class="import-export-row"><button id="exportPresetsBtn">导出</button><button id="importPresetsBtn">导入</button><input type="file" id="presetImportFile" accept=".json" style="display:none"></div></div><div class="settings-sub" id="settingsWorld" style="display:none"><div class="back-row" id="backFromWorld"><span>‹</span><span>返回</span></div><h3>世界书（角色专属）</h3><div class="section-title">关联当前角色（勾选生效）</div><div class="entry-list" id="worldList"></div><div class="entry-add"><textarea id="worldKeyInput" placeholder="关键词" style="width:30%" class="auto-resize"></textarea><textarea id="worldContentInput" placeholder="内容" class="auto-resize"></textarea><button id="addWorldBtn">添加</button></div><div class="import-export-row"><button id="exportWorldsBtn">导出</button><button id="importWorldsBtn">导入</button><input type="file" id="worldImportFile" accept=".json" style="display:none"></div></div><div class="settings-sub" id="settingsLog" style="display:none"><div class="back-row" id="backFromLog"><span>‹</span><span>返回</span></div><h3>运行日志</h3><textarea id="logTextarea" class="log-textarea" readonly></textarea><button class="copy-btn" id="copyLogBtn">复制全部日志</button><button class="gen-btn" id="showAutoReplyLogBtn" style="margin-top:10px;">🤖 自动回复日志</button><div id="autoReplyLogContainer" style="display:none; max-height:300px; overflow-y:auto; margin-top:10px; border:1px solid #ddd; padding:8px; border-radius:6px;"></div></div></div></div>
+    </div><div class="toggle-row" style="margin-top:18px;border-top:.5px solid #e0e0e0;padding-top:16px"><label>🌤️ 启用天气信息</label><label class="switch"><input type="checkbox" id="weatherEnableCheck"><span class="slider"></span></label></div><div class="hint-text" style="margin-top:2px">开启后，AI回复时将自动获取您所在地的天气信息</div><div id="weatherSettingsContainer" style="display:none"><div class="weather-status-row" id="weatherStatusRow"><span class="weather-icon" id="weatherStatusIcon">📍</span><div class="weather-info"><div class="weather-city" id="weatherStatusCity">未获取位置</div><div class="weather-detail" id="weatherStatusDetail">请先获取位置信息</div></div><span class="weather-status-badge idle" id="weatherStatusBadge">待获取</span></div><div class="weather-location-row"><input type="text" id="weatherCityInput" placeholder="城市名称（可选）" style="flex:1"><button class="fetch-location-btn" id="fetchLocationBtn">📍 获取位置</button></div><div class="hint-text" style="margin-top:4px">点击"获取位置"将请求浏览器定位权限，用于获取当地天气</div><div class="setting-row" style="margin-top:6px"><label>纬度</label><input type="text" id="weatherLatDisplay" readonly style="background:#f5f5f5;font-size:11px;color:#888"><label>经度</label><input type="text" id="weatherLonDisplay" readonly style="background:#f5f5f5;font-size:11px;color:#888"></div><button class="gen-btn" id="refreshWeatherBtn" style="margin-top:6px;width:100%">🔄 手动刷新天气</button></div></div></div><div class="settings-sub" id="settingsPreset" style="display:none"><div class="back-row" id="backFromPreset"><span>‹</span><span>返回</span></div><h3>预设（角色专属）</h3><div class="section-title">关联当前角色（勾选生效）</div><div class="entry-list" id="presetList"></div><div class="entry-add"><textarea id="presetNameInput" placeholder="名称" style="width:30%" class="auto-resize"></textarea><textarea id="presetContentInput" placeholder="内容" class="auto-resize"></textarea><button id="addPresetBtn">添加</button></div><div class="import-export-row"><button id="exportPresetsBtn">导出</button><button id="importPresetsBtn">导入</button><input type="file" id="presetImportFile" accept=".json" style="display:none"></div></div><div class="settings-sub" id="settingsWorld" style="display:none"><div class="back-row" id="backFromWorld"><span>‹</span><span>返回</span></div><h3>世界书（角色专属）</h3><div class="section-title">关联当前角色（勾选生效）</div><div class="entry-list" id="worldList"></div><div class="entry-add"><textarea id="worldKeyInput" placeholder="关键词" style="width:30%" class="auto-resize"></textarea><textarea id="worldContentInput" placeholder="内容" class="auto-resize"></textarea><button id="addWorldBtn">添加</button></div><div class="import-export-row"><button id="exportWorldsBtn">导出</button><button id="importWorldsBtn">导入</button><input type="file" id="worldImportFile" accept=".json" style="display:none"></div></div><div class="settings-sub" id="settingsLog" style="display:none"><div class="back-row" id="backFromLog"><span>‹</span><span>返回</span></div><h3>运行日志</h3><textarea id="logTextarea" class="log-textarea" readonly></textarea><button class="copy-btn" id="copyLogBtn">复制全部日志</button><button class="gen-btn" id="showAutoReplyLogBtn" style="margin-top:10px;">🤖 自动回复日志</button><div id="autoReplyLogContainer" style="display:none; max-height:300px; overflow-y:auto; margin-top:10px; border:1px solid #ddd; padding:8px; border-radius:6px;"></div></div></div></div>
   <div class="manage-modal" id="manageModal"><div class="manage-panel"><h3>聊天管理</h3><button id="exportChatBtn">📤 导出聊天记录和设定</button><button id="importChatBtn" class="btn-secondary">📥 导入聊天记录和设定</button><button id="newChatBtn" class="btn-danger">✨ 开启新聊天</button><button id="saveCurrentBtn" class="btn-secondary">💾 保存当前对话到历史</button><div class="section-title" style="margin-top:15px">历史聊天</div><div class="history-list" id="historyList"></div><div class="section-title" style="margin-top:15px">自动回复 / 群聊拒绝记录</div><div class="skip-log-list" id="skipLogList" style="max-height:150px; overflow-y:auto; margin-bottom:10px;"></div><button class="close-manage" id="closeManageBtn">关闭</button><input type="file" id="importChatFile" accept=".json" style="display:none"></div></div>
   <div class="persona-modal" id="personaEditModal"><div class="persona-panel" id="personaEditPanel"><h3 id="personaEditTitle">编辑人设</h3><div class="setting-row"><label>姓名</label><input type="text" id="personaNameInput" placeholder="你的名字"></div><div class="avatar-setting"><div class="avatar-preview avatar-me" id="personaAvatarPreview">👤</div><span>头像</span><button class="change-avatar-btn" id="personaChangeAvatarBtn">更换头像</button><input type="file" id="personaFileInput" accept="image/*"></div><div class="setting-row"><label style="align-self:flex-start">人物设定</label><textarea id="personaDetailInput" class="auto-resize" placeholder="描述你的身份、性格等，这将作为用户提示词发送给AI"></textarea></div><div class="hint-text">人物设定会在聊天时作为你的身份信息发送给AI，帮助AI更好地理解你。</div><button class="save-btn" id="savePersonaBtn">保存人设</button><button class="copy-btn" id="cancelPersonaBtn" style="background:#e0e0e0">取消</button><input type="file" id="personaCropFileInput" accept="image/*" style="display:none"></div></div>
   <div class="persona-modal" id="personaSelectModal"><div class="persona-panel" id="personaSelectPanel"><h3>选择用户人设</h3><div class="persona-list" id="personaSelectList"></div><div class="hint-text" style="text-align:center;margin-top:8px">选中的"人物设定"将作为用户提示词发送给AI</div><button class="copy-btn" id="closePersonaSelectBtn" style="background:#e0e0e0">关闭</button></div></div>
@@ -465,15 +464,15 @@
       if (splashScreen) splashScreen.classList.add('hide');
       if (document.documentElement.requestFullscreen) {
         document.documentElement.requestFullscreen().then(()=>{
-          document.getElementById('phoneRoot').classList.add('css-fullscreen');
+          document.querySelector('.main-container').classList.add('css-fullscreen');
         }).catch(() => {
-          document.getElementById('phoneRoot').classList.add('css-fullscreen');
+          document.querySelector('.main-container').classList.add('css-fullscreen');
         });
       } else if (document.documentElement.webkitRequestFullscreen) {
         document.documentElement.webkitRequestFullscreen();
-        document.getElementById('phoneRoot').classList.add('css-fullscreen');
+        document.querySelector('.main-container').classList.add('css-fullscreen');
       } else {
-        document.getElementById('phoneRoot').classList.add('css-fullscreen');
+        document.querySelector('.main-container').classList.add('css-fullscreen');
       }
     });
   }
@@ -482,7 +481,7 @@
     const chatViewWrap = document.getElementById('chatViewWrap');
     if(autoReplyInProgress){ history.pushState({},'',location.href); return; }
     if (chatHistoryPushed && chatViewWrap && chatViewWrap.classList.contains('active')) { chatHistoryPushed = false; if(!autoReplyInProgress) saveGlobalsToActiveChar(); chatViewWrap.classList.remove('active'); document.getElementById('messageListViewWrap').classList.add('active'); document.getElementById('libraryViewWrap').classList.remove('active'); document.getElementById('profileViewWrap').classList.remove('active'); updateAllTabBars('messages'); renderCharacterList() }
-    if(document.getElementById('phoneRoot').classList.contains('css-fullscreen')){ history.pushState({},'',location.href); if(!document.fullscreenElement && !document.webkitFullscreenElement){ try{ document.documentElement.requestFullscreen?.() }catch(e){} } }
+    if(document.querySelector('.main-container').classList.contains('css-fullscreen')){ history.pushState({},'',location.href); if(!document.fullscreenElement && !document.webkitFullscreenElement){ try{ document.documentElement.requestFullscreen?.() }catch(e){} } }
   });
   function autoResizeTextarea(textarea) { if (!textarea) return; const maxHeight = parseInt(window.getComputedStyle(textarea).maxHeight) || 0; textarea.style.height = 'auto'; if (maxHeight && textarea.scrollHeight > maxHeight) { textarea.style.height = maxHeight + 'px'; textarea.style.overflowY = 'auto'; textarea.style.webkitOverflowScrolling = 'touch' } else { textarea.style.height = textarea.scrollHeight + 'px'; textarea.style.overflowY = 'hidden'; textarea.style.webkitOverflowScrolling = '' } }
   document.addEventListener('input', function(e) { if (e.target.classList.contains('auto-resize') || e.target.id === 'messageInput' || e.target.classList.contains('msg-edit-textarea')) autoResizeTextarea(e.target) });
@@ -501,7 +500,7 @@
   updateStatusTime(); setInterval(updateStatusTime,1000); initBattery();
   const logMessages = [];
   function addLog(type,msg) { const now = new Date(), time = now.toLocaleTimeString(); logMessages.push({time,type,message:msg}); const ta = document.getElementById('logTextarea'); if(ta) ta.value = logMessages.map(l=>`[${l.time}] [${l.type}] ${l.message}`).join('\n') }
-  window.addEventListener('error', e=> addLog('error', `${e.message} (行${e.lineno})`));
+  window.addEventListener('error', e=> addLog('error', e.message));
   window.addEventListener('unhandledrejection', e=> addLog('error', e.reason?.message || 'Promise rejection'));
   function escapeHtml(text) { const map = {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}; return text.replace(/[&<>"']/g, m=>map[m]) }
   function ensureId(arr) { arr.forEach(item=>{ if(!item.id) item.id = Date.now() + Math.random().toString(36) }) }
@@ -948,7 +947,7 @@
     if(autoSkipReason) { autoSkipHintEl.style.display = 'flex'; autoSkipHintEl.title = '屏幕那端传来了消息，是TA憋在心里的...：' + autoSkipReason; autoSkipHintEl.onclick = () => { alert('屏幕那端传来了消息，是TA憋在心里的...：\n' + autoSkipReason); hideAutoSkipHint(); }; } else { autoSkipHintEl.style.display = 'none'; }
     updatePersonaSwitchBar();
     updateUnreadDisplay();
-  } catch(e){ addLog('error', e.message + ' @ ' + (e.stack||'').split('\n').slice(1,2).join('')); } }
+  } catch(e){ addLog('error', e.message); } }
   function renderGroupPersonaList(){
     if(!groupPersonaSelectList) return;
     groupPersonaSelectList.innerHTML = userPersonas.map(p=>{
@@ -1306,7 +1305,7 @@
       // --- 行动指令 ---
       systemPrompt += '===== 行动指令 =====\n\n';
       const lengthHint = apiSettings.chatModeSubtype==='long'?'约100字':'约20字';
-      const groupModeStr = apiSettings.faceToFaceEnabled ? '面对面见面。你们正在同一个地方当面交谈。请像小说场景一样描写，可以包含动作、表情、肢体语言、语气、环境描写，不需要限制字数' : `线上群聊。每条消息控制在${lengthHint}左右`;
+      const groupModeStr = apiSettings.faceToFaceEnabled ? '面对面见面。你们正在同一个地方当面交谈，可以有动作、表情和肢体语言的描写' : `线上群聊。每条消息控制在${lengthHint}左右`;
       systemPrompt += `## 对话规则\n模式：${groupModeStr}。\n\n`;
       if(options.allowedMemberIds && options.allowedMemberIds.length > 0){
         const min = overrideMinMsgs!==null ? overrideMinMsgs : apiSettings.minMsgs; const max = overrideMaxMsgs!==null ? overrideMaxMsgs : apiSettings.maxMsgs;
@@ -1317,8 +1316,7 @@
       // 群聊角色行动指令 + 格式强化
       const memberNames = members.map(m=>m.name);
       const fmtExample = memberNames.length>=2 ? `示例：\n[${memberNames[0]}]: 你好呀～\n\n[${memberNames[1]}]: 嗨！今天怎么样？` : (memberNames.length===1 ? `示例：\n[${memberNames[0]}]: 你好呀～` : '');
-      const rule4 = apiSettings.faceToFaceEnabled ? '4. 见面模式下允许在消息中加入动作和表情描写（用*号包裹动作）' : '4. 不要在消息中使用旁白、括号动作描写或第三人称叙述';
-      const fmtStrict = `\n\n⚠️ 格式要求（严格遵守）：\n1. 每条消息必须独占一段，以 [角色名]: 开头（方括号+冒号+空格）\n2. 不同消息之间用空行分隔\n3. 绝对不要把多个角色的话合并成一段\n${rule4}\n5. 每条消息就是该角色发出的一条聊天内容\n6. 即使不确定说什么，也要输出至少一条消息，不要给出空回复\n${fmtExample}\n\n`;
+      const fmtStrict = `\n\n⚠️ 格式要求（严格遵守）：\n1. 每条消息必须独占一段，以 [角色名]: 开头（方括号+冒号+空格）\n2. 不同消息之间用空行分隔\n3. 绝对不要把多个角色的话合并成一段\n4. 不要在消息中使用旁白、括号动作描写或第三人称叙述\n5. 每条消息就是该角色发出的一条聊天内容\n${fmtExample}\n\n`;
 
       if(options.phase === 'initiate' && options.allowedMemberIds?.length > 0){
         const t = members.find(m=>m.id===options.allowedMemberIds[0]);
@@ -1330,9 +1328,7 @@
         systemPrompt += `## 群聊发言\n每个AI成员根据自己的人设自由判断是否发言。允许多人说话，允许互相对话，也允许全部沉默。\n发言 → [成员名]: 消息内容\n不发言 → [成员名]: [AUTO_SKIP] 理由${fmtStrict}`;
       }
 
-      if(options.allowedMemberIds && options.allowedMemberIds.length > 0){
-        systemPrompt += `## 心声\n在回复开头用「【思考过程】」和「【思考结束】」包裹你当前角色此刻的内心心声——不好意思说出口的、想说又没说的真实想法。\n⚠️ 重要：这不是AI的推理！是角色的内心独白。只写你当前角色的心声，用第一人称口吻（"我..."），不要出现角色名前缀。\n\n`;
-      }
+      systemPrompt += `## 心声\n在回复开头用「【思考过程】」和「【思考结束】」包裹角色此刻的内心心声——不好意思说出口的、想说又没说的真实想法。\n⚠️ 心声规则：\n- 只写你当前扮演的那一个角色的心声，不要写其他角色的\n- 用该角色的第一人称口吻（"我..."）\n- 心声中不要出现角色名前缀\n- 心声内容要和该角色接下来的发言相关\n\n`;
       systemPrompt += `## 撤回\n可以撤回自己角色之前的消息（不能撤回别人的）。\n你的最近一条历史消息 → [RECALL:1]，再上一条 → [RECALL:2]，以此类推\n本轮你输出的第1条 → [RECALL:0]，第2条 → [RECALL:-1]，以此类推\n如需撤回就在回复中插入对应指令，不需要就正常回复。\n\n`;
       systemPrompt += `## @提及\n当消息前有 [@角色名] 标注时，表示发言者在点名对那个角色说话。你也可以在回复中使用 @角色名 来指定对谁说。\n\n`;
       if(apiSettings.crossChatEnabled){
@@ -1895,24 +1891,17 @@
     if (statusTimeEl) { statusTimeEl.addEventListener('dblclick', () => { if (document.fullscreenElement || document.webkitFullscreenElement) { if(document.exitFullscreen) document.exitFullscreen(); else if(document.webkitExitFullscreen) document.webkitExitFullscreen(); } else { if(document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(()=>{}); else if(document.documentElement.webkitRequestFullscreen) document.documentElement.webkitRequestFullscreen(); } }); }
   }
   if(window.visualViewport){
-    const mcEl = document.getElementById('phoneRoot');
+    const mcEl = document.querySelector('.main-container');
     window.visualViewport.addEventListener('resize', ()=>{
       if(document.fullscreenElement || document.webkitFullscreenElement){
         if(mcEl) mcEl.style.height = window.visualViewport.height + 'px';
         setTimeout(()=>{ if(chatArea) chatArea.scrollTop = chatArea.scrollHeight; }, 50);
       } else if(mcEl && mcEl.classList.contains('css-fullscreen')){
-        mcEl.style.height = window.visualViewport.height + 'px';
-        setTimeout(()=>{ if(chatArea) chatArea.scrollTop = chatArea.scrollHeight; }, 50);
+        mcEl.style.height = '';
       }
     });
-    window.visualViewport.addEventListener('scroll', ()=>{
-      if(mcEl && mcEl.classList.contains('css-fullscreen')){ mcEl.style.top = window.visualViewport.offsetTop + 'px'; }
-    });
     document.addEventListener('fullscreenchange', ()=>{
-      if(!document.fullscreenElement && mcEl){ mcEl.style.height = ''; mcEl.style.top = ''; }
-    });
-    if(messageInput) messageInput.addEventListener('blur', ()=>{
-      if(mcEl && mcEl.classList.contains('css-fullscreen')){ mcEl.style.height = ''; mcEl.style.top = ''; }
+      if(!document.fullscreenElement && mcEl) mcEl.style.height = '';
     });
   }
   initAll();
