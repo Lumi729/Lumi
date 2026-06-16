@@ -475,6 +475,12 @@
     </div>
     <div class="ble-section" id="bleCharList"><h4>设备服务列表</h4><div style="color:#999;font-size:13px">连接设备后显示</div></div>
     <div class="ble-section"><h4>AI 控制</h4><div style="font-size:12px;color:#666;line-height:1.6">保存配置后，AI 角色可用 <code>[BLE:数值]</code> 控制设备（0-100，0=停止）</div></div>
+    <div class="ble-section" id="bleScanSection" style="display:none">
+      <h4>🔍 自动扫描指令</h4>
+      <div style="font-size:12px;color:#666;margin-bottom:8px">逐个尝试常见指令，玩具动了就点停止</div>
+      <div style="display:flex;gap:8px"><button id="bleStartScanBtn" style="flex:1;padding:10px;border:none;border-radius:10px;background:#1989fa;color:#fff;font-size:14px;cursor:pointer">开始扫描</button><button id="bleStopScanBtn" style="flex:1;padding:10px;border:none;border-radius:10px;background:#ff9800;color:#fff;font-size:14px;cursor:pointer;display:none">停止！玩具动了！</button></div>
+      <div id="bleScanLog" style="margin-top:8px;font-size:11px;font-family:monospace;color:#666;max-height:200px;overflow-y:auto;background:#f9f9f9;border-radius:8px;padding:8px"></div>
+    </div>
   </div>
   <div class="create-modal" id="createModal"><div class="create-panel"><h3>创建</h3><button id="createSingleBtn">✨ 创建角色</button><button id="createGroupBtn">👥 创建群聊</button><button class="close-create" id="closeCreateBtn">关闭</button></div></div>
   <div class="create-modal" id="groupCreateModal"><div class="create-panel"><h3>选择群聊成员</h3><div class="create-member-list" id="groupMemberList"></div><div style="display:flex;gap:8px;"><button id="confirmGroupBtn" style="flex:1;">确认创建</button><button id="createEmptyGroupBtn" style="flex:1;background:#576b95;">创建空群聊</button></div><button class="close-create" id="closeGroupCreateBtn" style="width:100%;">取消</button></div></div>
@@ -1730,7 +1736,7 @@
   async function discoverBleServices(){
     if(!bleServer) return;
     const charListEl = document.getElementById('bleCharList');
-    charListEl.innerHTML = '<h4>设备服务列表</h4>';
+    charListEl.innerHTML = '<h4>设备服务列表</h4>'; document.getElementById('bleScanSection').style.display='block';
     try{
       const services = await bleServer.getPrimaryServices();
       for(const svc of services){
@@ -1803,6 +1809,35 @@
       return true;
     } catch(e){ addLog('error','BLE写入失败: '+e.message); return false; }
   }
+
+  // ===== 蓝牙自动扫描 =====
+  let bleScanRunning = false;
+  const bleCmdPatterns = ['01','02','03','05','0A','10','20','40','64','80','FF','AA01','AA02','AA03','AA0A','AA64','AAFF','AA0101','AA0102','AA0103','AA010A','AA0164','AA01FF','AA0201','AA0264','AA0301','AA0364','5501','5502','5503','550A','5564','55FF','550101','550164','5501FF','55AA01','55AA64','55AAFF','A501','A564','A5FF','A50101','A50164','0301','0302','0303','030164','0100','010A','0164','01FF','00010164','F001','FE01','FE64','0001','0064','00FF','080164','AA0301010000','AA030101000A','AA03010100FF','55AA030101000A'];
+  async function startBleScan(){
+    if(!bleServer?.connected){alert('请先连接设备');return;} bleScanRunning=true;
+    document.getElementById('bleStartScanBtn').style.display='none'; document.getElementById('bleStopScanBtn').style.display='block';
+    const log=document.getElementById('bleScanLog'); log.innerHTML='扫描开始...\n';
+    try{
+      const services=await bleServer.getPrimaryServices(); const writeChars=[];
+      for(const svc of services){const chars=await svc.getCharacteristics();for(const ch of chars){if(ch.properties.write||ch.properties.writeWithoutResponse)writeChars.push({svc:svc.uuid.substring(4,8),char:ch,uuid:ch.uuid.substring(4,8)});}}
+      if(writeChars.length===0){log.innerHTML='未找到可写入特征';bleScanRunning=false;return;}
+      for(const cmd of bleCmdPatterns){
+        if(!bleScanRunning)break;
+        for(const wc of writeChars){
+          if(!bleScanRunning)break;
+          const bytes=hexToBytes(cmd);if(!bytes)continue;
+          try{await(wc.char.writeValueWithoutResponse?wc.char.writeValueWithoutResponse(bytes):wc.char.writeValue(bytes));log.innerHTML=`→ [${wc.svc}/${wc.uuid}] ${cmd}\n`+log.innerHTML;}catch(e){}
+          log.scrollTop=0;
+        }
+        await new Promise(r=>setTimeout(r,1500));
+      }
+      if(bleScanRunning)log.innerHTML='扫描完成，所有指令都试过了\n'+log.innerHTML;
+    }catch(e){log.innerHTML='错误: '+e.message;}
+    bleScanRunning=false;document.getElementById('bleStartScanBtn').style.display='block';document.getElementById('bleStopScanBtn').style.display='none';
+  }
+  function stopBleScan(){bleScanRunning=false;document.getElementById('bleScanLog').innerHTML='已停止！最后显示的指令就是有效的\n'+document.getElementById('bleScanLog').innerHTML;document.getElementById('bleStartScanBtn').style.display='block';document.getElementById('bleStopScanBtn').style.display='none';}
+  document.getElementById('bleStartScanBtn')?.addEventListener('click',startBleScan);
+  document.getElementById('bleStopScanBtn')?.addEventListener('click',stopBleScan);
 
   function processBleCommands(content){
     if(!bleConfig) return content;
