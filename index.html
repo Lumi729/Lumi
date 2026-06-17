@@ -1738,7 +1738,7 @@
       bleDevice = await navigator.bluetooth.requestDevice({ acceptAllDevices:true, optionalServices:['0000cb01-0000-1000-8000-00805f9b34fb','5833ff01-9b8b-5191-6142-22a4536ef123','0000aa15-0000-1000-8000-00805f9b34fb','0000bb15-0000-1000-8000-00805f9b34fb','e73e0001-ef1b-4e74-8291-2e4f3164f3b5'] });
       statusEl.textContent = '连接中...';
       bleServer = await bleDevice.gatt.connect();
-      bleDevice.addEventListener('gattserverdisconnected', ()=>{ refreshBleUI(); });
+      bleDevice.addEventListener('gattserverdisconnected', ()=>{ bleWriteChar=null; refreshBleUI(); });
       statusEl.textContent = '已连接: ' + (bleDevice.name||'未知设备'); statusEl.className = 'ble-status connected';
       document.getElementById('bleConnectBtn').style.display='none';
       document.getElementById('bleDisconnectBtn').style.display='block';
@@ -1748,7 +1748,7 @@
 
   document.getElementById('bleDisconnectBtn').addEventListener('click',()=>{
     if(bleDevice && bleDevice.gatt.connected) bleDevice.gatt.disconnect();
-    bleDevice=null; bleServer=null; bleSavedChar=null; refreshBleUI();
+    bleDevice=null; bleServer=null; bleSavedChar=null; bleWriteChar=null; refreshBleUI();
   });
 
   async function discoverBleServices(){
