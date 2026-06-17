@@ -1763,6 +1763,7 @@
           const props = ch.properties;
           const propList = []; if(props.read) propList.push('Read'); if(props.write) propList.push('Write'); if(props.writeWithoutResponse) propList.push('WriteNoResp'); if(props.notify) propList.push('Notify');
           if(!props.write && !props.writeWithoutResponse) continue;
+          if(ch.uuid.includes('cb02')){ bleWriteChar = ch; addLog('info','BLE: 已缓存CB02写入通道'); }
           const div = document.createElement('div'); div.className='ble-char-item';
           div.innerHTML = `<div class="uuid">Service: ${svc.uuid}</div><div class="uuid">Char: ${ch.uuid}</div><div class="props">${propList.join(' | ')}</div><div class="ble-test-row"><input placeholder="十六进制（如 01 或 0164）" class="ble-hex-input"><button class="btn-write ble-write-btn">写入</button><button class="btn-save ble-save-btn">保存此配置</button></div><div class="ble-test-result" style="font-size:11px;margin-top:4px;color:#666"></div>`;
           div.querySelector('.ble-write-btn').addEventListener('click', async()=>{
