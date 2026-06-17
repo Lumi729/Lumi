@@ -1834,8 +1834,8 @@
     const v = Math.max(0, Math.min(100, parseInt(value)||0));
     const ch = channel === 2 ? 0x01 : 0x02;
     if(v === 0) return bleSendRaw([0xA5, 0x02, ch, 0x00, 0x5A]);
-    const level = Math.ceil(v / 20);
-    return bleSendRaw([0xA5, 0x02, ch, level, 0x5A]);
+    const powerByte = Math.round(0x40 + (v / 100) * 38);
+    return bleSendRaw([0xA5, 0x02, ch, powerByte, 0x5A]);
   }
   async function bleStop(){
     if(!bleDevice?.gatt?.connected) return;
