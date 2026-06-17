@@ -1829,7 +1829,8 @@
     } catch(e){ addLog('error','BLE写入失败: '+e.message); return false; }
   }
   async function bleWriteValue(value, channel=1){
-    if(!bleDevice?.gatt?.connected) return false;
+    addLog('info', `BLE调试: device=${!!bleDevice} gatt=${!!bleDevice?.gatt} connected=${bleDevice?.gatt?.connected} writeChar=${!!bleWriteChar} value=${value} ch=${channel}`);
+    if(!bleDevice?.gatt?.connected){ addLog('error','BLE: 设备未连接'); return false; }
     const v = Math.max(0, Math.min(100, parseInt(value)||0));
     const ch = channel === 2 ? 0x01 : 0x02;
     if(v === 0) return bleSendRaw([0xA5, 0x02, ch, 0x00, 0x5A]);
