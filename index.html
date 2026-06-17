@@ -476,6 +476,18 @@
     </div>
     <div class="ble-section" id="bleCharList"><h4>设备服务列表</h4><div style="color:#999;font-size:13px">连接设备后显示</div></div>
     <div class="ble-section"><h4>AI 控制</h4><div style="font-size:12px;color:#666;line-height:1.6">保存配置后，AI 角色可用 <code>[BLE:数值]</code> 控制设备（0-100，0=停止）</div></div>
+    <div class="ble-section" id="bleManualSection">
+      <h4>🕹️ 手动操控</h4>
+      <div style="margin-bottom:12px">
+        <div style="font-size:13px;margin-bottom:4px">通道1: <span id="bleCh1Val">0</span>%</div>
+        <input type="range" id="bleCh1Slider" min="0" max="100" value="0" style="width:100%">
+      </div>
+      <div style="margin-bottom:12px">
+        <div style="font-size:13px;margin-bottom:4px">通道2: <span id="bleCh2Val">0</span>%</div>
+        <input type="range" id="bleCh2Slider" min="0" max="100" value="0" style="width:100%">
+      </div>
+      <button id="bleStopAllBtn" style="width:100%;padding:12px;border:none;border-radius:10px;background:#ff3b30;color:#fff;font-size:14px;cursor:pointer">⏹ 全部停止</button>
+    </div>
     <div class="ble-section" id="bleScanSection" style="display:none">
       <h4>🔍 自动扫描指令</h4>
       <div style="font-size:12px;color:#666;margin-bottom:8px">逐个尝试常见指令，玩具动了就点停止</div>
@@ -1844,6 +1856,24 @@
   function stopBleScan(){bleScanRunning=false;document.getElementById('bleScanLog').innerHTML='已停止！最后显示的指令就是有效的\n'+document.getElementById('bleScanLog').innerHTML;document.getElementById('bleStartScanBtn').style.display='block';document.getElementById('bleStopScanBtn').style.display='none';}
   document.getElementById('bleStartScanBtn')?.addEventListener('click',startBleScan);
   document.getElementById('bleStopScanBtn')?.addEventListener('click',stopBleScan);
+
+  // 手动操控面板
+  let bleDebounceTimer = null;
+  document.getElementById('bleCh1Slider')?.addEventListener('input', function(){
+    document.getElementById('bleCh1Val').textContent = this.value;
+    clearTimeout(bleDebounceTimer);
+    bleDebounceTimer = setTimeout(()=>{ const v=parseInt(this.value); if(v===0) bleStop(); else bleWriteValue(v, 1); }, 150);
+  });
+  document.getElementById('bleCh2Slider')?.addEventListener('input', function(){
+    document.getElementById('bleCh2Val').textContent = this.value;
+    clearTimeout(bleDebounceTimer);
+    bleDebounceTimer = setTimeout(()=>{ const v=parseInt(this.value); if(v===0) bleStop(); else bleWriteValue(v, 2); }, 150);
+  });
+  document.getElementById('bleStopAllBtn')?.addEventListener('click', ()=>{
+    bleStop();
+    document.getElementById('bleCh1Slider').value=0; document.getElementById('bleCh1Val').textContent='0';
+    document.getElementById('bleCh2Slider').value=0; document.getElementById('bleCh2Val').textContent='0';
+  });
 
   async function processBleCommands(content){
     if(!apiSettings.bleControlEnabled) return content;
