@@ -1828,12 +1828,18 @@
       return true;
     } catch(e){ addLog('error','BLE写入失败: '+e.message); return false; }
   }
+  let bleLastValue = {1:0, 2:0};
   async function bleWriteValue(value, channel=1){
     addLog('info', `BLE调试: device=${!!bleDevice} gatt=${!!bleDevice?.gatt} connected=${bleDevice?.gatt?.connected} writeChar=${!!bleWriteChar} value=${value} ch=${channel}`);
     if(!bleDevice?.gatt?.connected){ addLog('error','BLE: 设备未连接'); return false; }
     const v = Math.max(0, Math.min(100, parseInt(value)||0));
     const ch = channel === 2 ? 0x01 : 0x02;
-    if(v === 0) return bleSendRaw([0xA5, 0x02, ch, 0x00, 0x5A]);
+    if(v === 0){ bleLastValue[channel]=0; return bleSendRaw([0xA5, 0x02, ch, 0x00, 0x5A]); }
+    if(bleLastValue[channel] === 0){
+      await bleSendRaw([0xA5, 0x02, ch, 0x01, 0x5A]);
+      await new Promise(r=>setTimeout(r,100));
+    }
+    bleLastValue[channel] = v;
     const powerByte = Math.round(0x40 + (v / 100) * 38);
     return bleSendRaw([0xA5, 0x02, ch, powerByte, 0x5A]);
   }
