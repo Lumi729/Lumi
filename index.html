@@ -1817,16 +1817,29 @@
 
   function hexToBytes(hex){ hex=hex.replace(/\s/g,''); if(!/^[0-9a-fA-F]*$/.test(hex)||hex.length%2!==0||hex.length===0) return null; const arr=new Uint8Array(hex.length/2); for(let i=0;i<hex.length;i+=2) arr[i/2]=parseInt(hex.substr(i,2),16); return arr; }
 
-  async function bleWriteValue(value){
-    if(!bleSavedChar || !bleDevice?.gatt?.connected) return false;
+  let bleWriteChar = null;
+  async function bleSendRaw(bytes){
+    let wc = bleWriteChar;
+    if(!wc){ addLog('error','BLE: 无写入通道，请先连接设备'); return false; }
     try{
-      const v = Math.max(0,Math.min(100,parseInt(value)||0));
-      const byte = Math.round(v*255/100);
-      const bytes = new Uint8Array([byte]);
-      await (bleSavedChar.writeValueWithoutResponse ? bleSavedChar.writeValueWithoutResponse(bytes) : bleSavedChar.writeValue(bytes));
-      addLog('info',`BLE 发送: ${v}% → 0x${byte.toString(16).padStart(2,'0')}`);
+      const cmd = new Uint8Array(bytes);
+      try{ await wc.writeValueWithoutResponse(cmd); } catch(e1){ await wc.writeValue(cmd); }
+      addLog('info','BLE发送: '+Array.from(cmd).map(b=>b.toString(16).padStart(2,'0')).join(' '));
       return true;
     } catch(e){ addLog('error','BLE写入失败: '+e.message); return false; }
+  }
+  async function bleWriteValue(value, channel=1){
+    if(!bleDevice?.gatt?.connected) return false;
+    const v = Math.max(0, Math.min(100, parseInt(value)||0));
+    const ch = channel === 2 ? 0x01 : 0x02;
+    if(v === 0) return bleSendRaw([0xA5, 0x02, ch, 0x00, 0x5A]);
+    const level = Math.ceil(v / 20);
+    return bleSendRaw([0xA5, 0x02, ch, level, 0x5A]);
+  }
+  async function bleStop(){
+    if(!bleDevice?.gatt?.connected) return;
+    await bleSendRaw([0xA5, 0x02, 0x02, 0x00, 0x5A]);
+    await bleSendRaw([0xA5, 0x02, 0x01, 0x00, 0x5A]);
   }
 
   // ===== 蓝牙自动扫描 =====
