@@ -1518,7 +1518,7 @@
           cleanedForSeg = processCrossChatSwitch(cleanText, sName, options.allowedMemberIds?.[0]);
           cleanedForSeg = cleanedForSeg.replace(/\[改名[：:].+?\]/g,'').trim();
         }
-        cleanedForSeg = processBleCommands(cleanedForSeg);
+        cleanedForSeg = await processBleCommands(cleanedForSeg);
         let segmentsRaw = cleanedForSeg.split(/\n{2,}/).filter(s=>s.trim()!==''); if(segmentsRaw.length===0 && cleanedForSeg) segmentsRaw = [cleanedForSeg];
         let newSegments = [];
         let skipReasons = [];
@@ -1845,14 +1845,14 @@
   document.getElementById('bleStartScanBtn')?.addEventListener('click',startBleScan);
   document.getElementById('bleStopScanBtn')?.addEventListener('click',stopBleScan);
 
-  function processBleCommands(content){
+  async function processBleCommands(content){
     if(!apiSettings.bleControlEnabled) return content;
     const regex = /\[BLE[:：](\d+)(?:[:：](\d))?\]/g; let match;
     while((match = regex.exec(content)) !== null){
       const val = parseInt(match[1])||0;
       const ch = parseInt(match[2])||1;
-      if(val === 0) bleStop();
-      else bleWriteValue(val, ch);
+      if(val === 0) await bleStop();
+      else await bleWriteValue(val, ch);
       // 聊天界面显示控制气泡
       const label = val === 0 ? '🎮 设备已停止' : `🎮 强度 ${val}%${ch===2?' (通道2)':''}`;
       const hintDiv = document.createElement('div');
