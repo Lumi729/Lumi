@@ -480,11 +480,11 @@
       <h4>🕹️ 手动操控</h4>
       <div style="margin-bottom:12px">
         <div style="font-size:13px;margin-bottom:4px">通道1: <span id="bleCh1Val">0</span>%</div>
-        <input type="range" id="bleCh1Slider" min="0" max="100" value="0" style="width:100%">
+        <input type="range" id="bleCh1Slider" min="1" max="100" value="1" style="width:100%">
       </div>
       <div style="margin-bottom:12px">
         <div style="font-size:13px;margin-bottom:4px">通道2: <span id="bleCh2Val">0</span>%</div>
-        <input type="range" id="bleCh2Slider" min="0" max="100" value="0" style="width:100%">
+        <input type="range" id="bleCh2Slider" min="1" max="100" value="1" style="width:100%">
       </div>
       <button id="bleStopAllBtn" style="width:100%;padding:12px;border:none;border-radius:10px;background:#ff3b30;color:#fff;font-size:14px;cursor:pointer">⏹ 全部停止</button>
     </div>
@@ -1832,10 +1832,6 @@
     if(!bleDevice?.gatt?.connected){ addLog('error','BLE: 设备未连接'); return false; }
     const v = Math.max(0, Math.min(100, parseInt(value)||0));
     const ch = channel === 2 ? 0x01 : 0x02;
-    if(v === 0){
-      const stopByte = ch === 0x02 ? 0x06 : 0x00;
-      return bleSendRaw([0xA5, 0x02, ch, stopByte, 0x5A]);
-    }
     const powerByte = Math.round(0x40 + (v / 100) * 38);
     return bleSendRaw([0xA5, 0x02, ch, powerByte, 0x5A]);
   }
@@ -1879,12 +1875,12 @@
   document.getElementById('bleCh1Slider')?.addEventListener('input', function(){
     document.getElementById('bleCh1Val').textContent = this.value;
     clearTimeout(bleDebounceTimer);
-    bleDebounceTimer = setTimeout(()=>{ const v=parseInt(this.value); if(v===0) bleStop(); else bleWriteValue(v, 1); }, 150);
+    bleDebounceTimer = setTimeout(()=>{ bleWriteValue(parseInt(this.value), 1); }, 150);
   });
   document.getElementById('bleCh2Slider')?.addEventListener('input', function(){
     document.getElementById('bleCh2Val').textContent = this.value;
     clearTimeout(bleDebounceTimer);
-    bleDebounceTimer = setTimeout(()=>{ const v=parseInt(this.value); if(v===0) bleStop(); else bleWriteValue(v, 2); }, 150);
+    bleDebounceTimer = setTimeout(()=>{ bleWriteValue(parseInt(this.value), 2); }, 150);
   });
   document.getElementById('bleStopAllBtn')?.addEventListener('click', ()=>{
     bleStop();
