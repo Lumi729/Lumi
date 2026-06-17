@@ -479,12 +479,12 @@
     <div class="ble-section" id="bleManualSection">
       <h4>🕹️ 手动操控</h4>
       <div style="margin-bottom:12px">
-        <div style="font-size:13px;margin-bottom:4px">通道1: <span id="bleCh1Val">0</span>%</div>
-        <input type="range" id="bleCh1Slider" min="1" max="100" value="1" style="width:100%">
+        <div style="font-size:13px;margin-bottom:4px">通道1: <span id="bleCh1Val">1</span> 档</div>
+        <input type="range" id="bleCh1Slider" min="1" max="5" value="1" style="width:100%">
       </div>
       <div style="margin-bottom:12px">
-        <div style="font-size:13px;margin-bottom:4px">通道2: <span id="bleCh2Val">0</span>%</div>
-        <input type="range" id="bleCh2Slider" min="1" max="100" value="1" style="width:100%">
+        <div style="font-size:13px;margin-bottom:4px">通道2: <span id="bleCh2Val">1</span> 档</div>
+        <input type="range" id="bleCh2Slider" min="1" max="5" value="1" style="width:100%">
       </div>
       <button id="bleStopAllBtn" style="width:100%;padding:12px;border:none;border-radius:10px;background:#ff3b30;color:#fff;font-size:14px;cursor:pointer">⏹ 全部停止</button>
     </div>
@@ -1392,7 +1392,7 @@
         systemPrompt += `## 心声\n每个发言角色在自己的消息前，用「【思考过程】」和「【思考结束】」写出该角色的内心心声。每个角色单独写自己的心声，不要合并。\n格式示例：\n【思考过程】（角色A心里想：我其实有点紧张...）【思考结束】\n[角色A]: 消息内容\n\n【思考过程】（角色B心里想：他在说什么呀...）【思考结束】\n[角色B]: 消息内容\n\n⚠️ 这不是AI推理，是角色的内心独白，用角色自己的口吻写。\n\n`;
       }
       if(apiSettings.bleControlEnabled){
-        systemPrompt += `## 设备控制\n你可以通过蓝牙控制用户身边的设备。\n指令格式：[BLE:强度] 或 [BLE:强度:通道]\n- 强度 0-100（0=停止，50=中等，100=最强）\n- 通道1=默认，通道2=另一个模式\n- 示例：[BLE:50] 中等强度，[BLE:0] 停止\n请根据对话氛围和角色人设自由判断。\n\n`;
+        systemPrompt += `## 设备控制\n你可以通过蓝牙控制用户身边的设备。\n指令格式：[BLE:强度] 或 [BLE:强度:通道]\n- 强度 1-5（1=最轻，5=最强）\n- 通道1=默认，通道2=另一个模式\n- 示例：[BLE:3] 中等强度，[BLE:0] 停止\n请根据对话氛围和角色人设自由判断。\n\n`;
       }
       systemPrompt += `## 撤回\n可以撤回自己角色之前的消息（不能撤回别人的）。\n你的最近一条历史消息 → [RECALL:1]，再上一条 → [RECALL:2]，以此类推\n本轮你输出的第1条 → [RECALL:0]，第2条 → [RECALL:-1]，以此类推\n如需撤回就在回复中插入对应指令，不需要就正常回复。\n\n`;
       systemPrompt += `## @提及\n当消息前有 [@角色名] 标注时，表示发言者在点名对那个角色说话。你也可以在回复中使用 @角色名 来指定对谁说。\n\n`;
@@ -1466,7 +1466,7 @@
       else systemPrompt += `每轮发送 ${min} 条消息。\n\n`;
       systemPrompt += `## 思维链\n在回复开头用「【思考过程】」和「【思考结束】」包裹你的内心思考过程。\n\n`;
       if(apiSettings.bleControlEnabled){
-        systemPrompt += `## 设备控制\n你可以通过蓝牙控制用户身边的设备。\n指令格式：[BLE:强度] 或 [BLE:强度:通道]\n- 强度 0-100（0=停止，50=中等，100=最强）\n- 通道1=默认，通道2=另一个模式\n- 示例：[BLE:50] 中等强度，[BLE:80:2] 通道2高强度，[BLE:0] 停止\n请根据对话氛围和角色人设自由判断是否使用、什么强度，让控制融入对话情境中。\n\n`;
+        systemPrompt += `## 设备控制\n你可以通过蓝牙控制用户身边的设备。\n指令格式：[BLE:强度] 或 [BLE:强度:通道]\n- 强度 1-5（1=最轻，5=最强）\n- 通道1=默认，通道2=另一个模式\n- 示例：[BLE:3] 中等强度，[BLE:5:2] 通道2最强，[BLE:0] 停止\n请根据对话氛围和角色人设自由判断是否使用、什么强度，让控制融入对话情境中。\n\n`;
       }
       systemPrompt += `## 撤回\n可以撤回你之前发送过的消息。\n你的最近一条历史消息 → [RECALL:1]，再上一条 → [RECALL:2]，以此类推\n本轮你输出的第1条 → [RECALL:0]，第2条 → [RECALL:-1]，以此类推\n如需撤回就在回复中插入对应指令，不需要就正常回复。\n\n`;
 
@@ -1832,8 +1832,8 @@
     if(!bleDevice?.gatt?.connected){ addLog('error','BLE: 设备未连接'); return false; }
     const v = Math.max(0, Math.min(100, parseInt(value)||0));
     const ch = channel === 2 ? 0x01 : 0x02;
-    const powerByte = Math.round(0x40 + (v / 100) * 38);
-    return bleSendRaw([0xA5, 0x02, ch, powerByte, 0x5A]);
+    const level = Math.max(1, Math.min(5, Math.ceil(v / 20)));
+    return bleSendRaw([0xA5, 0x02, ch, level, 0x5A]);
   }
   async function bleStop(){
     if(!bleDevice?.gatt?.connected) return;
@@ -1894,7 +1894,7 @@
     while((match = regex.exec(content)) !== null){
       const val = parseInt(match[1])||0;
       const ch = parseInt(match[2])||1;
-      if(val === 0) await bleStop();
+      if(val <= 0) await bleStop();
       else await bleWriteValue(val, ch);
       // 聊天界面显示控制气泡
       const label = val === 0 ? '🎮 设备已停止' : `🎮 强度 ${val}%${ch===2?' (通道2)':''}`;
