@@ -929,7 +929,7 @@
   chatBackBtn.addEventListener('click',()=>{ if(autoReplyInProgress) return; if(chatHistoryPushed && chatViewWrap.classList.contains('active')){ history.back() } else { saveGlobalsToActiveChar(); showView('messages') } });
   function getLastMessagePreview(character){ const msgs = character.chatMessages || []; if(msgs.length===0) return '暂无消息'; const last = msgs[msgs.length-1]; if(last.role==='hint') return last.text; const who = last.role==='user'?'我':(character.type==='group' && last.senderName ? last.senderName : (character.name||'角色')); const txt = (last.text||'').substring(0,30); return who+': '+txt+(last.text && last.text.length>30?'...':'') }
   function renderCharacterList(filterText){ if(!characterList) return; let filtered = characters; if(filterText && filterText.trim()){ const q = filterText.trim().toLowerCase(); filtered = characters.filter(c=>c.name.toLowerCase().includes(q)) } filtered.sort((a,b)=>{ if(a.pinned && !b.pinned) return -1; if(!a.pinned && b.pinned) return 1; const aMsgs = a.chatMessages||[]; const bMsgs = b.chatMessages||[]; const aTs = aMsgs.length>0?(aMsgs[aMsgs.length-1].timestamp||0):0; const bTs = bMsgs.length>0?(bMsgs[bMsgs.length-1].timestamp||0):0; return bTs - aTs; }); const now = Date.now(); characterList.innerHTML = filtered.map(c=>{ const isGroup = c.type === 'group'; const memberCount = isGroup ? ((c.members ? c.members.length : 0) + ((c.selectedUserPersonaIds && c.selectedUserPersonaIds.length) || 1)) : 0; const avatarHtml = c.avatarType==='image' && c.avatarSrc ? `<div class="char-card-avatar" style="background-image:url(${escapeHtml(c.avatarSrc)});background-size:cover;"></div>` : `<div class="char-card-avatar" style="background:linear-gradient(135deg,#a8e063,#56ab2f);">${escapeHtml(c.avatarEmoji||'🌙')}</div>`; const msgs = c.chatMessages || []; const lastMsg = msgs.length>0?msgs[msgs.length-1]:null; const lastTs = lastMsg?(lastMsg.timestamp||0):0; const timeStr = lastTs?formatRelativeTime(lastTs,now):''; const unread = c.unreadCount || 0; const pinHtml = c.pinned ? '<span class="pin-badge">📌</span>' : ''; const nameDisplay = isGroup ? `${escapeHtml(c.name)} (${memberCount})` : escapeHtml(c.name); return `<div class="char-card${c.pinned?' pinned':''}" data-char-id="${escapeHtml(c.id)}" data-char-name="${escapeHtml(c.name)}">${avatarHtml}<div class="char-card-info"><div class="char-card-name">${nameDisplay}${pinHtml}</div><div class="char-card-preview">${escapeHtml(getLastMessagePreview(c))}</div></div><div class="char-card-time" data-timestamp="${lastTs}">${timeStr}</div><div class="char-card-unread" data-char-id="${escapeHtml(c.id)}" style="display:${unread>0?'flex':'none'}"><span class="unread-count">${unread>99?'99+':unread}</span></div></div>`; }).join(''); characterList.querySelectorAll('.char-card').forEach(card=>{ card.addEventListener('click',function(){ openCharacterChat(this.dataset.charId) }); let longPressTimer; const startLongPress = (e)=>{ longPressTimer = setTimeout(()=>{ showCharActionMenu(card.dataset.charId, card.dataset.charName) },600) }; const cancelLongPress = ()=>clearTimeout(longPressTimer); card.addEventListener('touchstart',startLongPress,{passive:true}); card.addEventListener('touchend',cancelLongPress); card.addEventListener('touchmove',cancelLongPress); card.addEventListener('mousedown',startLongPress); card.addEventListener('mouseup',cancelLongPress); card.addEventListener('mouseleave',cancelLongPress) }); }
-  function openCharacterChat(charId){ if(autoReplyInProgress){ alert('自动回复处理中，请稍候再切换'); return; } saveGlobalsToActiveChar(); activeCharacterId = charId; save('activeCharacterId',activeCharacterId); loadActiveCharToGlobals(); unreadCount = 0; saveGlobalsToActiveChar(); updateUnreadDisplay(); refreshAllUIForActiveChar(); if(!chatHistoryPushed){ history.pushState({chatView:true},'',location.href); chatHistoryPushed = true } showView('chat'); reloadChatUI(); chatArea.scrollTop = chatArea.scrollHeight; }
+  function openCharacterChat(charId){ if(autoReplyInProgress){ alert('自动回复处理中，请稍候再切换'); return; } saveGlobalsToActiveChar(); activeCharacterId = charId; save('activeCharacterId',activeCharacterId); loadActiveCharToGlobals(); unreadCount = 0; saveGlobalsToActiveChar(); updateUnreadDisplay(); refreshAllUIForActiveChar(); if(!chatHistoryPushed){ history.pushState({chatView:true},'',location.href); chatHistoryPushed = true } showView('chat'); reloadChatUI(); chatArea.scrollTop = chatArea.scrollHeight; const phoneEl=document.getElementById('phoneRoot'); if(phoneEl && !phoneEl.classList.contains('css-fullscreen')){ phoneEl.classList.add('css-fullscreen'); try{ document.documentElement.requestFullscreen?.(); }catch(e){} } }
   function deleteCharacter(charId){ characters = characters.filter(c=>c.id!==charId); if(activeCharacterId===charId){ activeCharacterId = characters.length>0?characters[0].id:null; save('activeCharacterId',activeCharacterId); loadActiveCharToGlobals(); refreshAllUIForActiveChar(); reloadChatUI() } saveAllData(); renderCharacterList(charSearchInput?.value||''); updateUnreadDisplay() }
   function refreshAllUIForActiveChar(){ try{
     const isGroup = chatType === 'group';
@@ -1210,13 +1210,13 @@
   function syncHistoryFromChat(){ messageHistory = chatMessages.filter(m=>m.role!=='hint').map(m=>{ if(m.role==='user' && m.recalled) return {role:'user', content:'[用户撤回了一条消息]'}; if(m.role==='dog' && m.recalled) return {role:'assistant', content:'[AI撤回了一条消息]'}; return {role: m.role==='user'?'user':'assistant', content: m.text} }); save('messageHistory',messageHistory) }
   function createTimeStampDiv(ts){ const div = document.createElement('div'); div.className='time-stamp'; div.dataset.timestamp = ts; div.textContent = formatTimeDivider(ts,Date.now()); return div }
   function addCenteredHint(text){ const div = document.createElement('div'); div.className='time-stamp'; div.textContent = text; chatArea.appendChild(div); chatArea.scrollTop = chatArea.scrollHeight; }
-  function reloadChatUI(){ const children = chatArea.children; while(children.length>1) chatArea.removeChild(children[1]); let lastTs = null; chatMessages.forEach(msg=>{ ensureMsgTimestamp(msg); const ts = msg.timestamp; if(lastTs===null || (ts-lastTs)>=300000){ chatArea.appendChild(createTimeStampDiv(ts)); lastTs = ts } else { lastTs = Math.max(lastTs,ts) } if(msg.role==='hint'){ const hintDiv = document.createElement('div'); hintDiv.className='time-stamp'; hintDiv.textContent = msg.text; chatArea.appendChild(hintDiv); } else if(msg.role==='user') chatArea.appendChild(createUserMsg(msg.text,msg.id,msg.quoteText,msg.quoteRole,msg.quoteId,msg.senderId,msg.recalled,msg.mentionName)); else chatArea.appendChild(createDogMsg(msg.text,msg.reasoning,true,msg.id,msg.quoteText,msg.quoteRole,msg.quoteId,msg.senderId,msg.recalled,msg.recalledText, msg.senderName)); }); chatArea.scrollTop = chatArea.scrollHeight }
+  function reloadChatUI(keepScroll=false){ const savedScroll = keepScroll ? chatArea.scrollTop : -1; const children = chatArea.children; while(children.length>1) chatArea.removeChild(children[1]); let lastTs = null; chatMessages.forEach(msg=>{ ensureMsgTimestamp(msg); const ts = msg.timestamp; if(lastTs===null || (ts-lastTs)>=300000){ chatArea.appendChild(createTimeStampDiv(ts)); lastTs = ts } else { lastTs = Math.max(lastTs,ts) } if(msg.role==='hint'){ const hintDiv = document.createElement('div'); hintDiv.className='time-stamp'; hintDiv.textContent = msg.text; chatArea.appendChild(hintDiv); } else if(msg.role==='user') chatArea.appendChild(createUserMsg(msg.text,msg.id,msg.quoteText,msg.quoteRole,msg.quoteId,msg.senderId,msg.recalled,msg.mentionName)); else chatArea.appendChild(createDogMsg(msg.text,msg.reasoning,true,msg.id,msg.quoteText,msg.quoteRole,msg.quoteId,msg.senderId,msg.recalled,msg.recalledText, msg.senderName)); }); if(savedScroll >= 0) chatArea.scrollTop = savedScroll; else chatArea.scrollTop = chatArea.scrollHeight }
   function updateQuoteHint(){ if(currentQuote){ const who = currentQuote.role==='user'?'我':remarkVal||'月'; quoteTextSpan.textContent = `引用 ${who}: ${currentQuote.text.substring(0,30)}`; quoteHint.style.display = 'flex' } else quoteHint.style.display = 'none' }
   function updateSendHint(){ if(pendingUserMessages.length>0){ sendHint.style.display='flex'; sendHintText.textContent = `积${pendingUserMessages.length}条·三击回复` } else { sendHint.style.display='none' } }
   clearPendingBtn.addEventListener('click',()=>{ pendingUserMessages=[]; updateSendHint(); clickCount=0; if(clickTimer) clearTimeout(clickTimer) });
   function buildChatUrl(u){ let url = u.trim().replace(/\/+$/,''); if(url.endsWith('/chat/completions')) return url; if(url.endsWith('/v1')) return url+'/chat/completions'; if(!url.includes('/v1/')) return url+'/v1/chat/completions'; return url+'/chat/completions' }
   function getFormattedUserContent(text,quoteText){ if(quoteText){ const who = currentQuote?.role==='user'?'我':remarkVal||'月'; return `[用户引用了来自"${who}"的消息：\n"${quoteText}"\n---]\n${text}` } return text }
-  function startInlineEdit(msgId){ const wrapper = document.getElementById('msg-'+msgId); if(!wrapper) return; const bubble = wrapper.querySelector('.bubble-left, .bubble-right'); const msgText = bubble.querySelector('.msg-text'); if(!msgText || bubble.querySelector('.msg-edit-container')) return; const originalText = msgText.childNodes[0]?.textContent||''; const editContainer = document.createElement('div'); editContainer.className='msg-edit-container'; const textarea = document.createElement('textarea'); textarea.className='msg-edit-textarea'; textarea.value = originalText; textarea.rows = 1; const actions = document.createElement('div'); actions.className='msg-edit-actions'; const saveBtn = document.createElement('button'); saveBtn.className='msg-edit-save'; saveBtn.textContent='保存'; const cancelBtn = document.createElement('button'); cancelBtn.className='msg-edit-cancel'; cancelBtn.textContent='取消'; actions.appendChild(saveBtn); actions.appendChild(cancelBtn); editContainer.appendChild(textarea); editContainer.appendChild(actions); msgText.style.display='none'; bubble.insertBefore(editContainer, msgText.nextSibling); autoResizeTextarea(textarea); textarea.focus(); const cleanup = ()=>{ if(editContainer.parentNode) editContainer.parentNode.removeChild(editContainer); msgText.style.display='' }; saveBtn.addEventListener('click',()=>{ const newText = textarea.value.trim(); if(newText){ const msg = chatMessages.find(m=>m.id===msgId); if(msg){ msg.text = newText; saveChatHistory(); reloadChatUI() } } cleanup() }); cancelBtn.addEventListener('click',()=>{ cleanup() }) }
+  function startInlineEdit(msgId){ const wrapper = document.getElementById('msg-'+msgId); if(!wrapper) return; const bubble = wrapper.querySelector('.bubble-left, .bubble-right'); const msgText = bubble.querySelector('.msg-text'); if(!msgText || bubble.querySelector('.msg-edit-container')) return; const originalText = msgText.childNodes[0]?.textContent||''; const editContainer = document.createElement('div'); editContainer.className='msg-edit-container'; const textarea = document.createElement('textarea'); textarea.className='msg-edit-textarea'; textarea.value = originalText; textarea.rows = 1; const actions = document.createElement('div'); actions.className='msg-edit-actions'; const saveBtn = document.createElement('button'); saveBtn.className='msg-edit-save'; saveBtn.textContent='保存'; const cancelBtn = document.createElement('button'); cancelBtn.className='msg-edit-cancel'; cancelBtn.textContent='取消'; actions.appendChild(saveBtn); actions.appendChild(cancelBtn); editContainer.appendChild(textarea); editContainer.appendChild(actions); msgText.style.display='none'; bubble.insertBefore(editContainer, msgText.nextSibling); autoResizeTextarea(textarea); textarea.focus(); const cleanup = ()=>{ if(editContainer.parentNode) editContainer.parentNode.removeChild(editContainer); msgText.style.display='' }; saveBtn.addEventListener('click',()=>{ const newText = textarea.value.trim(); if(newText){ const msg = chatMessages.find(m=>m.id===msgId); if(msg){ msg.text = newText; saveChatHistory(); reloadChatUI(true) } } cleanup() }); cancelBtn.addEventListener('click',()=>{ cleanup() }) }
   function getPersonInstruction(){
     const aiPerson = apiSettings.aiPerson || 'first'; const userPerson = apiSettings.userPerson || 'second';
     const characterName = charSettings.name || remarkVal || '角色'; const userName = (getActiveUserPersona()?.name) || '用户';
@@ -1544,7 +1544,7 @@
         if(apiSettings.crossChatEnabled){
           const sName = chatType==='group' && options.allowedMemberIds?.length===1 ? members.find(x=>x.id===options.allowedMemberIds[0])?.name : remarkVal;
           cleanedForSeg = processCrossChatSwitch(cleanText, sName, options.allowedMemberIds?.[0]);
-          cleanedForSeg = cleanedForSeg.replace(/\[改名[：:].+?\]/g,'').trim();
+          cleanedForSeg = cleanedForSeg.replace(/\[改名[：:].+?\]/g,'').replace(/\[切换[：:](?:私聊|见面|群聊)[：:].+?\]/g,'').trim();
         }
         cleanedForSeg = await processBleCommands(cleanedForSeg);
         let segmentsRaw = cleanedForSeg.split(/\n{2,}/).filter(s=>s.trim()!==''); if(segmentsRaw.length===0 && cleanedForSeg) segmentsRaw = [cleanedForSeg];
@@ -1933,12 +1933,10 @@
       if(val <= 0) await bleStop();
       else await bleWriteValue(val, ch);
       // 聊天界面显示控制气泡
-      const label = val === 0 ? '🎮 设备已停止' : `🎮 强度 ${val}%${ch===2?' (通道2)':''}`;
-      const hintDiv = document.createElement('div');
-      hintDiv.className = 'time-stamp';
-      hintDiv.style.cssText = 'background:#e8f5e9;color:#2e7d32;padding:4px 12px;border-radius:12px;font-size:12px;display:inline-block;margin:4px auto;';
-      hintDiv.textContent = label;
-      if(chatArea){ const wrapper = document.createElement('div'); wrapper.style.textAlign='center'; wrapper.appendChild(hintDiv); chatArea.appendChild(wrapper); }
+      const label = `🎮 强度 ${Math.max(1,val)}%${ch===2?' (通道2)':''}`;
+      const bleHintMsg = {id:'msg_'+Date.now().toString(36)+Math.random().toString(36).substr(2,5), role:'hint', text:label, timestamp:Date.now()};
+      chatMessages.push(bleHintMsg); saveChatHistory();
+      addCenteredHint(label);
       content = content.replace(match[0], '');
     }
     return content.trim();
@@ -1955,7 +1953,7 @@
         const member = getMemberById(senderId);
         if(member){ member.displayName = newName; saveGlobalsToActiveChar(); saveAllData(); }
       }
-      cleaned = cleaned.replace(match[0], '');
+      cleaned = '';
     }
     return cleaned.trim();
   }
@@ -1987,7 +1985,7 @@
         chatMessages.push({id:'msg_'+Date.now().toString(36)+Math.random().toString(36).substr(2,5), role:'hint', text:hintText, timestamp:Date.now()});
         saveChatHistory();
       }
-      cleaned = cleaned.replace(match[0], '');
+      cleaned = '';
     }
     return cleaned.trim();
   }
@@ -2180,6 +2178,16 @@
   function startAutoReplyTimer(){ stopAutoReplyTimer(); autoReplyTimer = setInterval(checkAutoReply, 10000); }
   function stopAutoReplyTimer(){ if(autoReplyTimer){ clearInterval(autoReplyTimer); autoReplyTimer = null; } }
   messageInput.addEventListener('focus', () => { if (window.visualViewport) { const viewport = window.visualViewport; const handler = () => { requestAnimationFrame(() => { chatArea.scrollTop = chatArea.scrollHeight; }); }; viewport.addEventListener('resize', handler); viewport.addEventListener('scroll', handler); const blurHandler = () => { viewport.removeEventListener('resize', handler); viewport.removeEventListener('scroll', handler); messageInput.removeEventListener('blur', blurHandler); }; messageInput.addEventListener('blur', blurHandler); } });
+  // 自动备份：页面加载时保存上一次的完整数据
+  try{
+    const charData = localStorage.getItem('dogchat_multi_characters');
+    if(charData && charData.length > 100){
+      localStorage.setItem('dogchat_backup_characters', charData);
+      localStorage.setItem('dogchat_backup_time', new Date().toLocaleString('zh-CN'));
+      addLog('info','自动备份已保存 ('+Math.round(charData.length/1024)+'KB)');
+    }
+  }catch(e){}
+
   function initAll(){
     loadActiveCharToGlobals(); refreshAllUIForActiveChar();
     remarkInput.value = remarkVal; signatureInput.value = signatureVal;
