@@ -481,7 +481,7 @@
       <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center">
         <span style="font-size:12px;color:#666">无极范围</span>
         <span style="font-size:12px">0x</span><input id="bleRangeMin" value="40" style="width:40px;padding:4px;border:1px solid #ddd;border-radius:4px;font-family:monospace;font-size:12px">
-        <span style="font-size:12px">~0x</span><input id="bleRangeMax" value="66" style="width:40px;padding:4px;border:1px solid #ddd;border-radius:4px;font-family:monospace;font-size:12px">
+        <span style="font-size:12px">~0x</span><input id="bleRangeMax" value="9A" style="width:40px;padding:4px;border:1px solid #ddd;border-radius:4px;font-family:monospace;font-size:12px">
         <button id="bleRangeSave" style="padding:4px 10px;border:none;border-radius:6px;background:#07c160;color:#fff;font-size:12px;cursor:pointer">应用</button>
       </div>
       <div style="margin-bottom:12px">
@@ -1834,7 +1834,7 @@
       return true;
     } catch(e){ addLog('error','BLE写入失败: '+e.message); return false; }
   }
-  let bleRangeMin = 0x40, bleRangeMax = 0x66;
+  let bleRangeMin = 0x40, bleRangeMax = 0x9A;
   const savedBleRange = localStorage.getItem('dogchat_ble_range');
   if(savedBleRange){ try{ const r=JSON.parse(savedBleRange); bleRangeMin=r.min; bleRangeMax=r.max; }catch(e){} }
 
