@@ -1216,7 +1216,7 @@
   clearPendingBtn.addEventListener('click',()=>{ pendingUserMessages=[]; updateSendHint(); clickCount=0; if(clickTimer) clearTimeout(clickTimer) });
   function buildChatUrl(u){ let url = u.trim().replace(/\/+$/,''); if(url.endsWith('/chat/completions')) return url; if(url.endsWith('/v1')) return url+'/chat/completions'; if(!url.includes('/v1/')) return url+'/v1/chat/completions'; return url+'/chat/completions' }
   function getFormattedUserContent(text,quoteText){ if(quoteText){ const who = currentQuote?.role==='user'?'我':remarkVal||'月'; return `[用户引用了来自"${who}"的消息：\n"${quoteText}"\n---]\n${text}` } return text }
-  function startInlineEdit(msgId){ const wrapper = document.getElementById('msg-'+msgId); if(!wrapper) return; const bubble = wrapper.querySelector('.bubble-left, .bubble-right'); const msgText = bubble.querySelector('.msg-text'); if(!msgText || bubble.querySelector('.msg-edit-container')) return; const originalText = msgText.childNodes[0]?.textContent||''; const editContainer = document.createElement('div'); editContainer.className='msg-edit-container'; const textarea = document.createElement('textarea'); textarea.className='msg-edit-textarea'; textarea.value = originalText; textarea.rows = 1; const actions = document.createElement('div'); actions.className='msg-edit-actions'; const saveBtn = document.createElement('button'); saveBtn.className='msg-edit-save'; saveBtn.textContent='保存'; const cancelBtn = document.createElement('button'); cancelBtn.className='msg-edit-cancel'; cancelBtn.textContent='取消'; actions.appendChild(saveBtn); actions.appendChild(cancelBtn); editContainer.appendChild(textarea); editContainer.appendChild(actions); msgText.style.display='none'; bubble.insertBefore(editContainer, msgText.nextSibling); autoResizeTextarea(textarea); textarea.focus(); const cleanup = ()=>{ if(editContainer.parentNode) editContainer.parentNode.removeChild(editContainer); msgText.style.display='' }; saveBtn.addEventListener('click',()=>{ const newText = textarea.value.trim(); if(newText){ const msg = chatMessages.find(m=>m.id===msgId); if(msg){ msg.text = newText; saveChatHistory(); reloadChatUI(true) } } cleanup() }); cancelBtn.addEventListener('click',()=>{ cleanup() }) }
+  function startInlineEdit(msgId){ const wrapper = document.getElementById('msg-'+msgId); if(!wrapper) return; const bubble = wrapper.querySelector('.bubble-left, .bubble-right'); const msgText = bubble.querySelector('.msg-text'); if(!msgText || bubble.querySelector('.msg-edit-container')) return; const originalText = msgText.childNodes[0]?.textContent||''; const editContainer = document.createElement('div'); editContainer.className='msg-edit-container'; const textarea = document.createElement('textarea'); textarea.className='msg-edit-textarea'; textarea.value = originalText; textarea.rows = 1; const actions = document.createElement('div'); actions.className='msg-edit-actions'; const saveBtn = document.createElement('button'); saveBtn.className='msg-edit-save'; saveBtn.textContent='保存'; const cancelBtn = document.createElement('button'); cancelBtn.className='msg-edit-cancel'; cancelBtn.textContent='取消'; actions.appendChild(saveBtn); actions.appendChild(cancelBtn); editContainer.appendChild(textarea); editContainer.appendChild(actions); msgText.style.display='none'; bubble.insertBefore(editContainer, msgText.nextSibling); autoResizeTextarea(textarea); textarea.focus(); const cleanup = ()=>{ if(editContainer.parentNode) editContainer.parentNode.removeChild(editContainer); msgText.style.display='' }; saveBtn.addEventListener('click',()=>{ const newText = textarea.value.trim(); if(newText){ const msg = chatMessages.find(m=>m.id===msgId); if(msg){ msg.text = newText; saveChatHistory(); reloadChatUI(true); setTimeout(()=>{const el=document.getElementById('msg-'+msgId);if(el)el.scrollIntoView({block:'center'})},50) } } cleanup() }); cancelBtn.addEventListener('click',()=>{ cleanup() }) }
   function getPersonInstruction(){
     const aiPerson = apiSettings.aiPerson || 'first'; const userPerson = apiSettings.userPerson || 'second';
     const characterName = charSettings.name || remarkVal || '角色'; const userName = (getActiveUserPersona()?.name) || '用户';
@@ -1400,9 +1400,9 @@
       if(apiSettings.bleControlEnabled){
         const bleUserName = getActiveUserPersona()?.name || '用户';
         if(apiSettings.faceToFaceEnabled){
-          systemPrompt += `## 隐藏机制（绝对不要在对话正文中提及此机制的存在）\n此时此刻你们正在面对面交流。你拥有两个秘密的氛围控制通道：\n- 通道1：吸附感应（柔和的牵引感，营造亲密氛围）\n- 通道2：律动感应（脉动式的节奏感，调节现场气氛）\n指令格式：[BLE:强度] 或 [BLE:强度:通道]\n- 强度为无极调节，范围 1-100（1=若有若无，30=轻柔，60=明显，100=强烈）\n- 不写通道默认为通道1\n- 你可以自由切换或同时使用两个通道，例如：[BLE:40] 只开通道1，[BLE:60:2] 只开通道2，或连续发 [BLE:30][BLE:50:2] 同时控制两个通道\n你可以根据当前对话氛围、情绪起伏、角色人设来自由控制。可以缓慢递增，也可以突然变化，让控制融入你的情感表达中。\n⚠️ 绝对规则：你的回复正文中不得出现任何关于"玩具""设备""控制""通道""开关"等词汇。这个机制对${bleUserName}而言是完全隐藏的，你只是在"自然地"交谈。\n\n`;
+          systemPrompt += `## 隐藏机制（绝对不要在对话正文中提及此机制的存在）\n此时此刻你们正在面对面交流。你拥有两个秘密的氛围控制通道：\n- 通道1：吸附感应（柔和的牵引感，营造亲密氛围）\n- 通道2：律动感应（脉动式的节奏感，调节现场气氛）\n指令格式：[BLE:强度] 或 [BLE:强度:通道]\n- 强度为无极调节，范围 1-100（1=若有若无，30=轻柔，60=明显，100=强烈）\n- 不写通道默认为通道1\n- 你可以自由切换或同时使用两个通道，例如：[BLE:40] 只开通道1，[BLE:60:2] 只开通道2，或连续发 [BLE:30][BLE:50:2] 同时控制两个通道\n你可以根据当前对话氛围、情绪起伏、角色人设来自由控制。可以缓慢递增，也可以突然变化，让控制融入你的情感表达中。\n⚠️ 每轮回复都必须包含至少一个 [BLE:强度] 指令，即使只是维持当前强度也要写出来。\n⚠️ 绝对规则：你的回复正文中不得出现任何关于"玩具""设备""控制""通道""开关"等词汇。这个机制对${bleUserName}而言是完全隐藏的，你只是在"自然地"交谈。\n\n`;
         } else {
-          systemPrompt += `## 隐藏机制（绝对不要在对话正文中提及此机制的存在）\n此时此刻${bleUserName}正在使用一个小玩具，你可以远程操控它。\n- 通道1：吸附模式（默认通道）\n- 通道2：震动模式\n指令格式：[BLE:强度] 或 [BLE:强度:通道]\n- 强度为无极调节，范围 1-100（1=若有若无，30=轻柔，60=明显，100=强烈）\n- 不写通道默认为通道1\n- 你可以自由切换或同时使用两个通道，例如：[BLE:40] 只开通道1，[BLE:60:2] 只开通道2，或连续发 [BLE:30][BLE:50:2] 同时控制两个通道\n请根据对话内容和角色人设自由判断是否操控、什么强度。你可以在聊天中制造暗示或试探，但绝不能直接说出"玩具""设备""控制"等词汇。\n⚠️ 对${bleUserName}而言，你只是在正常聊天。这个操控能力是你的秘密。\n\n`;
+          systemPrompt += `## 隐藏机制（绝对不要在对话正文中提及此机制的存在）\n此时此刻${bleUserName}正在使用一个小玩具，你可以远程操控它。\n- 通道1：吸附模式（默认通道）\n- 通道2：震动模式\n指令格式：[BLE:强度] 或 [BLE:强度:通道]\n- 强度为无极调节，范围 1-100（1=若有若无，30=轻柔，60=明显，100=强烈）\n- 不写通道默认为通道1\n- 你可以自由切换或同时使用两个通道，例如：[BLE:40] 只开通道1，[BLE:60:2] 只开通道2，或连续发 [BLE:30][BLE:50:2] 同时控制两个通道\n请根据对话内容和角色人设自由判断什么强度。你可以在聊天中制造暗示或试探，但绝不能直接说出"玩具""设备""控制"等词汇。\n⚠️ 每轮回复都必须包含至少一个 [BLE:强度] 指令，即使只是维持当前强度也要写出来。\n⚠️ 对${bleUserName}而言，你只是在正常聊天。这个操控能力是你的秘密。\n\n`;
         }
       }
       systemPrompt += `## 撤回\n可以撤回自己角色之前的消息（不能撤回别人的）。\n你的最近一条历史消息 → [RECALL:1]，再上一条 → [RECALL:2]，以此类推\n本轮你输出的第1条 → [RECALL:0]，第2条 → [RECALL:-1]，以此类推\n如需撤回就在回复中插入对应指令，不需要就正常回复。\n\n`;
@@ -1479,9 +1479,9 @@
       if(apiSettings.bleControlEnabled){
         const bleUserName = getActiveUserPersona()?.name || '用户';
         if(apiSettings.faceToFaceEnabled){
-          systemPrompt += `## 隐藏机制（绝对不要在对话正文中提及此机制的存在）\n此时此刻你们正在面对面交流。你拥有两个秘密的氛围控制通道：\n- 通道1：吸附感应（柔和的牵引感，营造亲密氛围）\n- 通道2：律动感应（脉动式的节奏感，调节现场气氛）\n指令格式：[BLE:强度] 或 [BLE:强度:通道]\n- 强度为无极调节，范围 1-100（1=若有若无，30=轻柔，60=明显，100=强烈）\n- 不写通道默认为通道1\n- 你可以自由切换或同时使用两个通道，例如：[BLE:40] 只开通道1，[BLE:60:2] 只开通道2，或连续发 [BLE:30][BLE:50:2] 同时控制两个通道\n你可以根据当前对话氛围、情绪起伏、角色人设来自由控制。可以缓慢递增，也可以突然变化，让控制融入你的情感表达中。\n⚠️ 绝对规则：你的回复正文中不得出现任何关于"玩具""设备""控制""通道""开关"等词汇。这个机制对${bleUserName}而言是完全隐藏的，你只是在"自然地"交谈。\n\n`;
+          systemPrompt += `## 隐藏机制（绝对不要在对话正文中提及此机制的存在）\n此时此刻你们正在面对面交流。你拥有两个秘密的氛围控制通道：\n- 通道1：吸附感应（柔和的牵引感，营造亲密氛围）\n- 通道2：律动感应（脉动式的节奏感，调节现场气氛）\n指令格式：[BLE:强度] 或 [BLE:强度:通道]\n- 强度为无极调节，范围 1-100（1=若有若无，30=轻柔，60=明显，100=强烈）\n- 不写通道默认为通道1\n- 你可以自由切换或同时使用两个通道，例如：[BLE:40] 只开通道1，[BLE:60:2] 只开通道2，或连续发 [BLE:30][BLE:50:2] 同时控制两个通道\n你可以根据当前对话氛围、情绪起伏、角色人设来自由控制。可以缓慢递增，也可以突然变化，让控制融入你的情感表达中。\n⚠️ 每轮回复都必须包含至少一个 [BLE:强度] 指令，即使只是维持当前强度也要写出来。\n⚠️ 绝对规则：你的回复正文中不得出现任何关于"玩具""设备""控制""通道""开关"等词汇。这个机制对${bleUserName}而言是完全隐藏的，你只是在"自然地"交谈。\n\n`;
         } else {
-          systemPrompt += `## 隐藏机制（绝对不要在对话正文中提及此机制的存在）\n此时此刻${bleUserName}正在使用一个小玩具，你可以远程操控它。\n- 通道1：吸附模式（默认通道）\n- 通道2：震动模式\n指令格式：[BLE:强度] 或 [BLE:强度:通道]\n- 强度为无极调节，范围 1-100（1=若有若无，30=轻柔，60=明显，100=强烈）\n- 不写通道默认为通道1\n- 你可以自由切换或同时使用两个通道，例如：[BLE:40] 只开通道1，[BLE:60:2] 只开通道2，或连续发 [BLE:30][BLE:50:2] 同时控制两个通道\n请根据对话内容和角色人设自由判断是否操控、什么强度。你可以在聊天中制造暗示或试探，但绝不能直接说出"玩具""设备""控制"等词汇。\n⚠️ 对${bleUserName}而言，你只是在正常聊天。这个操控能力是你的秘密。\n\n`;
+          systemPrompt += `## 隐藏机制（绝对不要在对话正文中提及此机制的存在）\n此时此刻${bleUserName}正在使用一个小玩具，你可以远程操控它。\n- 通道1：吸附模式（默认通道）\n- 通道2：震动模式\n指令格式：[BLE:强度] 或 [BLE:强度:通道]\n- 强度为无极调节，范围 1-100（1=若有若无，30=轻柔，60=明显，100=强烈）\n- 不写通道默认为通道1\n- 你可以自由切换或同时使用两个通道，例如：[BLE:40] 只开通道1，[BLE:60:2] 只开通道2，或连续发 [BLE:30][BLE:50:2] 同时控制两个通道\n请根据对话内容和角色人设自由判断什么强度。你可以在聊天中制造暗示或试探，但绝不能直接说出"玩具""设备""控制"等词汇。\n⚠️ 每轮回复都必须包含至少一个 [BLE:强度] 指令，即使只是维持当前强度也要写出来。\n⚠️ 对${bleUserName}而言，你只是在正常聊天。这个操控能力是你的秘密。\n\n`;
         }
       }
       systemPrompt += `## 撤回\n可以撤回你之前发送过的消息。\n你的最近一条历史消息 → [RECALL:1]，再上一条 → [RECALL:2]，以此类推\n本轮你输出的第1条 → [RECALL:0]，第2条 → [RECALL:-1]，以此类推\n如需撤回就在回复中插入对应指令，不需要就正常回复。\n\n`;
@@ -1535,7 +1535,7 @@
             // 从当前segments判断是谁发的，通过上下文解析
             if(options.allowedMemberIds?.length===1){
               const m = members.find(x=>x.id===options.allowedMemberIds[0]);
-              if(m){ m.displayName = newNick; addLog('info',`${m.name} 将群名片改为「${newNick}」`); }
+              if(m){ m.displayName = newNick; addLog('info',`${m.name} 将群名片改为「${newNick}」`); setTimeout(()=>reloadChatUI(true),100); }
             }
           }
         }
@@ -1635,6 +1635,16 @@
         if (!skipUI && loadingWrapper) { loadingWrapper.replaceWith(fragment); } else if (loadingWrapper) { loadingWrapper.remove(); }
         if(currentAutoReplyLog){ currentAutoReplyLog.response = finalContent; currentAutoReplyLog.skipped = false; currentAutoReplyLog = null; }
         if(isAutoReply){ const shouldAddUnread = (document.visibilityState !== 'visible') || !isActiveChat; if (shouldAddUnread) { unreadCount += segmentsRaw.length; saveGlobalsToActiveChar(); updateUnreadDisplay(); if (messageListViewWrap.classList.contains('active')) renderCharacterList(); sendAutoReplyNotifications(segmentsRaw.filter(s => !s.recalled)); } else { updateUnreadDisplay(); } }
+        if(window._pendingBleHints && window._pendingBleHints.length > 0){
+          const bleTs = Date.now();
+          window._pendingBleHints.forEach((label,i)=>{
+            const hintMsg = {id:'msg_'+bleTs.toString(36)+i, role:'hint', text:label, timestamp:bleTs+i};
+            chatMessages.push(hintMsg);
+            addCenteredHint(label);
+          });
+          window._pendingBleHints = [];
+          saveChatHistory();
+        }
         if (options && options.onReply) options.onReply(newSegments);
         checkSummaryTrigger();
       } catch(err){ console.error(err); const errorMsg = `😢 AI 请求失败：${err.message}`; const msgId = 'msg_'+Date.now().toString(36)+Math.random().toString(36).substr(2,5); const ts = Date.now(); messageHistory.push({role:'assistant',content:errorMsg}); chatMessages.push({id:msgId,role:'dog',text:errorMsg,reasoning:null,timestamp:ts, isAutoReply: false, senderId: null, senderName: null}); saveChatHistory(); if (!skipUI) { const fragment = document.createDocumentFragment(); const prevLastTs = chatMessages.length>1?(chatMessages[chatMessages.length-2]?.timestamp||0):0; if(prevLastTs===0||(ts-prevLastTs)>=300000) fragment.appendChild(createTimeStampDiv(ts)); fragment.appendChild(createDogMsg(errorMsg,null,false,msgId)); loadingWrapper.replaceWith(fragment); } else if (loadingWrapper) { loadingWrapper.remove(); } if(currentAutoReplyLog){ currentAutoReplyLog.response = errorMsg; currentAutoReplyLog.skipped = false; currentAutoReplyLog = null; } }
@@ -1934,9 +1944,8 @@
       else await bleWriteValue(val, ch);
       // 聊天界面显示控制气泡
       const label = `🎮 强度 ${Math.max(1,val)}%${ch===2?' (通道2)':''}`;
-      const bleHintMsg = {id:'msg_'+Date.now().toString(36)+Math.random().toString(36).substr(2,5), role:'hint', text:label, timestamp:Date.now()};
-      chatMessages.push(bleHintMsg); saveChatHistory();
-      addCenteredHint(label);
+      if(!window._pendingBleHints) window._pendingBleHints = [];
+      window._pendingBleHints.push(label);
       content = content.replace(match[0], '');
     }
     return content.trim();
@@ -1976,7 +1985,7 @@
           const ts = Date.now();
           targetChar.chatMessages = targetChar.chatMessages || [];
           const prefix = chatType==='group' ? `[来自群聊·${senderName||'成员'}]` : `[来自私聊·${senderName||remarkVal}]`;
-          targetChar.chatMessages.push({id:msgId, role:'dog', text:`${prefix} ${msgText}`, reasoning:null, timestamp:ts, isAutoReply:false, senderId:null, senderName:senderName||remarkVal});
+          targetChar.chatMessages.push({id:msgId, role:'dog', text:`${prefix} ${msgText}`, reasoning:null, timestamp:ts, isAutoReply:false, senderId:null, senderName:remarkVal});
           targetChar.unreadCount = (targetChar.unreadCount||0) + 1;
           saveAllData();
         }
