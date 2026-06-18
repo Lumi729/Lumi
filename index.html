@@ -1834,12 +1834,16 @@
       return true;
     } catch(e){ addLog('error','BLE写入失败: '+e.message); return false; }
   }
+  let bleRangeMin = 0x40, bleRangeMax = 0x66;
+  const savedBleRange = localStorage.getItem('dogchat_ble_range');
+  if(savedBleRange){ try{ const r=JSON.parse(savedBleRange); bleRangeMin=r.min; bleRangeMax=r.max; }catch(e){} }
+
   async function bleWriteValue(value, channel=1){
     if(!bleDevice?.gatt?.connected){ addLog('error','BLE: 设备未连接'); return false; }
-    const v = Math.max(0, Math.min(100, parseInt(value)||0));
+    const v = Math.max(1, Math.min(100, parseInt(value)||1));
     const ch = channel === 2 ? 0x01 : 0x02;
-    const level = Math.max(1, Math.min(5, Math.ceil(v / 20)));
-    return bleSendRaw([0xA5, 0x02, ch, level, 0x5A]);
+    const powerByte = Math.round(bleRangeMin + (v / 100) * (bleRangeMax - bleRangeMin));
+    return bleSendRaw([0xA5, 0x02, ch, powerByte, 0x5A]);
   }
   async function bleStop(){
     if(!bleDevice?.gatt?.connected) return;
@@ -1852,9 +1856,7 @@
   const bleCmdPatterns = ['01','02','03','05','0A','10','20','40','64','80','FF','AA01','AA02','AA03','AA0A','AA64','AAFF','AA0101','AA0102','AA0103','AA010A','AA0164','AA01FF','AA0201','AA0264','AA0301','AA0364','5501','5502','5503','550A','5564','55FF','550101','550164','5501FF','55AA01','55AA64','55AAFF','A501','A564','A5FF','A50101','A50164','0301','0302','0303','030164','0100','010A','0164','01FF','00010164','F001','FE01','FE64','0001','0064','00FF','080164','AA0301010000','AA030101000A','AA03010100FF','55AA030101000A'];
   async function startBleScan(){
     if(!bleServer?.connected){alert('请先连接设备');return;} bleScanRunning=true;
-    let bleRangeMin = 0x40, bleRangeMax = 0x66;
-  const savedRange = localStorage.getItem('dogchat_ble_range');
-  if(savedRange){ try{ const r=JSON.parse(savedRange); bleRangeMin=r.min; bleRangeMax=r.max; document.getElementById('bleRangeMin').value=bleRangeMin.toString(16); document.getElementById('bleRangeMax').value=bleRangeMax.toString(16); }catch(e){} }
+    try{ if(bleRangeMin) document.getElementById('bleRangeMin').value=bleRangeMin.toString(16); if(bleRangeMax) document.getElementById('bleRangeMax').value=bleRangeMax.toString(16); }catch(e){}
   document.getElementById('bleRangeSave')?.addEventListener('click', ()=>{
     bleRangeMin = parseInt(document.getElementById('bleRangeMin').value, 16) || 0x40;
     bleRangeMax = parseInt(document.getElementById('bleRangeMax').value, 16) || 0x66;
@@ -1882,9 +1884,7 @@
     bleScanRunning=false;document.getElementById('bleStartScanBtn').style.display='block';document.getElementById('bleStopScanBtn').style.display='none';
   }
   function stopBleScan(){bleScanRunning=false;document.getElementById('bleScanLog').innerHTML='已停止！最后显示的指令就是有效的\n'+document.getElementById('bleScanLog').innerHTML;document.getElementById('bleStartScanBtn').style.display='block';document.getElementById('bleStopScanBtn').style.display='none';}
-  let bleRangeMin = 0x40, bleRangeMax = 0x66;
-  const savedRange = localStorage.getItem('dogchat_ble_range');
-  if(savedRange){ try{ const r=JSON.parse(savedRange); bleRangeMin=r.min; bleRangeMax=r.max; document.getElementById('bleRangeMin').value=bleRangeMin.toString(16); document.getElementById('bleRangeMax').value=bleRangeMax.toString(16); }catch(e){} }
+  try{ if(bleRangeMin) document.getElementById('bleRangeMin').value=bleRangeMin.toString(16); if(bleRangeMax) document.getElementById('bleRangeMax').value=bleRangeMax.toString(16); }catch(e){}
   document.getElementById('bleRangeSave')?.addEventListener('click', ()=>{
     bleRangeMin = parseInt(document.getElementById('bleRangeMin').value, 16) || 0x40;
     bleRangeMax = parseInt(document.getElementById('bleRangeMax').value, 16) || 0x66;
