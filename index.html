@@ -1216,7 +1216,7 @@
   clearPendingBtn.addEventListener('click',()=>{ pendingUserMessages=[]; updateSendHint(); clickCount=0; if(clickTimer) clearTimeout(clickTimer) });
   function buildChatUrl(u){ let url = u.trim().replace(/\/+$/,''); if(url.endsWith('/chat/completions')) return url; if(url.endsWith('/v1')) return url+'/chat/completions'; if(!url.includes('/v1/')) return url+'/v1/chat/completions'; return url+'/chat/completions' }
   function getFormattedUserContent(text,quoteText){ if(quoteText){ const who = currentQuote?.role==='user'?'我':remarkVal||'月'; return `[用户引用了来自"${who}"的消息：\n"${quoteText}"\n---]\n${text}` } return text }
-  function startInlineEdit(msgId){ const wrapper = document.getElementById('msg-'+msgId); if(!wrapper) return; const bubble = wrapper.querySelector('.bubble-left, .bubble-right'); const msgText = bubble.querySelector('.msg-text'); if(!msgText || bubble.querySelector('.msg-edit-container')) return; const originalText = msgText.childNodes[0]?.textContent||''; const editContainer = document.createElement('div'); editContainer.className='msg-edit-container'; const textarea = document.createElement('textarea'); textarea.className='msg-edit-textarea'; textarea.value = originalText; textarea.rows = 1; const actions = document.createElement('div'); actions.className='msg-edit-actions'; const saveBtn = document.createElement('button'); saveBtn.className='msg-edit-save'; saveBtn.textContent='保存'; const cancelBtn = document.createElement('button'); cancelBtn.className='msg-edit-cancel'; cancelBtn.textContent='取消'; actions.appendChild(saveBtn); actions.appendChild(cancelBtn); editContainer.appendChild(textarea); editContainer.appendChild(actions); msgText.style.display='none'; bubble.insertBefore(editContainer, msgText.nextSibling); autoResizeTextarea(textarea); textarea.focus(); const cleanup = ()=>{ if(editContainer.parentNode) editContainer.parentNode.removeChild(editContainer); msgText.style.display='' }; saveBtn.addEventListener('click',()=>{ const newText = textarea.value.trim(); if(newText){ const msg = chatMessages.find(m=>m.id===msgId); if(msg){ msg.text = newText; saveChatHistory(); reloadChatUI(true); setTimeout(()=>{const el=document.getElementById('msg-'+msgId);if(el)el.scrollIntoView({block:'center'})},50) } } cleanup() }); cancelBtn.addEventListener('click',()=>{ cleanup() }) }
+  function startInlineEdit(msgId){ isInlineEditing = true; const wrapper = document.getElementById('msg-'+msgId); if(!wrapper) return; const bubble = wrapper.querySelector('.bubble-left, .bubble-right'); const msgText = bubble.querySelector('.msg-text'); if(!msgText || bubble.querySelector('.msg-edit-container')) return; const originalText = msgText.childNodes[0]?.textContent||''; const editContainer = document.createElement('div'); editContainer.className='msg-edit-container'; const textarea = document.createElement('textarea'); textarea.className='msg-edit-textarea'; textarea.value = originalText; textarea.rows = 1; const actions = document.createElement('div'); actions.className='msg-edit-actions'; const saveBtn = document.createElement('button'); saveBtn.className='msg-edit-save'; saveBtn.textContent='保存'; const cancelBtn = document.createElement('button'); cancelBtn.className='msg-edit-cancel'; cancelBtn.textContent='取消'; actions.appendChild(saveBtn); actions.appendChild(cancelBtn); editContainer.appendChild(textarea); editContainer.appendChild(actions); msgText.style.display='none'; bubble.insertBefore(editContainer, msgText.nextSibling); autoResizeTextarea(textarea); textarea.focus(); const cleanup = ()=>{ if(editContainer.parentNode) editContainer.parentNode.removeChild(editContainer); msgText.style.display='' }; saveBtn.addEventListener('click',()=>{ const newText = textarea.value.trim(); if(newText){ const msg = chatMessages.find(m=>m.id===msgId); if(msg){ msg.text = newText; saveChatHistory(); isInlineEditing = false; reloadChatUI(true); setTimeout(()=>{const el=document.getElementById('msg-'+msgId);if(el)el.scrollIntoView({block:'center'})},150) } } cleanup() }); cancelBtn.addEventListener('click',()=>{ cleanup() }) }
   function getPersonInstruction(){
     const aiPerson = apiSettings.aiPerson || 'first'; const userPerson = apiSettings.userPerson || 'second';
     const characterName = charSettings.name || remarkVal || '角色'; const userName = (getActiveUserPersona()?.name) || '用户';
@@ -1551,8 +1551,9 @@
         let newSegments = [];
         let skipReasons = [];
         if(chatType==='group'){
-          const parsedSegments = parseGroupResponse(finalContent);
+          const parsedSegments = parseGroupResponse(cleanedForSeg);
           parsedSegments.forEach(seg => {
+            seg.text = seg.text.replace(/\[BLE[:：]\d+(?:[:：]\d)?\]/g,'').replace(/\[切换[到]?[：:]?(?:私聊|见面|群聊)[：:].+?\]/g,'').replace(/\[改名[：:].+?\]/g,'').trim();
             if(seg.text.startsWith('[AUTO_SKIP]')){
               let reason = seg.text.replace('[AUTO_SKIP]','').trim() || '未提供具体理由';
               reason = reason.replace(/^(理由[：:]?\s*)/, '').trim();
@@ -1742,6 +1743,7 @@
   const groupOnlySettings = document.getElementById('groupOnlySettings');
   const mentionHint = document.getElementById('mentionHint'), mentionText = document.getElementById('mentionText'), mentionCancelBtn = document.getElementById('mentionCancelBtn');
   let currentMention = null;
+  let isInlineEditing = false;
   if(crossChatCheck) crossChatCheck.addEventListener('change', function(){ apiSettings.crossChatEnabled = this.checked; saveGlobalsToActiveChar(); });
   if(nicknameCheck) nicknameCheck.addEventListener('change', function(){ apiSettings.nicknameChangeEnabled = this.checked; saveGlobalsToActiveChar(); });
   const faceToFaceCheckEl = document.getElementById('faceToFaceCheck');
@@ -2216,10 +2218,10 @@
     window.visualViewport.addEventListener('resize', ()=>{
       if(document.fullscreenElement || document.webkitFullscreenElement){
         if(mcEl) mcEl.style.height = window.visualViewport.height + 'px';
-        setTimeout(()=>{ if(chatArea) chatArea.scrollTop = chatArea.scrollHeight; }, 50);
+        if(!isInlineEditing) setTimeout(()=>{ if(chatArea) chatArea.scrollTop = chatArea.scrollHeight; }, 50);
       } else if(mcEl && mcEl.classList.contains('css-fullscreen')){
         mcEl.style.height = window.visualViewport.height + 'px';
-        setTimeout(()=>{ if(chatArea) chatArea.scrollTop = chatArea.scrollHeight; }, 50);
+        if(!isInlineEditing) setTimeout(()=>{ if(chatArea) chatArea.scrollTop = chatArea.scrollHeight; }, 50);
       }
     });
     window.visualViewport.addEventListener('scroll', ()=>{
