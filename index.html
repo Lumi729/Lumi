@@ -478,6 +478,12 @@
     <div class="ble-section"><h4>AI 控制</h4><div style="font-size:12px;color:#666;line-height:1.6">保存配置后，AI 角色可用 <code>[BLE:数值]</code> 控制设备（0-100，0=停止）</div></div>
     <div class="ble-section" id="bleManualSection">
       <h4>🕹️ 手动操控</h4>
+      <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center">
+        <span style="font-size:12px;color:#666">无极范围</span>
+        <span style="font-size:12px">0x</span><input id="bleRangeMin" value="40" style="width:40px;padding:4px;border:1px solid #ddd;border-radius:4px;font-family:monospace;font-size:12px">
+        <span style="font-size:12px">~0x</span><input id="bleRangeMax" value="66" style="width:40px;padding:4px;border:1px solid #ddd;border-radius:4px;font-family:monospace;font-size:12px">
+        <button id="bleRangeSave" style="padding:4px 10px;border:none;border-radius:6px;background:#07c160;color:#fff;font-size:12px;cursor:pointer">应用</button>
+      </div>
       <div style="margin-bottom:12px">
         <div style="font-size:13px;margin-bottom:4px">通道1: <span id="bleCh1Val">1</span> 档</div>
         <input type="range" id="bleCh1Slider" min="1" max="5" value="1" style="width:100%">
@@ -1846,7 +1852,16 @@
   const bleCmdPatterns = ['01','02','03','05','0A','10','20','40','64','80','FF','AA01','AA02','AA03','AA0A','AA64','AAFF','AA0101','AA0102','AA0103','AA010A','AA0164','AA01FF','AA0201','AA0264','AA0301','AA0364','5501','5502','5503','550A','5564','55FF','550101','550164','5501FF','55AA01','55AA64','55AAFF','A501','A564','A5FF','A50101','A50164','0301','0302','0303','030164','0100','010A','0164','01FF','00010164','F001','FE01','FE64','0001','0064','00FF','080164','AA0301010000','AA030101000A','AA03010100FF','55AA030101000A'];
   async function startBleScan(){
     if(!bleServer?.connected){alert('请先连接设备');return;} bleScanRunning=true;
-    document.getElementById('bleStartScanBtn').style.display='none'; document.getElementById('bleStopScanBtn').style.display='block';
+    let bleRangeMin = 0x40, bleRangeMax = 0x66;
+  const savedRange = localStorage.getItem('dogchat_ble_range');
+  if(savedRange){ try{ const r=JSON.parse(savedRange); bleRangeMin=r.min; bleRangeMax=r.max; document.getElementById('bleRangeMin').value=bleRangeMin.toString(16); document.getElementById('bleRangeMax').value=bleRangeMax.toString(16); }catch(e){} }
+  document.getElementById('bleRangeSave')?.addEventListener('click', ()=>{
+    bleRangeMin = parseInt(document.getElementById('bleRangeMin').value, 16) || 0x40;
+    bleRangeMax = parseInt(document.getElementById('bleRangeMax').value, 16) || 0x66;
+    localStorage.setItem('dogchat_ble_range', JSON.stringify({min:bleRangeMin, max:bleRangeMax}));
+    alert('已应用: 0x'+bleRangeMin.toString(16)+' ~ 0x'+bleRangeMax.toString(16));
+  });
+  document.getElementById('bleStartScanBtn').style.display='none'; document.getElementById('bleStopScanBtn').style.display='block';
     const log=document.getElementById('bleScanLog'); log.innerHTML='扫描开始...\n';
     try{
       const services=await bleServer.getPrimaryServices(); const writeChars=[];
@@ -1867,20 +1882,31 @@
     bleScanRunning=false;document.getElementById('bleStartScanBtn').style.display='block';document.getElementById('bleStopScanBtn').style.display='none';
   }
   function stopBleScan(){bleScanRunning=false;document.getElementById('bleScanLog').innerHTML='已停止！最后显示的指令就是有效的\n'+document.getElementById('bleScanLog').innerHTML;document.getElementById('bleStartScanBtn').style.display='block';document.getElementById('bleStopScanBtn').style.display='none';}
+  let bleRangeMin = 0x40, bleRangeMax = 0x66;
+  const savedRange = localStorage.getItem('dogchat_ble_range');
+  if(savedRange){ try{ const r=JSON.parse(savedRange); bleRangeMin=r.min; bleRangeMax=r.max; document.getElementById('bleRangeMin').value=bleRangeMin.toString(16); document.getElementById('bleRangeMax').value=bleRangeMax.toString(16); }catch(e){} }
+  document.getElementById('bleRangeSave')?.addEventListener('click', ()=>{
+    bleRangeMin = parseInt(document.getElementById('bleRangeMin').value, 16) || 0x40;
+    bleRangeMax = parseInt(document.getElementById('bleRangeMax').value, 16) || 0x66;
+    localStorage.setItem('dogchat_ble_range', JSON.stringify({min:bleRangeMin, max:bleRangeMax}));
+    alert('已应用: 0x'+bleRangeMin.toString(16)+' ~ 0x'+bleRangeMax.toString(16));
+  });
   document.getElementById('bleStartScanBtn')?.addEventListener('click',startBleScan);
   document.getElementById('bleStopScanBtn')?.addEventListener('click',stopBleScan);
 
   // 手动操控面板
-  let bleDebounceTimer = null;
+  let bleThrottleBusy = false;
   document.getElementById('bleCh1Slider')?.addEventListener('input', function(){
     document.getElementById('bleCh1Val').textContent = this.value;
-    clearTimeout(bleDebounceTimer);
-    bleDebounceTimer = setTimeout(()=>{ bleWriteValue(parseInt(this.value), 1); }, 150);
+    if(bleThrottleBusy) return;
+    bleThrottleBusy = true;
+    bleWriteValue(parseInt(this.value), 1).finally(()=>{ setTimeout(()=>{ bleThrottleBusy=false; }, 80); });
   });
   document.getElementById('bleCh2Slider')?.addEventListener('input', function(){
     document.getElementById('bleCh2Val').textContent = this.value;
-    clearTimeout(bleDebounceTimer);
-    bleDebounceTimer = setTimeout(()=>{ bleWriteValue(parseInt(this.value), 2); }, 150);
+    if(bleThrottleBusy) return;
+    bleThrottleBusy = true;
+    bleWriteValue(parseInt(this.value), 2).finally(()=>{ setTimeout(()=>{ bleThrottleBusy=false; }, 80); });
   });
   document.getElementById('bleStopAllBtn')?.addEventListener('click', ()=>{
     bleStop();
