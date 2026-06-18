@@ -486,11 +486,11 @@
       </div>
       <div style="margin-bottom:12px">
         <div style="font-size:13px;margin-bottom:4px">通道1: <span id="bleCh1Val">1</span> 档</div>
-        <input type="range" id="bleCh1Slider" min="1" max="5" value="1" style="width:100%">
+        <input type="range" id="bleCh1Slider" min="1" max="100" value="1" style="width:100%">
       </div>
       <div style="margin-bottom:12px">
         <div style="font-size:13px;margin-bottom:4px">通道2: <span id="bleCh2Val">1</span> 档</div>
-        <input type="range" id="bleCh2Slider" min="1" max="5" value="1" style="width:100%">
+        <input type="range" id="bleCh2Slider" min="1" max="100" value="1" style="width:100%">
       </div>
       <button id="bleStopAllBtn" style="width:100%;padding:12px;border:none;border-radius:10px;background:#ff3b30;color:#fff;font-size:14px;cursor:pointer">⏹ 全部停止</button>
     </div>
@@ -1847,8 +1847,8 @@
   }
   async function bleStop(){
     if(!bleDevice?.gatt?.connected) return;
-    await bleSendRaw([0xA5, 0x02, 0x02, 0x06, 0x5A]);
-    await bleSendRaw([0xA5, 0x02, 0x01, 0x06, 0x5A]);
+    await bleSendRaw([0xA5, 0x02, 0x02, 0x00, 0x5A]);
+    await bleSendRaw([0xA5, 0x02, 0x01, 0x00, 0x5A]);
   }
 
   // ===== 蓝牙自动扫描 =====
