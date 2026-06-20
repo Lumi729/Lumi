@@ -417,7 +417,7 @@
       <div class="bottom-tab-item" data-tab="profile"><span class="tab-icon">👤</span><span>我的</span></div>
     </div>
   </div>
-  <div class="profile-view-wrap" id="profileViewWrap"><div class="nav-bar"><span style="font-size:17px;font-weight:600;color:#000">我的 · 用户人设</span></div><div class="profile-view" id="profileViewContent"><span class="profile-icon">🌙</span><span style="font-size:14px;color:#000;font-weight:500">用户人设库</span><span style="font-size:11px;color:#bbb">管理你的所有人设，聊天时可快速切换</span><div id="profilePersonaEditor" style="width:100%;background:#fff;border-radius:10px;padding:15px;margin-top:8px;overflow:visible"></div><button class="save-btn" id="profileAddPersonaBtn" style="margin-top:8px">＋ 新建人设</button><div class="hint-text" style="text-align:center;margin-top:6px">选择人设即可编辑，在聊天设置中可选择当前使用的人设</div><div class="global-btn-row" style="margin-top:12px;width:100%"><button class="btn-export" id="globalExportBtn">📤 导出全部设置</button><button class="btn-import" id="globalImportBtn">📥 导入全部设置</button></div><div class="global-btn-row" style="margin-top:4px;width:100%"><button class="btn-reset" id="globalResetBtn" style="flex:1">🔄 恢复默认设置</button></div><input type="file" id="globalImportFile" accept=".json" style="display:none"></div>
+  <div class="profile-view-wrap" id="profileViewWrap"><div class="nav-bar"><span style="font-size:17px;font-weight:600;color:#000">我的 · 用户人设</span></div><div class="profile-view" id="profileViewContent"><span class="profile-icon">🌙</span><span style="font-size:14px;color:#000;font-weight:500">用户人设库</span><span style="font-size:11px;color:#bbb">管理你的所有人设，聊天时可快速切换</span><div id="profilePersonaEditor" style="width:100%;background:#fff;border-radius:10px;padding:15px;margin-top:8px;overflow:visible"></div><button class="save-btn" id="profileAddPersonaBtn" style="margin-top:8px">＋ 新建人设</button><div class="hint-text" style="text-align:center;margin-top:6px">选择人设即可编辑，在聊天设置中可选择当前使用的人设</div><div class="global-btn-row" style="margin-top:12px;width:100%"><button class="btn-export" id="globalExportBtn">📤 导出全部设置</button><button class="btn-import" id="globalImportBtn">📥 导入全部设置</button></div><div class="global-btn-row" style="margin-top:4px;width:100%"><button class="btn-reset" id="globalResetBtn" style="flex:1">🔄 恢复默认设置</button></div><div class="global-btn-row" style="margin-top:10px;width:100%;flex-direction:column;align-items:stretch;gap:6px;border-top:1px dashed #ddd;padding-top:10px"><span style="font-size:12px;color:#666;font-weight:600">⏱️ 自动定时备份</span><button class="btn-export" id="chooseBackupFolderBtn" style="width:100%">📁 选择备份文件夹</button><div id="backupFolderStatus" style="font-size:11px;color:#999">尚未选择文件夹</div><label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#333"><input type="checkbox" id="autoBackupEnabledCheck"> 启用定时自动备份</label><div style="display:flex;align-items:center;gap:6px;font-size:13px;color:#333">每隔 <input type="number" id="autoBackupIntervalInput" min="1" value="10" style="width:50px;text-align:center;padding:2px"> 分钟备份一次</div><div id="autoBackupLastTime" style="font-size:11px;color:#999">上次备份：从未</div></div><input type="file" id="globalImportFile" accept=".json" style="display:none"></div>
     <div class="bottom-tab-bar" id="bottomTabBar3">
       <div class="bottom-tab-item" data-tab="messages"><span class="tab-icon">💬</span><span>信息</span></div>
       <div class="bottom-tab-item" data-tab="library"><span class="tab-icon">📚</span><span>资料库</span></div>
@@ -1117,6 +1117,75 @@
   globalImportBtn.addEventListener('click',()=>{ globalImportFile.value=''; globalImportFile.click() });
   globalImportFile.addEventListener('change',async function(e){ const file = e.target.files[0]; if(!file) return; const ok = await showConfirmDialog('导入将覆盖所有现有设置，确定吗？'); if(!ok){ this.value=''; return } const reader = new FileReader(); reader.onload = function(ev){ try{ const data = JSON.parse(ev.target.result); if(typeof data!=='object' || Object.keys(data).length===0){ alert('文件格式不正确'); return } restoreAllSettingsData(data); location.reload() } catch(err){ alert('导入失败：'+err.message) } }; reader.readAsText(file); this.value = '' });
   globalResetBtn.addEventListener('click',async()=>{ const ok = await showConfirmDialog('确定要恢复默认设置吗？将清除所有数据，建议先导出备份。'); if(!ok) return; clearAllSettings(); location.reload() });
+
+  // ===== 自动定时备份（File System Access API，带降级方案）=====
+  let backupDirHandle = null;
+  const BACKUP_DB_NAME = 'lumos_backup_db', BACKUP_STORE = 'handles';
+  function openBackupDB(){ return new Promise((resolve,reject)=>{ const req = indexedDB.open(BACKUP_DB_NAME,1); req.onupgradeneeded = ()=>{ req.result.createObjectStore(BACKUP_STORE) }; req.onsuccess = ()=>resolve(req.result); req.onerror = ()=>reject(req.error) }) }
+  async function idbSet(key,val){ try{ const db = await openBackupDB(); return new Promise((resolve,reject)=>{ const tx = db.transaction(BACKUP_STORE,'readwrite'); tx.objectStore(BACKUP_STORE).put(val,key); tx.oncomplete=()=>resolve(); tx.onerror=()=>reject(tx.error) }) } catch(e){} }
+  async function idbGet(key){ try{ const db = await openBackupDB(); return new Promise((resolve,reject)=>{ const tx = db.transaction(BACKUP_STORE,'readonly'); const req = tx.objectStore(BACKUP_STORE).get(key); req.onsuccess=()=>resolve(req.result); req.onerror=()=>reject(req.error) }) } catch(e){ return null } }
+  function updateBackupFolderStatus(needsPermission){
+    const el = document.getElementById('backupFolderStatus'); if(!el) return;
+    if(!backupDirHandle){ if(load('autoBackupUseDownloadFallback', false)){ el.textContent = '当前方式：浏览器不支持选文件夹，自动下载到默认下载目录'; } else { el.textContent = '尚未选择文件夹'; } return; }
+    if(needsPermission){ el.innerHTML = `文件夹：${escapeHtml(backupDirHandle.name)}（<a href="#" id="reauthBackupLink">权限已过期，点击恢复</a>）`; const link = document.getElementById('reauthBackupLink'); if(link) link.addEventListener('click', async (e)=>{ e.preventDefault(); try{ const p = await backupDirHandle.requestPermission({mode:'readwrite'}); if(p==='granted') updateBackupFolderStatus(); } catch(err){} }); return; }
+    el.textContent = '文件夹：'+backupDirHandle.name;
+  }
+  async function chooseBackupFolder(){
+    if(!window.showDirectoryPicker){ alert('你的浏览器不支持选择文件夹，将改用"自动下载备份文件"的方式（文件会进入手机默认下载目录）'); save('autoBackupUseDownloadFallback', true); updateBackupFolderStatus(); return; }
+    try{
+      const handle = await window.showDirectoryPicker({mode:'readwrite'});
+      backupDirHandle = handle; await idbSet('backupDir', handle); save('autoBackupUseDownloadFallback', false);
+      updateBackupFolderStatus(); alert('备份文件夹已选好：'+handle.name);
+    } catch(e){ if(e.name !== 'AbortError') alert('选择文件夹失败：'+e.message); }
+  }
+  async function restoreBackupFolderHandle(){
+    const handle = await idbGet('backupDir'); if(!handle) { updateBackupFolderStatus(); return; }
+    try{ const perm = await handle.queryPermission({mode:'readwrite'}); backupDirHandle = handle; updateBackupFolderStatus(perm !== 'granted'); }
+    catch(e){ addLog('warn','恢复备份文件夹失败: '+e.message); }
+  }
+  async function pruneOldBackups(){
+    if(!backupDirHandle) return;
+    try{
+      const entries = []; for await (const [name, h] of backupDirHandle.entries()){ if(h.kind==='file' && name.startsWith('lumos_autobackup_')) entries.push(name); }
+      entries.sort(); const KEEP = 20;
+      if(entries.length > KEEP){ for(const name of entries.slice(0, entries.length-KEEP)){ try{ await backupDirHandle.removeEntry(name) } catch(e){} } }
+    } catch(e){}
+  }
+  function updateBackupLastTimeUI(){ const el = document.getElementById('autoBackupLastTime'); if(el) el.textContent = '上次备份：'+(load('autoBackupLastTime','')||'从未'); }
+  async function writeBackupFile(){
+    const allData = getAllSettingsData();
+    const ts = new Date(); const stamp = ts.getFullYear()+'-'+String(ts.getMonth()+1).padStart(2,'0')+'-'+String(ts.getDate()).padStart(2,'0')+'_'+String(ts.getHours()).padStart(2,'0')+'-'+String(ts.getMinutes()).padStart(2,'0')+'-'+String(ts.getSeconds()).padStart(2,'0');
+    const filename = `lumos_autobackup_${stamp}.json`; const jsonStr = JSON.stringify(allData);
+    if(backupDirHandle){
+      try{
+        const perm = await backupDirHandle.queryPermission({mode:'readwrite'});
+        if(perm !== 'granted'){ updateBackupFolderStatus(true); return false; }
+        const fileHandle = await backupDirHandle.getFileHandle(filename,{create:true});
+        const writable = await fileHandle.createWritable(); await writable.write(jsonStr); await writable.close();
+        await pruneOldBackups(); save('autoBackupLastTime', ts.toLocaleString('zh-CN')); updateBackupLastTimeUI();
+        addLog('info','自动备份已写入: '+filename); return true;
+      } catch(e){ addLog('error','自动备份写入失败: '+e.message); return false; }
+    } else if(load('autoBackupUseDownloadFallback', false)){
+      const blob = new Blob([jsonStr],{type:'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+      save('autoBackupLastTime', ts.toLocaleString('zh-CN')); updateBackupLastTimeUI(); return true;
+    }
+    return false;
+  }
+  let autoBackupTimer = null;
+  function startAutoBackupTimer(){
+    stopAutoBackupTimer(); if(!load('autoBackupEnabled', false)) return;
+    const intervalMin = Math.max(1, parseInt(load('autoBackupIntervalMin', 10)) || 10);
+    autoBackupTimer = setInterval(()=>{ saveGlobalsToActiveChar(); writeBackupFile(); }, intervalMin*60*1000);
+  }
+  function stopAutoBackupTimer(){ if(autoBackupTimer){ clearInterval(autoBackupTimer); autoBackupTimer = null; } }
+  document.getElementById('chooseBackupFolderBtn')?.addEventListener('click', chooseBackupFolder);
+  const autoBackupEnabledCheck = document.getElementById('autoBackupEnabledCheck');
+  if(autoBackupEnabledCheck){ autoBackupEnabledCheck.checked = load('autoBackupEnabled', false); autoBackupEnabledCheck.addEventListener('change', function(){ save('autoBackupEnabled', this.checked); startAutoBackupTimer(); }) }
+  const autoBackupIntervalInput = document.getElementById('autoBackupIntervalInput');
+  if(autoBackupIntervalInput){ autoBackupIntervalInput.value = load('autoBackupIntervalMin', 10); autoBackupIntervalInput.addEventListener('change', function(){ const v = Math.max(1, parseInt(this.value)||10); this.value=v; save('autoBackupIntervalMin', v); startAutoBackupTimer(); }) }
+  updateBackupLastTimeUI();
+  restoreBackupFolderHandle().then(()=> startAutoBackupTimer());
+
   function updateRemark(name){ const n = name.trim()||'月'; chatTitle.textContent = n; tipText.textContent = chatType==='group'?'我们绝不是孤岛':`你收到了${n}的讯息`; dogNameLabel.textContent = n; remarkVal = n }
   function updateSignature(sig){ chatSignature.textContent = sig.trim()||'月夜雪纷纷'; signatureVal = sig.trim() }
   remarkInput.addEventListener('input',()=> updateRemark(remarkInput.value)); signatureInput.addEventListener('input',()=> updateSignature(signatureInput.value));
@@ -1304,7 +1373,7 @@
     return segments;
   }
 
-  function resolveSenderId(senderName){ if(!senderName) return null; const member = members.find(m=> m.name === senderName); return member ? member.id : null; }
+  function resolveSenderId(senderName){ if(!senderName) return null; const member = members.find(m=> m.name === senderName || m.displayName === senderName); return member ? member.id : null; }
 
   async function triggerAiReply(isAutoReply=false, overrideMinMsgs=null, overrideMaxMsgs=null, skipUI=false, isActiveChat=false, options={}){
     if(!isAutoReply && waiting) return;
@@ -1535,7 +1604,7 @@
             // 从当前segments判断是谁发的，通过上下文解析
             if(options.allowedMemberIds?.length===1){
               const m = members.find(x=>x.id===options.allowedMemberIds[0]);
-              if(m){ m.displayName = newNick; addLog('info',`${m.name} 将群名片改为「${newNick}」`); setTimeout(()=>reloadChatUI(true),100); }
+              if(m){ m.displayName = newNick; addLog('info',`${m.name} 将群名片改为「${newNick}」`); reloadChatUI(true); }
             }
           }
         }
@@ -1674,7 +1743,7 @@
   if (changeBgBtn) { changeBgBtn.addEventListener('click', () => { if (bgFileInput) bgFileInput.click(); }); }
   if (bgFileInput) { bgFileInput.addEventListener('change', function(e) { const file = e.target.files[0]; if (!file) return; openCropModal('bg', file); this.value = ''; }); }
   if (clearBgBtn) { clearBgBtn.addEventListener('click', () => { charSettings.bgImage = ''; chatArea.style.backgroundImage = ''; saveGlobalsToActiveChar(); }); }
-  function openDeleteModal(){ const modal = document.getElementById('deleteModal'), list = document.getElementById('deleteList'); const roleName = remarkVal||'月'; list.innerHTML = chatMessages.map(m=>{let who='我'; if(m.role==='hint') who='💬'; else if(m.role!=='user'){ const mb=m.senderId?members.find(x=>x.id===m.senderId):null; who=mb?mb.name:(m.senderName||roleName); } return `<div class="entry-item"><label><input type="checkbox" value="${escapeHtml(m.id)}" class="delete-check"> ${escapeHtml(who)}: ${escapeHtml((m.text||'').substring(0,30))}${(m.text||'').length>30?'...':''}</label></div>`}).join(''); modal.classList.add('show'); list.scrollTop = list.scrollHeight; document.getElementById('deleteConfirmBtn').onclick = ()=>{ const checked = Array.from(list.querySelectorAll('.delete-check:checked')).map(cb=>cb.value); if(checked.length===0){ alert('请至少选择一条消息'); return } chatMessages = chatMessages.filter(m=>!checked.includes(m.id)); syncHistoryFromChat(); saveChatHistory(); reloadChatUI(); modal.classList.remove('show') }; document.getElementById('deleteCancelBtn').onclick = ()=> modal.classList.remove('show'); modal.addEventListener('click',e=>{ if(e.target===modal) modal.classList.remove('show') }) }
+  function openDeleteModal(){ const modal = document.getElementById('deleteModal'), list = document.getElementById('deleteList'); const roleName = remarkVal||'月'; list.innerHTML = chatMessages.map(m=>{let who='我'; if(m.role==='hint') who='💬'; else if(m.role!=='user'){ const mb=m.senderId?members.find(x=>x.id===m.senderId):null; who=mb?getMemberDisplayName(mb):(m.senderName||roleName); } return `<div class="entry-item"><label><input type="checkbox" value="${escapeHtml(m.id)}" class="delete-check"> ${escapeHtml(who)}: ${escapeHtml((m.text||'').substring(0,30))}${(m.text||'').length>30?'...':''}</label></div>`}).join(''); modal.classList.add('show'); list.scrollTop = list.scrollHeight; document.getElementById('deleteConfirmBtn').onclick = ()=>{ const checked = Array.from(list.querySelectorAll('.delete-check:checked')).map(cb=>cb.value); if(checked.length===0){ alert('请至少选择一条消息'); return } chatMessages = chatMessages.filter(m=>!checked.includes(m.id)); syncHistoryFromChat(); saveChatHistory(); reloadChatUI(); modal.classList.remove('show') }; document.getElementById('deleteCancelBtn').onclick = ()=> modal.classList.remove('show'); modal.addEventListener('click',e=>{ if(e.target===modal) modal.classList.remove('show') }) }
   function showMain(){ settingsPanel.classList.remove('character-panel','preset-panel','world-panel','log-panel','persona-panel'); settingsMain.style.display='block'; settingsProfile.style.display='none'; settingsCharacter.style.display='none'; settingsApi.style.display='none'; settingsPreset.style.display='none'; settingsWorld.style.display='none'; settingsLog.style.display='none' }
   function showProfile(){ settingsPanel.classList.remove('character-panel','preset-panel','world-panel','log-panel','persona-panel'); settingsMain.style.display='none'; settingsProfile.style.display='block'; settingsCharacter.style.display='none'; settingsApi.style.display='none'; settingsPreset.style.display='none'; settingsWorld.style.display='none'; settingsLog.style.display='none'; updatePersonaDisplay(); if(chatType==='group'){ if(groupPersonaSection) groupPersonaSection.style.display='block'; if(groupPersonaSelectList) groupPersonaSelectList.style.display='block'; renderGroupPersonaList(); } else { if(groupPersonaSection) groupPersonaSection.style.display='none'; if(groupPersonaSelectList) groupPersonaSelectList.style.display='none'; } }
   function showCharacter(){ settingsPanel.classList.add('character-panel'); settingsPanel.classList.remove('preset-panel','world-panel','log-panel','persona-panel'); settingsMain.style.display='none'; settingsProfile.style.display='none'; settingsCharacter.style.display='block'; settingsApi.style.display='none'; settingsPreset.style.display='none'; settingsWorld.style.display='none'; settingsLog.style.display='none'; setTimeout(()=>{ autoResizeTextarea(charDetailsInput); autoResizeTextarea(charPromptInput) },0) }
@@ -1989,6 +2058,8 @@
           targetChar.chatMessages.push({id:msgId, role:'dog', text:`${prefix} ${msgText}`, reasoning:null, timestamp:ts, isAutoReply:false, senderId:null, senderName:remarkVal});
           targetChar.unreadCount = (targetChar.unreadCount||0) + 1;
           saveAllData();
+          updateUnreadDisplay();
+          if(messageListViewWrap && messageListViewWrap.classList.contains('active')) renderCharacterList(charSearchInput?.value||'');
         }
         const hintText = `${senderName||remarkVal} 转去${mode === '群聊' ? '群聊「'+targetName+'」' : '和 '+targetName+' '+mode}了`;
         addCenteredHint(hintText);
@@ -2225,7 +2296,11 @@
       }
     });
     window.visualViewport.addEventListener('scroll', ()=>{
-      if(mcEl && mcEl.classList.contains('css-fullscreen')){ mcEl.style.top = window.visualViewport.offsetTop + 'px'; }
+      if(mcEl && mcEl.classList.contains('css-fullscreen')){
+        // 不要跟着移动整个容器（会带着顶部角色名字栏一起跑），
+        // 容器始终钉在 top:0，如果页面被浏览器自动滚动了就纠正回去
+        if(window.scrollY !== 0 || window.scrollX !== 0) window.scrollTo(0,0);
+      }
     });
     document.addEventListener('fullscreenchange', ()=>{
       if(!document.fullscreenElement && mcEl){ mcEl.style.height = ''; mcEl.style.top = ''; }
