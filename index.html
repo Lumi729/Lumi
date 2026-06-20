@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover,interactive-widget=resizes-content">
     <title>Lumos</title>
     <link rel="manifest" href="/Lumi/manifest.json">
     <meta name="theme-color" content="#ededed">
@@ -1483,7 +1483,7 @@
         systemPrompt += `## 场景切换\n当前场景：${curMode}。你可以选择暂时离开群聊，转到自己的私聊频道和用户单独互动。\n${availTargets}\n如果想切换，在消息末尾插入 [切换:私聊:你自己的角色名] 或 [切换:见面:你自己的角色名]。\n例如你是「月」，就写 [切换:私聊:月]，你的消息会出现在「月」的私聊中。\n请根据剧情自由判断，不要频繁切换。\n\n`;
       }
       if(apiSettings.nicknameChangeEnabled){
-        systemPrompt += `## 群名片\n你可以修改自己在群聊中的显示名。如果觉得有必要，在消息中插入 [改名:新名字] 即可。这只是群聊昵称，不影响你的真实身份。请根据角色人设自由判断要不要改。\n\n`;
+        systemPrompt += `## 群名片\n你可以修改自己在群聊中的显示名。如果觉得有必要，在消息中插入 [改名:新名字] 即可。这只是群聊昵称，不影响你的真实身份。请根据角色人设自由判断要不要改。\n⚠️ 重要格式要求：插入 [改名:新名字] 的这一条消息，开头的 [发言人] 标注仍然要用你**当前**的名字（旧名字），不要提前用新名字。新名字从**下一条**消息开始才在 [发言人] 里使用。\n\n`;
       }
 
       if(isAutoReply){
@@ -1596,23 +1596,41 @@
           return;
         }
         const regexClean = /\[RECALL:-?\d+\]/g; const cleanText = finalContent.replace(regexClean, '').trim();
+        // 群聊场景下，先按每一段自己的发言人解析一遍（不假设整轮只有一个人在说话），
+        // 改名、跨聊转发都依赖"这段话到底是谁说的"，不再只在自动回复(allowedMemberIds)时才能正确识别
+        const groupPreSegments = chatType==='group' ? parseGroupResponse(cleanText) : [];
+        function findSegmentSenderName(tagSnippet){
+          const seg = groupPreSegments.find(s => s.text.includes(tagSnippet));
+          if(!seg) return null;
+          if(seg.senderId){ const m = getMemberById(seg.senderId); if(m) return m.name; }
+          return seg.senderName || null;
+        }
         // 改名解析
         if(chatType==='group' && apiSettings.nicknameChangeEnabled){
-          const renameRegex = /\[改名[：:](.+?)\]/g; let renameMatch;
-          while((renameMatch = renameRegex.exec(cleanText)) !== null){
-            const newNick = renameMatch[1].trim();
-            // 从当前segments判断是谁发的，通过上下文解析
-            if(options.allowedMemberIds?.length===1){
-              const m = members.find(x=>x.id===options.allowedMemberIds[0]);
-              if(m){ m.displayName = newNick; addLog('info',`${m.name} 将群名片改为「${newNick}」`); reloadChatUI(true); }
+          const renameRegex = /\[改名[：:](.+?)\]/g;
+          let renamedAny = false;
+          groupPreSegments.forEach(pseg => {
+            let m2; renameRegex.lastIndex = 0;
+            while((m2 = renameRegex.exec(pseg.text)) !== null){
+              const newNick = m2[1].trim();
+              let targetMember = pseg.senderId ? getMemberById(pseg.senderId) : null;
+              if(!targetMember && options.allowedMemberIds?.length===1){ targetMember = members.find(x=>x.id===options.allowedMemberIds[0]); }
+              if(targetMember && newNick){ targetMember.displayName = newNick; addLog('info',`${targetMember.name} 将群名片改为「${newNick}」`); renamedAny = true; }
             }
-          }
+          });
+          if(renamedAny) reloadChatUI(true);
         }
         let cleanedForSeg = cleanText.replace(/\[改名[：:].+?\]/g,'').replace(/\[切换[：:](?:私聊|见面)[：:].+?\]/g,'').trim();
         // 跨聊转发处理
         if(apiSettings.crossChatEnabled){
-          const sName = chatType==='group' && options.allowedMemberIds?.length===1 ? members.find(x=>x.id===options.allowedMemberIds[0])?.name : remarkVal;
-          cleanedForSeg = processCrossChatSwitch(cleanText, sName, options.allowedMemberIds?.[0]);
+          let sName = remarkVal;
+          if(chatType==='group'){
+            const switchMatch = /\[切换[到]?[：:]?(?:私聊|见面|群聊)[：:].+?\]/.exec(cleanText);
+            const foundName = switchMatch ? findSegmentSenderName(switchMatch[0]) : null;
+            sName = foundName || (options.allowedMemberIds?.length===1 ? members.find(x=>x.id===options.allowedMemberIds[0])?.name : remarkVal);
+          }
+          const switchSenderId = chatType==='group' ? (groupPreSegments.find(s=>s.text.includes('[切换'))?.senderId || options.allowedMemberIds?.[0] || null) : null;
+          cleanedForSeg = processCrossChatSwitch(cleanText, sName, switchSenderId);
           cleanedForSeg = cleanedForSeg.replace(/\[改名[：:].+?\]/g,'').replace(/\[切换[到]?[：:]?(?:私聊|见面|群聊)[：:].+?\]/g,'').trim();
         }
         cleanedForSeg = await processBleCommands(cleanedForSeg);
@@ -1743,7 +1761,7 @@
   if (changeBgBtn) { changeBgBtn.addEventListener('click', () => { if (bgFileInput) bgFileInput.click(); }); }
   if (bgFileInput) { bgFileInput.addEventListener('change', function(e) { const file = e.target.files[0]; if (!file) return; openCropModal('bg', file); this.value = ''; }); }
   if (clearBgBtn) { clearBgBtn.addEventListener('click', () => { charSettings.bgImage = ''; chatArea.style.backgroundImage = ''; saveGlobalsToActiveChar(); }); }
-  function openDeleteModal(){ const modal = document.getElementById('deleteModal'), list = document.getElementById('deleteList'); const roleName = remarkVal||'月'; list.innerHTML = chatMessages.map(m=>{let who='我'; if(m.role==='hint') who='💬'; else if(m.role!=='user'){ const mb=m.senderId?members.find(x=>x.id===m.senderId):null; who=mb?getMemberDisplayName(mb):(m.senderName||roleName); } return `<div class="entry-item"><label><input type="checkbox" value="${escapeHtml(m.id)}" class="delete-check"> ${escapeHtml(who)}: ${escapeHtml((m.text||'').substring(0,30))}${(m.text||'').length>30?'...':''}</label></div>`}).join(''); modal.classList.add('show'); list.scrollTop = list.scrollHeight; document.getElementById('deleteConfirmBtn').onclick = ()=>{ const checked = Array.from(list.querySelectorAll('.delete-check:checked')).map(cb=>cb.value); if(checked.length===0){ alert('请至少选择一条消息'); return } chatMessages = chatMessages.filter(m=>!checked.includes(m.id)); syncHistoryFromChat(); saveChatHistory(); reloadChatUI(); modal.classList.remove('show') }; document.getElementById('deleteCancelBtn').onclick = ()=> modal.classList.remove('show'); modal.addEventListener('click',e=>{ if(e.target===modal) modal.classList.remove('show') }) }
+  function openDeleteModal(){ const modal = document.getElementById('deleteModal'), list = document.getElementById('deleteList'); const roleName = remarkVal||'月'; list.innerHTML = chatMessages.map(m=>{let who='我'; if(m.role==='hint') who='💬'; else if(m.role!=='user'){ const mb=m.senderId?members.find(x=>x.id===m.senderId):null; who=mb?mb.name:(m.senderName||roleName); } return `<div class="entry-item"><label><input type="checkbox" value="${escapeHtml(m.id)}" class="delete-check"> ${escapeHtml(who)}: ${escapeHtml((m.text||'').substring(0,30))}${(m.text||'').length>30?'...':''}</label></div>`}).join(''); modal.classList.add('show'); list.scrollTop = list.scrollHeight; document.getElementById('deleteConfirmBtn').onclick = ()=>{ const checked = Array.from(list.querySelectorAll('.delete-check:checked')).map(cb=>cb.value); if(checked.length===0){ alert('请至少选择一条消息'); return } chatMessages = chatMessages.filter(m=>!checked.includes(m.id)); syncHistoryFromChat(); saveChatHistory(); reloadChatUI(); modal.classList.remove('show') }; document.getElementById('deleteCancelBtn').onclick = ()=> modal.classList.remove('show'); modal.addEventListener('click',e=>{ if(e.target===modal) modal.classList.remove('show') }) }
   function showMain(){ settingsPanel.classList.remove('character-panel','preset-panel','world-panel','log-panel','persona-panel'); settingsMain.style.display='block'; settingsProfile.style.display='none'; settingsCharacter.style.display='none'; settingsApi.style.display='none'; settingsPreset.style.display='none'; settingsWorld.style.display='none'; settingsLog.style.display='none' }
   function showProfile(){ settingsPanel.classList.remove('character-panel','preset-panel','world-panel','log-panel','persona-panel'); settingsMain.style.display='none'; settingsProfile.style.display='block'; settingsCharacter.style.display='none'; settingsApi.style.display='none'; settingsPreset.style.display='none'; settingsWorld.style.display='none'; settingsLog.style.display='none'; updatePersonaDisplay(); if(chatType==='group'){ if(groupPersonaSection) groupPersonaSection.style.display='block'; if(groupPersonaSelectList) groupPersonaSelectList.style.display='block'; renderGroupPersonaList(); } else { if(groupPersonaSection) groupPersonaSection.style.display='none'; if(groupPersonaSelectList) groupPersonaSelectList.style.display='none'; } }
   function showCharacter(){ settingsPanel.classList.add('character-panel'); settingsPanel.classList.remove('preset-panel','world-panel','log-panel','persona-panel'); settingsMain.style.display='none'; settingsProfile.style.display='none'; settingsCharacter.style.display='block'; settingsApi.style.display='none'; settingsPreset.style.display='none'; settingsWorld.style.display='none'; settingsLog.style.display='none'; setTimeout(()=>{ autoResizeTextarea(charDetailsInput); autoResizeTextarea(charPromptInput) },0) }
