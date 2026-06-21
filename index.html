@@ -1127,7 +1127,7 @@
   function updateBackupFolderStatus(needsPermission){
     const el = document.getElementById('backupFolderStatus'); if(!el) return;
     if(!backupDirHandle){ if(load('autoBackupUseDownloadFallback', false)){ el.textContent = '当前方式：浏览器不支持选文件夹，自动下载到默认下载目录'; } else { el.textContent = '尚未选择文件夹'; } return; }
-    if(needsPermission){ el.innerHTML = `文件夹：${escapeHtml(backupDirHandle.name)}（<a href="#" id="reauthBackupLink">权限已过期，点击恢复</a>）`; const link = document.getElementById('reauthBackupLink'); if(link) link.addEventListener('click', async (e)=>{ e.preventDefault(); try{ const p = await backupDirHandle.requestPermission({mode:'readwrite'}); if(p==='granted') updateBackupFolderStatus(); } catch(err){} }); return; }
+    if(needsPermission){ el.innerHTML = `文件夹：${escapeHtml(backupDirHandle.name)}（<a href="#" id="reauthBackupLink">权限已过期，点击恢复</a>）`; const link = document.getElementById('reauthBackupLink'); if(link) link.addEventListener('click', async (e)=>{ e.preventDefault(); try{ const p = await backupDirHandle.requestPermission({mode:'readwrite'}); if(p==='granted'){ updateBackupFolderStatus(); maybeCatchUpBackup(); } } catch(err){} }); return; }
     el.textContent = '文件夹：'+backupDirHandle.name;
   }
   async function chooseBackupFolder(){
@@ -1135,7 +1135,7 @@
     try{
       const handle = await window.showDirectoryPicker({mode:'readwrite'});
       backupDirHandle = handle; await idbSet('backupDir', handle); save('autoBackupUseDownloadFallback', false);
-      updateBackupFolderStatus(); alert('备份文件夹已选好：'+handle.name);
+      updateBackupFolderStatus(); alert('备份文件夹已选好：'+handle.name); maybeCatchUpBackup();
     } catch(e){ if(e.name !== 'AbortError') alert('选择文件夹失败：'+e.message); }
   }
   async function restoreBackupFolderHandle(){
@@ -1151,7 +1151,14 @@
       if(entries.length > KEEP){ for(const name of entries.slice(0, entries.length-KEEP)){ try{ await backupDirHandle.removeEntry(name) } catch(e){} } }
     } catch(e){}
   }
-  function updateBackupLastTimeUI(){ const el = document.getElementById('autoBackupLastTime'); if(el) el.textContent = '上次备份：'+(load('autoBackupLastTime','')||'从未'); }
+  function updateBackupLastTimeUI(){
+    const el = document.getElementById('autoBackupLastTime'); if(!el) return;
+    const lastTs = load('autoBackupLastTimestamp', 0);
+    if(!lastTs){ el.textContent = '上次备份：从未'; return; }
+    const minsAgo = Math.round((Date.now()-lastTs)/60000);
+    const timeStr = load('autoBackupLastTime','');
+    el.textContent = `上次备份：${timeStr}（${minsAgo<1?'刚刚':minsAgo+'分钟前'}）`;
+  }
   async function writeBackupFile(){
     const allData = getAllSettingsData();
     const ts = new Date(); const stamp = ts.getFullYear()+'-'+String(ts.getMonth()+1).padStart(2,'0')+'-'+String(ts.getDate()).padStart(2,'0')+'_'+String(ts.getHours()).padStart(2,'0')+'-'+String(ts.getMinutes()).padStart(2,'0')+'-'+String(ts.getSeconds()).padStart(2,'0');
@@ -1159,22 +1166,31 @@
     if(backupDirHandle){
       try{
         const perm = await backupDirHandle.queryPermission({mode:'readwrite'});
-        if(perm !== 'granted'){ updateBackupFolderStatus(true); return false; }
+        if(perm !== 'granted'){ updateBackupFolderStatus(true); addLog('warn','自动备份未执行：文件夹权限未授权'); return false; }
         const fileHandle = await backupDirHandle.getFileHandle(filename,{create:true});
         const writable = await fileHandle.createWritable(); await writable.write(jsonStr); await writable.close();
-        await pruneOldBackups(); save('autoBackupLastTime', ts.toLocaleString('zh-CN')); updateBackupLastTimeUI();
+        await pruneOldBackups(); save('autoBackupLastTime', ts.toLocaleString('zh-CN')); save('autoBackupLastTimestamp', ts.getTime()); updateBackupLastTimeUI();
         addLog('info','自动备份已写入: '+filename); return true;
       } catch(e){ addLog('error','自动备份写入失败: '+e.message); return false; }
     } else if(load('autoBackupUseDownloadFallback', false)){
       const blob = new Blob([jsonStr],{type:'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click();
-      save('autoBackupLastTime', ts.toLocaleString('zh-CN')); updateBackupLastTimeUI(); return true;
+      save('autoBackupLastTime', ts.toLocaleString('zh-CN')); save('autoBackupLastTimestamp', ts.getTime()); updateBackupLastTimeUI(); return true;
     }
-    return false;
+    addLog('warn','自动备份未执行：还没有选择备份文件夹'); return false;
+  }
+  // 启动/恢复权限时检查：如果已经超过设定间隔没备份过，立刻补一次，
+  // 不用死等下一个 setInterval 周期（页面没有一直开着的话，定时器永远等不到）
+  async function maybeCatchUpBackup(){
+    if(!load('autoBackupEnabled', false)) return;
+    const intervalMin = Math.max(1, parseInt(load('autoBackupIntervalMin', 10)) || 10);
+    const lastTs = load('autoBackupLastTimestamp', 0);
+    if(Date.now() - lastTs >= intervalMin*60*1000){ saveGlobalsToActiveChar(); await writeBackupFile(); }
   }
   let autoBackupTimer = null;
   function startAutoBackupTimer(){
     stopAutoBackupTimer(); if(!load('autoBackupEnabled', false)) return;
     const intervalMin = Math.max(1, parseInt(load('autoBackupIntervalMin', 10)) || 10);
+    maybeCatchUpBackup();
     autoBackupTimer = setInterval(()=>{ saveGlobalsToActiveChar(); writeBackupFile(); }, intervalMin*60*1000);
   }
   function stopAutoBackupTimer(){ if(autoBackupTimer){ clearInterval(autoBackupTimer); autoBackupTimer = null; } }
@@ -1595,7 +1611,11 @@
           if (options && options.onAutoSkip) options.onAutoSkip(reason);
           return;
         }
-        const regexClean = /\[RECALL:-?\d+\]/g; const cleanText = finalContent.replace(regexClean, '').trim();
+        const regexClean = /\[RECALL:-?\d+\]/g; const cleanTextRaw = finalContent.replace(regexClean, '').trim();
+        // BLE 指令在这里就先从文本里摘掉（纯文本处理，不在这里真的发送），
+        // 这样跨聊转发、改名解析看到的都是干净文本，不会把 [BLE:xx] 这种控制代码泄漏到转发消息里
+        const bleExtraction = extractBleCommands(cleanTextRaw);
+        const cleanText = bleExtraction.cleaned;
         // 群聊场景下，先按每一段自己的发言人解析一遍（不假设整轮只有一个人在说话），
         // 改名、跨聊转发都依赖"这段话到底是谁说的"，不再只在自动回复(allowedMemberIds)时才能正确识别
         const groupPreSegments = chatType==='group' ? parseGroupResponse(cleanText) : [];
@@ -1606,34 +1626,38 @@
           return seg.senderName || null;
         }
         // 改名解析
+        let needsRenameReload = false;
         if(chatType==='group' && apiSettings.nicknameChangeEnabled){
           const renameRegex = /\[改名[：:](.+?)\]/g;
-          let renamedAny = false;
           groupPreSegments.forEach(pseg => {
             let m2; renameRegex.lastIndex = 0;
             while((m2 = renameRegex.exec(pseg.text)) !== null){
               const newNick = m2[1].trim();
               let targetMember = pseg.senderId ? getMemberById(pseg.senderId) : null;
               if(!targetMember && options.allowedMemberIds?.length===1){ targetMember = members.find(x=>x.id===options.allowedMemberIds[0]); }
-              if(targetMember && newNick){ targetMember.displayName = newNick; addLog('info',`${targetMember.name} 将群名片改为「${newNick}」`); renamedAny = true; }
+              if(targetMember && newNick){ targetMember.displayName = newNick; addLog('info',`${targetMember.name} 将群名片改为「${newNick}」`); needsRenameReload = true; }
             }
           });
-          if(renamedAny) reloadChatUI(true);
         }
         let cleanedForSeg = cleanText.replace(/\[改名[：:].+?\]/g,'').replace(/\[切换[：:](?:私聊|见面)[：:].+?\]/g,'').trim();
         // 跨聊转发处理
         if(apiSettings.crossChatEnabled){
-          let sName = remarkVal;
+          let sName = remarkVal, presetMsgText = null;
           if(chatType==='group'){
             const switchMatch = /\[切换[到]?[：:]?(?:私聊|见面|群聊)[：:].+?\]/.exec(cleanText);
-            const foundName = switchMatch ? findSegmentSenderName(switchMatch[0]) : null;
-            sName = foundName || (options.allowedMemberIds?.length===1 ? members.find(x=>x.id===options.allowedMemberIds[0])?.name : remarkVal);
+            const switchSeg = switchMatch ? groupPreSegments.find(s => s.text.includes(switchMatch[0])) : null;
+            if(switchSeg){
+              sName = (switchSeg.senderId && getMemberById(switchSeg.senderId)?.name) || switchSeg.senderName || remarkVal;
+              presetMsgText = switchSeg.text.replace(/\[切换[到]?[：:]?(?:私聊|见面|群聊)[：:].+?\]/g,'').replace(/\[改名[：:].+?\]/g,'').trim();
+            } else {
+              sName = options.allowedMemberIds?.length===1 ? (members.find(x=>x.id===options.allowedMemberIds[0])?.name || remarkVal) : remarkVal;
+            }
           }
           const switchSenderId = chatType==='group' ? (groupPreSegments.find(s=>s.text.includes('[切换'))?.senderId || options.allowedMemberIds?.[0] || null) : null;
-          cleanedForSeg = processCrossChatSwitch(cleanText, sName, switchSenderId);
+          cleanedForSeg = processCrossChatSwitch(cleanText, sName, switchSenderId, presetMsgText);
           cleanedForSeg = cleanedForSeg.replace(/\[改名[：:].+?\]/g,'').replace(/\[切换[到]?[：:]?(?:私聊|见面|群聊)[：:].+?\]/g,'').trim();
         }
-        cleanedForSeg = await processBleCommands(cleanedForSeg);
+        await sendExtractedBleCommands(bleExtraction.bleMatches);
         let segmentsRaw = cleanedForSeg.split(/\n{2,}/).filter(s=>s.trim()!==''); if(segmentsRaw.length===0 && cleanedForSeg) segmentsRaw = [cleanedForSeg];
         let newSegments = [];
         let skipReasons = [];
@@ -1721,6 +1745,7 @@
         }
         messageHistory.push({role:'assistant',content:finalContent||''}); saveChatHistory();
         if (!skipUI && loadingWrapper) { loadingWrapper.replaceWith(fragment); } else if (loadingWrapper) { loadingWrapper.remove(); }
+        if(needsRenameReload) reloadChatUI(true);
         if(currentAutoReplyLog){ currentAutoReplyLog.response = finalContent; currentAutoReplyLog.skipped = false; currentAutoReplyLog = null; }
         if(isAutoReply){ const shouldAddUnread = (document.visibilityState !== 'visible') || !isActiveChat; if (shouldAddUnread) { unreadCount += segmentsRaw.length; saveGlobalsToActiveChar(); updateUnreadDisplay(); if (messageListViewWrap.classList.contains('active')) renderCharacterList(); sendAutoReplyNotifications(segmentsRaw.filter(s => !s.recalled)); } else { updateUnreadDisplay(); } }
         if(window._pendingBleHints && window._pendingBleHints.length > 0){
@@ -2023,20 +2048,27 @@
     document.getElementById('bleCh2Slider').value=0; document.getElementById('bleCh2Val').textContent='0';
   });
 
-  async function processBleCommands(content){
-    if(!apiSettings.bleControlEnabled) return content;
+  function extractBleCommands(content){
+    if(!apiSettings.bleControlEnabled) return {cleaned: content, bleMatches: []};
     const bleMatches = [];
     const cleaned = content.replace(/\[BLE[:：](\d+)(?:[:：](\d))?\]/g, (m, val, ch)=>{
       bleMatches.push({val: parseInt(val)||1, ch: parseInt(ch)||1});
       return '';
     });
+    return {cleaned: cleaned.trim(), bleMatches};
+  }
+  async function sendExtractedBleCommands(bleMatches){
     for(const cmd of bleMatches){
       await bleWriteValue(Math.max(1, cmd.val), cmd.ch);
       const label = `🎮 强度 ${Math.max(1,cmd.val)}%${cmd.ch===2?' (通道2)':''}`;
       if(!window._pendingBleHints) window._pendingBleHints = [];
       window._pendingBleHints.push(label);
     }
-    return cleaned.trim();
+  }
+  async function processBleCommands(content){
+    const {cleaned, bleMatches} = extractBleCommands(content);
+    await sendExtractedBleCommands(bleMatches);
+    return cleaned;
   }
   if(mentionCancelBtn) mentionCancelBtn.addEventListener('click', ()=>{ currentMention = null; mentionHint.style.display = 'none'; });
   function setMention(name, id){ currentMention = {name, id}; mentionText.textContent = '@ '+name; mentionHint.style.display = 'flex'; }
@@ -2055,7 +2087,7 @@
     return cleaned.trim();
   }
   function getMemberDisplayName(member){ return member?.displayName || member?.name || '成员'; }
-  function processCrossChatSwitch(content, senderName, senderId){
+  function processCrossChatSwitch(content, senderName, senderId, presetMsgText){
     if(!apiSettings.crossChatEnabled) return content;
     const regex = /\[切换[:：](私聊|见面|群聊)[:：](.+?)\]/g; let match; let cleaned = content;
     while((match = regex.exec(content)) !== null){
@@ -2067,7 +2099,7 @@
         targetChar = characters.find(c=> c.type!=='group' && c.name === targetName);
       }
       if(targetChar){
-        const msgText = cleaned.replace(match[0],'').trim();
+        const msgText = presetMsgText!=null ? presetMsgText : cleaned.replace(match[0],'').trim();
         if(msgText){
           const msgId = 'msg_'+Date.now().toString(36)+Math.random().toString(36).substr(2,5);
           const ts = Date.now();
