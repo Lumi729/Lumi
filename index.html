@@ -2090,6 +2090,7 @@
   function processCrossChatSwitch(content, senderName, senderId, presetMsgText){
     if(!apiSettings.crossChatEnabled) return content;
     const regex = /\[切换[:：](私聊|见面|群聊)[:：](.+?)\]/g; let match; let cleaned = content;
+    let anyFound = false;
     while((match = regex.exec(content)) !== null){
       const mode = match[1], targetName = match[2].trim();
       let targetChar = null;
@@ -2099,6 +2100,7 @@
         targetChar = characters.find(c=> c.type!=='group' && c.name === targetName);
       }
       if(targetChar){
+        anyFound = true;
         const msgText = presetMsgText!=null ? presetMsgText : cleaned.replace(match[0],'').trim();
         if(msgText){
           const msgId = 'msg_'+Date.now().toString(36)+Math.random().toString(36).substr(2,5);
@@ -2115,8 +2117,13 @@
         addCenteredHint(hintText);
         chatMessages.push({id:'msg_'+Date.now().toString(36)+Math.random().toString(36).substr(2,5), role:'hint', text:hintText, timestamp:Date.now()});
         saveChatHistory();
+        cleaned = '';
+      } else {
+        // 找不到对应的角色（比如还没建过同名的单聊），不要把整条消息清空，
+        // 只把这个标签本身去掉，剩下的话照常正常显示
+        addLog('warn', `跨聊转发失败：找不到名为「${targetName}」的${mode==='群聊'?'群聊':'单聊角色'}，本轮消息按普通消息处理`);
+        cleaned = cleaned.replace(match[0], '').trim();
       }
-      cleaned = '';
     }
     return cleaned.trim();
   }
