@@ -1160,17 +1160,36 @@
     el.textContent = `上次备份：${timeStr}（${minsAgo<1?'刚刚':minsAgo+'分钟前'}）`;
   }
   async function writeBackupFile(){
+    saveGlobalsToActiveChar(); // 先把内存里的最新数据刷进 localStorage，再收集，防止文件为空
     const allData = getAllSettingsData();
+    const keyCount = Object.keys(allData).length;
+    if(keyCount === 0){ addLog('warn','自动备份跳过：收集到的数据为空（localStorage 可能还未初始化）'); return false; }
     const ts = new Date(); const stamp = ts.getFullYear()+'-'+String(ts.getMonth()+1).padStart(2,'0')+'-'+String(ts.getDate()).padStart(2,'0')+'_'+String(ts.getHours()).padStart(2,'0')+'-'+String(ts.getMinutes()).padStart(2,'0')+'-'+String(ts.getSeconds()).padStart(2,'0');
     const filename = `lumos_autobackup_${stamp}.json`; const jsonStr = JSON.stringify(allData);
     if(backupDirHandle){
       try{
-        const perm = await backupDirHandle.queryPermission({mode:'readwrite'});
-        if(perm !== 'granted'){ updateBackupFolderStatus(true); addLog('warn','自动备份未执行：文件夹权限未授权'); return false; }
-        const fileHandle = await backupDirHandle.getFileHandle(filename,{create:true});
+        let perm = await backupDirHandle.queryPermission({mode:'readwrite'});
+        if(perm !== 'granted'){
+          // 先主动请求一次权限（在有用户手势的上下文里可能成功）
+          try{ perm = await backupDirHandle.requestPermission({mode:'readwrite'}); } catch(e){}
+        }
+        if(perm !== 'granted'){ updateBackupFolderStatus(true); addLog('warn','自动备份未执行：文件夹权限未授权，请在设置里点击"恢复权限"'); return false; }
+        let fileHandle;
+        try{
+          fileHandle = await backupDirHandle.getFileHandle(filename,{create:true});
+        } catch(e){
+          // 句柄可能因磁盘状态变化而失效，尝试从 IndexedDB 重新载入
+          addLog('warn','文件句柄失效，正在尝试重新获取文件夹权限：'+e.message);
+          const freshHandle = await idbGet('backupDir');
+          if(!freshHandle){ addLog('error','自动备份失败：无法重新获取文件夹句柄'); return false; }
+          const freshPerm = await freshHandle.requestPermission({mode:'readwrite'});
+          if(freshPerm !== 'granted'){ addLog('warn','自动备份未执行：重新获取权限失败'); return false; }
+          backupDirHandle = freshHandle; updateBackupFolderStatus();
+          fileHandle = await backupDirHandle.getFileHandle(filename,{create:true});
+        }
         const writable = await fileHandle.createWritable(); await writable.write(jsonStr); await writable.close();
         await pruneOldBackups(); save('autoBackupLastTime', ts.toLocaleString('zh-CN')); save('autoBackupLastTimestamp', ts.getTime()); updateBackupLastTimeUI();
-        addLog('info','自动备份已写入: '+filename); return true;
+        addLog('info',`自动备份已写入: ${filename}（${keyCount} 个键）`); return true;
       } catch(e){ addLog('error','自动备份写入失败: '+e.message); return false; }
     } else if(load('autoBackupUseDownloadFallback', false)){
       const blob = new Blob([jsonStr],{type:'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click();
@@ -2113,7 +2132,10 @@
           updateUnreadDisplay();
           if(messageListViewWrap && messageListViewWrap.classList.contains('active')) renderCharacterList(charSearchInput?.value||'');
         }
-        const hintText = `${senderName||remarkVal} 转去${mode === '群聊' ? '群聊「'+targetName+'」' : '和 '+targetName+' '+mode}了`;
+        const userDisplayName = (typeof getActiveUserPersona === 'function' && getActiveUserPersona()?.name) || '用户';
+        const hintText = mode === '群聊'
+          ? `${senderName||remarkVal} 转去「${targetName}」群聊了`
+          : `${senderName||remarkVal} 转去和 ${userDisplayName} 私聊了`;
         addCenteredHint(hintText);
         chatMessages.push({id:'msg_'+Date.now().toString(36)+Math.random().toString(36).substr(2,5), role:'hint', text:hintText, timestamp:Date.now()});
         saveChatHistory();
