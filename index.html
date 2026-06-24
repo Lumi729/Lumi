@@ -1120,6 +1120,7 @@
 
   // ===== 自动定时备份（File System Access API，带降级方案）=====
   let backupDirHandle = null;
+  let backupHandleWasLost = false;
   const BACKUP_DB_NAME = 'lumos_backup_db', BACKUP_STORE = 'handles';
   function openBackupDB(){ return new Promise((resolve,reject)=>{ const req = indexedDB.open(BACKUP_DB_NAME,1); req.onupgradeneeded = ()=>{ req.result.createObjectStore(BACKUP_STORE) }; req.onsuccess = ()=>resolve(req.result); req.onerror = ()=>reject(req.error) }) }
   async function idbSet(key,val){ try{ const db = await openBackupDB(); return new Promise((resolve,reject)=>{ const tx = db.transaction(BACKUP_STORE,'readwrite'); tx.objectStore(BACKUP_STORE).put(val,key); tx.oncomplete=()=>resolve(); tx.onerror=()=>reject(tx.error) }) } catch(e){} }
@@ -1134,7 +1135,7 @@
     if(!window.showDirectoryPicker){ alert('你的浏览器不支持选择文件夹，将改用"自动下载备份文件"的方式（文件会进入手机默认下载目录）'); save('autoBackupUseDownloadFallback', true); updateBackupFolderStatus(); return; }
     try{
       const handle = await window.showDirectoryPicker({mode:'readwrite'});
-      backupDirHandle = handle; await idbSet('backupDir', handle); save('autoBackupUseDownloadFallback', false);
+      backupDirHandle = handle; backupHandleWasLost = false; await idbSet('backupDir', handle); save('autoBackupUseDownloadFallback', false);
       updateBackupFolderStatus(); alert('备份文件夹已选好：'+handle.name); maybeCatchUpBackup();
     } catch(e){ if(e.name !== 'AbortError') alert('选择文件夹失败：'+e.message); }
   }
@@ -1190,12 +1191,24 @@
         const writable = await fileHandle.createWritable(); await writable.write(jsonStr); await writable.close();
         await pruneOldBackups(); save('autoBackupLastTime', ts.toLocaleString('zh-CN')); save('autoBackupLastTimestamp', ts.getTime()); updateBackupLastTimeUI();
         addLog('info',`自动备份已写入: ${filename}（${keyCount} 个键）`); return true;
-      } catch(e){ addLog('error','自动备份写入失败: '+e.message); return false; }
+      } catch(e){
+        const isStale = e.message && e.message.includes('state had changed');
+        if(isStale){
+          // 句柄因切到后台而失效 —— 清掉，把本次数据存入 IDB 缓存，只警告一次
+          backupDirHandle = null; backupHandleWasLost = true; updateBackupFolderStatus();
+          try{ await idbSet('handlelost_backup', jsonStr); await idbSet('handlelost_backup_time', ts.toLocaleString('zh-CN')); } catch(_){}
+          save('autoBackupLastTime', ts.toLocaleString('zh-CN')); save('autoBackupLastTimestamp', ts.getTime()); updateBackupLastTimeUI();
+          addLog('warn','备份文件夹句柄已失效（通常是切到后台导致），本次数据已缓存到本地。请重新进入设置→自动备份，重新选择文件夹来恢复。');
+        } else {
+          addLog('error','自动备份写入失败: '+e.message);
+        }
+        return false;
+      }
     } else if(load('autoBackupUseDownloadFallback', false)){
       const blob = new Blob([jsonStr],{type:'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click();
       save('autoBackupLastTime', ts.toLocaleString('zh-CN')); save('autoBackupLastTimestamp', ts.getTime()); updateBackupLastTimeUI(); return true;
     }
-    addLog('warn','自动备份未执行：还没有选择备份文件夹'); return false;
+    if(!backupHandleWasLost) addLog('warn','自动备份未执行：还没有选择备份文件夹'); return false;
   }
   // 启动/恢复权限时检查：如果已经超过设定间隔没备份过，立刻补一次，
   // 不用死等下一个 setInterval 周期（页面没有一直开着的话，定时器永远等不到）
