@@ -2438,6 +2438,12 @@ async function _saveCharsToIDB(chars){
     });
   }
   (async ()=>{
+    // 清理历史遗留的无用 localStorage key，释放空间
+    ['dogchat_backup_characters','dogchat_backup_time',
+     'dogchat_multi_chatMessages','dogchat_multi_messageHistory',
+     'dogchat_multi_conversations','dogchat_multi_activeConversationId'
+    ].forEach(k=>{ try{ localStorage.removeItem(k); }catch(e){} });
+
     const _idbChars = await _loadCharsFromIDB();
     if(_idbChars && Array.isArray(_idbChars) && _idbChars.length > 0){
       // IDB 有数据则优先使用（无容量限制）
