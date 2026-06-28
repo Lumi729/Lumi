@@ -505,6 +505,36 @@
   <div class="create-modal" id="groupCreateModal"><div class="create-panel"><h3>选择群聊成员</h3><div class="create-member-list" id="groupMemberList"></div><div style="display:flex;gap:8px;"><button id="confirmGroupBtn" style="flex:1;">确认创建</button><button id="createEmptyGroupBtn" style="flex:1;background:#576b95;">创建空群聊</button></div><button class="close-create" id="closeGroupCreateBtn" style="width:100%;">取消</button></div></div>
 </div>
 <script>
+// === IndexedDB for characters (large chat data, no 5MB limit) ===
+const _CHARS_DB_NAME = 'lumos_chars_v1';
+const _CHARS_STORE_NAME = 'chars';
+function _openCharsDB(){
+  return new Promise((res,rej)=>{
+    const r=indexedDB.open(_CHARS_DB_NAME,1);
+    r.onupgradeneeded=()=>r.result.createObjectStore(_CHARS_STORE_NAME);
+    r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);
+  });
+}
+async function _loadCharsFromIDB(){
+  try{
+    const db=await _openCharsDB();
+    return new Promise((res,rej)=>{
+      const tx=db.transaction(_CHARS_STORE_NAME,'readonly');
+      const req=tx.objectStore(_CHARS_STORE_NAME).get('main');
+      req.onsuccess=()=>res(req.result||null); req.onerror=()=>rej(req.error);
+    });
+  }catch(e){return null;}
+}
+async function _saveCharsToIDB(chars){
+  try{
+    const db=await _openCharsDB();
+    return new Promise((res,rej)=>{
+      const tx=db.transaction(_CHARS_STORE_NAME,'readwrite');
+      tx.objectStore(_CHARS_STORE_NAME).put(chars,'main');
+      tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error);
+    });
+  }catch(e){ console.error('IDB save failed:',e); }
+}
 (function() {
   const splashScreen = document.getElementById('splashScreen');
   const progressFill = document.getElementById('progressFill');
@@ -549,8 +579,8 @@
   let _saveQuotaWarned = false;
   function save(k,v) { try{ localStorage.setItem('dogchat_multi_'+k, JSON.stringify(v)) } catch(e){ if(!_saveQuotaWarned && (e.name==='QuotaExceededError'||e.name==='NS_ERROR_DOM_QUOTA_REACHED'||e.code===22)){ _saveQuotaWarned=true; setTimeout(()=>{ alert('⚠️ 存储空间不足！数据未能保存。\n建议：立即导出全局备份，然后删除部分历史对话或旧角色释放空间。'); _saveQuotaWarned=false; },0); } } }
   function load(k,def) { try{ const r = localStorage.getItem('dogchat_multi_'+k); return r !== null ? JSON.parse(r) : def } catch(e){ return def } }
-  function getAllSettingsData() { const data = {}; for(let i=0;i<localStorage.length;i++){ const key = localStorage.key(i); if(key && key.startsWith('dogchat_multi_')){ try{ data[key] = JSON.parse(localStorage.getItem(key)) } catch(e){ data[key] = localStorage.getItem(key) } } } return data }
-  function restoreAllSettingsData(data) { const keysToRemove = []; for(let i=0;i<localStorage.length;i++){ const key = localStorage.key(i); if(key && key.startsWith('dogchat_multi_')) keysToRemove.push(key) } keysToRemove.forEach(k => localStorage.removeItem(k)); for(const [key,value] of Object.entries(data)){ if(key.startsWith('dogchat_multi_')){ try{ localStorage.setItem(key, JSON.stringify(value)) } catch(e){} } } }
+  function getAllSettingsData() { const data = {}; for(let i=0;i<localStorage.length;i++){ const key = localStorage.key(i); if(key && key.startsWith('dogchat_multi_')){ try{ data[key] = JSON.parse(localStorage.getItem(key)) } catch(e){ data[key] = localStorage.getItem(key) } } } try{ if(typeof characters !== 'undefined' && characters.length > 0) data['dogchat_multi_characters'] = characters; } catch(e){} return data }
+  function restoreAllSettingsData(data) { const keysToRemove = []; for(let i=0;i<localStorage.length;i++){ const key = localStorage.key(i); if(key && key.startsWith('dogchat_multi_')) keysToRemove.push(key) } keysToRemove.forEach(k => localStorage.removeItem(k)); if(data['dogchat_multi_characters'] && Array.isArray(data['dogchat_multi_characters'])){ _saveCharsToIDB(data['dogchat_multi_characters']); } for(const [key,value] of Object.entries(data)){ if(key === 'dogchat_multi_characters') continue; if(key.startsWith('dogchat_multi_')){ try{ localStorage.setItem(key, JSON.stringify(value)) } catch(e){} } } }
   function clearAllSettings() { const keysToRemove = []; for(let i=0;i<localStorage.length;i++){ const key = localStorage.key(i); if(key && key.startsWith('dogchat_multi_')) keysToRemove.push(key) } keysToRemove.forEach(k => localStorage.removeItem(k)) }
   const statusTimeEl = document.getElementById('statusTime'), statusBattery = document.getElementById('statusBattery');
   function updateStatusTime() { const now = new Date(); statusTimeEl.textContent = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}` }
@@ -625,7 +655,7 @@
   }
   if(!activeCharacterId || !characters.find(c=>c.id===activeCharacterId)){ activeCharacterId = characters[0]?.id || null; save('activeCharacterId',activeCharacterId) }
   function getActiveCharacter(){ return characters.find(c=>c.id===activeCharacterId) || characters[0] || null }
-  function saveAllData(){ save('characters',characters); save('activeCharacterId',activeCharacterId); save('libraryPresets',libraryPresets); save('libraryWorlds',libraryWorlds); saveUserPersonas() }
+  function saveAllData(){ _saveCharsToIDB(characters); save('activeCharacterId',activeCharacterId); save('libraryPresets',libraryPresets); save('libraryWorlds',libraryWorlds); saveUserPersonas() }
   let presets=[], worlds=[], enabledPresetIds=[], enabledWorldIds=[];
   let chatMessages=[], messageHistory=[], conversations=[], activeConvId=null;
   let avatarState = { dog:{type:'text',text:'🌙',src:''}, user:{type:'text',text:'我',src:''} };
@@ -2407,7 +2437,22 @@
       if(mcEl && mcEl.classList.contains('css-fullscreen')){ mcEl.style.height = ''; mcEl.style.top = ''; }
     });
   }
-  initAll();
+  (async ()=>{
+    const _idbChars = await _loadCharsFromIDB();
+    if(_idbChars && Array.isArray(_idbChars) && _idbChars.length > 0){
+      // IDB 有数据则优先使用（无容量限制）
+      characters = _idbChars;
+      if(!activeCharacterId||!characters.find(c=>c.id===activeCharacterId)){ activeCharacterId=characters[0]?.id||null; save('activeCharacterId',activeCharacterId); }
+      loadActiveCharToGlobals();
+    } else if(characters.length > 0){
+      // 首次运行：把 localStorage 数据迁移到 IDB，并释放 localStorage 空间
+      _saveCharsToIDB(characters).then(()=>{
+        try{ localStorage.removeItem('dogchat_multi_characters'); } catch(e){}
+        addLog('info','数据已迁移至 IndexedDB，本地存储空间已释放');
+      });
+    }
+    initAll();
+  })();
 })();
 </script>
 </body>
