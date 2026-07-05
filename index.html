@@ -95,6 +95,66 @@
         .quote-hint .quote-text{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
         .quote-hint .quote-cancel{background:0 0;border:0;font-size:16px;cursor:pointer;color:#999}
         .input-bar{background:#f7f7f7;border-top:.5px solid rgba(0,0,0,.1);padding:8px 12px;display:flex;align-items:flex-end;gap:10px}
+        .ext-plus-btn{background:none;border:none;font-size:26px;color:#666;cursor:pointer;padding:0;line-height:1;align-self:flex-end;margin-bottom:6px;transition:transform .2s;touch-action:manipulation;flex-shrink:0}
+        .ext-plus-btn.open{transform:rotate(45deg);color:#999}
+        .ext-plus-btn:active{opacity:.6}
+        .ext-panel{display:none;background:#f7f7f7;border-top:.5px solid rgba(0,0,0,.08);padding:12px 16px;gap:16px;flex-wrap:wrap}
+        .ext-panel.show{display:flex}
+        .ext-item{display:flex;flex-direction:column;align-items:center;gap:4px;width:60px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+        .ext-item-icon{width:46px;height:46px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+        .ext-item-label{font-size:11px;color:#666}
+        .ext-item:active .ext-item-icon{transform:scale(.93)}
+        .wallet-modal{display:none;position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.4);backdrop-filter:blur(4px);z-index:100;justify-content:center;align-items:center}
+        .wallet-modal.show{display:flex}
+        .wallet-panel{background:#fff;border-radius:16px;width:92%;max-width:380px;max-height:85vh;overflow-y:auto;padding:0;box-shadow:0 8px 24px rgba(0,0,0,.2)}
+        .wallet-header{padding:16px 20px 12px;display:flex;align-items:center;justify-content:space-between;border-bottom:.5px solid #f0f0f0}
+        .wallet-header h3{font-size:17px;font-weight:600;margin:0}
+        .wallet-close{background:none;border:none;font-size:20px;color:#999;cursor:pointer;padding:4px}
+        .wallet-body{padding:16px 20px 20px}
+        .wallet-balance-row{display:flex;gap:10px;margin-bottom:16px}
+        .wallet-balance-card{flex:1;background:#f8f8f8;border-radius:10px;padding:12px 14px}
+        .wallet-balance-label{font-size:12px;color:#999;margin-bottom:4px;display:flex;align-items:center;gap:4px}
+        .wallet-balance-label .wallet-char-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+        .wallet-balance-amount{font-size:24px;font-weight:600;color:#000}
+        .wallet-balance-amount .wallet-currency{font-size:14px;color:#999;font-weight:400;margin-right:1px}
+        .wallet-actions{display:flex;gap:8px;margin-bottom:18px}
+        .wallet-action-btn{flex:1;padding:9px 0;border-radius:8px;border:none;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px;transition:background .2s}
+        .wallet-action-btn:active{opacity:.8}
+        .wallet-action-btn.wa-record{background:#f0f0f0;color:#333}
+        .wallet-action-btn.wa-topup{background:#e8f5e9;color:#2e7d32}
+        .wallet-action-btn.wa-hongbao{background:#fff0f0;color:#c0392b}
+        .wallet-tx-title{font-size:13px;color:#999;margin-bottom:8px}
+        .wallet-tx-list{max-height:240px;overflow-y:auto}
+        .wallet-tx-item{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:.5px solid #f5f5f5}
+        .wallet-tx-item:last-child{border-bottom:none}
+        .wallet-tx-icon{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+        .wallet-tx-icon.wt-in{background:#e8f5e9;color:#2e7d32}
+        .wallet-tx-icon.wt-out{background:#fce4ec;color:#c0392b}
+        .wallet-tx-icon.wt-hb{background:#fff8e1;color:#f57c00}
+        .wallet-tx-info{flex:1;min-width:0}
+        .wallet-tx-info .wt-name{font-size:14px;color:#333;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .wallet-tx-info .wt-note{font-size:11px;color:#aaa;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .wallet-tx-amount{font-size:14px;font-weight:500;white-space:nowrap}
+        .wallet-tx-amount.wt-pos{color:#2e7d32}
+        .wallet-tx-amount.wt-neg{color:#c0392b}
+        .wallet-empty{text-align:center;padding:24px 0;color:#ccc;font-size:13px}
+        .wallet-form{margin-bottom:12px}
+        .wallet-form-row{display:flex;gap:8px;margin-bottom:8px;align-items:center}
+        .wallet-form-row label{font-size:13px;color:#666;min-width:36px;text-align:right}
+        .wallet-form-row input,.wallet-form-row select{flex:1;border:.5px solid #d0d0d0;border-radius:6px;padding:7px 10px;font-size:13px;outline:none;background:#fff;font-family:inherit}
+        .wallet-form-row input:focus{border-color:#07c160}
+        .wallet-form-btns{display:flex;gap:8px;margin-top:10px}
+        .wallet-form-btns button{flex:1;padding:8px;border:none;border-radius:8px;font-size:13px;cursor:pointer}
+        .wallet-form-btns .wf-cancel{background:#f0f0f0;color:#666}
+        .wallet-form-btns .wf-confirm{background:#07c160;color:#fff}
+        .hongbao-bubble{width:220px;border-radius:10px;overflow:hidden;cursor:pointer;margin-top:4px}
+        .hongbao-bubble-top{background:#c9453b;color:#fff;padding:12px 14px;display:flex;align-items:center;gap:10px}
+        .hongbao-bubble-coin{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+        .hongbao-bubble-text{font-size:13px;line-height:1.4}
+        .hongbao-bubble-text .hb-amt{font-size:18px;font-weight:600}
+        .hongbao-bubble-bottom{background:#f9f0ef;padding:7px 14px;font-size:11px;color:#999;display:flex;justify-content:space-between;align-items:center}
+        .hongbao-claim-btn{font-size:11px;padding:3px 10px;background:#c9453b;color:#fff;border:none;border-radius:6px;cursor:pointer}
+        .hongbao-claimed{color:#aaa;font-style:italic}
         .retry-btn{background:#576b95;border:0;color:#fff;padding:8px 12px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;transition:background .2s;white-space:nowrap;touch-action:manipulation;align-self:flex-end;margin-bottom:4px}
         .retry-btn:active{background:#4a5c82}
         .retry-btn:disabled{background:#b0b0b0;cursor:not-allowed}
@@ -398,7 +458,30 @@
     <div class="quote-hint" id="quoteHint" style="display:none"><span class="quote-text" id="quoteText"></span><button class="quote-cancel" id="quoteCancelBtn">×</button></div>
     <div class="quote-hint" id="mentionHint" style="display:none;background:#e1f0ff"><span class="quote-text" id="mentionText" style="color:#1a73e8"></span><button class="quote-cancel" id="mentionCancelBtn">×</button></div>
     <div class="pending-hint" id="sendHint"><span class="pending-text" id="sendHintText">积0条·三击回复</span><button class="pending-cancel" id="clearPendingBtn">×</button></div>
-    <div class="input-bar"><button class="retry-btn" id="retryBtn" title="重说上一次AI回复">重说</button><textarea class="input-field" id="messageInput" placeholder="输入消息..." rows="1"></textarea><button class="send-btn" id="sendBtn">发送</button></div>
+    <div class="input-bar"><button class="ext-plus-btn" id="extPlusBtn">＋</button><button class="retry-btn" id="retryBtn" title="重说上一次AI回复">重说</button><textarea class="input-field" id="messageInput" placeholder="输入消息..." rows="1"></textarea><button class="send-btn" id="sendBtn">发送</button></div>
+    <div class="ext-panel" id="extPanel">
+      <div class="ext-item" id="extWallet"><div class="ext-item-icon">💰</div><div class="ext-item-label">钱包</div></div>
+      <div class="ext-item" id="extVoice" style="opacity:.4"><div class="ext-item-icon">🎙️</div><div class="ext-item-label">语音</div></div>
+      <div class="ext-item" id="extImage" style="opacity:.4"><div class="ext-item-icon">🎨</div><div class="ext-item-label">文生图</div></div>
+    </div>
+    <div class="wallet-modal" id="walletModal">
+      <div class="wallet-panel">
+        <div class="wallet-header"><h3>💰 钱包</h3><button class="wallet-close" id="walletCloseBtn">✕</button></div>
+        <div class="wallet-body">
+          <div class="wallet-balance-row">
+            <div class="wallet-balance-card"><div class="wallet-balance-label">我的余额</div><div class="wallet-balance-amount"><span class="wallet-currency">¥</span><span id="walletMyBalance">0</span></div></div>
+            <div class="wallet-balance-card"><div class="wallet-balance-label"><span class="wallet-char-dot" style="background:#a78bfa"></span> <span id="walletCharName">角色</span></div><div class="wallet-balance-amount"><span class="wallet-currency">¥</span><span id="walletCharBalance">0</span></div></div>
+          </div>
+          <div class="wallet-actions">
+            <button class="wallet-action-btn wa-record" id="walletRecordBtn">📝 记一笔</button>
+            <button class="wallet-action-btn wa-topup" id="walletTopupBtn">💚 充值给角色</button>
+          </div>
+          <div id="walletFormArea" style="display:none"></div>
+          <div class="wallet-tx-title">最近流水</div>
+          <div class="wallet-tx-list" id="walletTxList"><div class="wallet-empty">还没有记录</div></div>
+        </div>
+      </div>
+    </div>
   </div>
   <div class="message-list-view-wrap active" id="messageListViewWrap"><div class="nav-bar"><span style="font-size:17px;font-weight:600;color:#000">信息</span></div><div class="search-bar-row"><div class="search-input-wrap"><span class="search-icon">🔍</span><input type="text" id="charSearchInput" placeholder="搜索角色/群聊"></div><button class="create-char-btn" id="createCharBtn">＋ 创建</button></div><div class="character-list" id="characterList"></div>
     <div class="bottom-tab-bar" id="bottomTabBar1">
@@ -1664,6 +1747,7 @@ async function _clearCharsIDB(){
         systemPrompt += `## 自动回复\n你们已经 ${timeAgoStr} 没有聊天了。最后一条是「${lastSender}」发的：「${lastPreview}」，之后「${userName}」一直没回复。\n请以「${charName}」的人设判断：在这个时间点，你会主动发消息吗？\n想发 → 按正常格式回复（会标注为自动回复）\n不想发 → 输出 [AUTO_SKIP] 理由\n\n`;
       }
     }
+    try{ const walletCtx = await getWalletContextForPrompt(); if(walletCtx) systemPrompt += walletCtx; }catch(e){ console.warn('wallet prompt inject failed',e); }
     if(isAutoReply){ currentAutoReplyLog = { time: new Date().toISOString(), prompt: systemPrompt, response: null, skipped: false, reason: '' }; autoReplyLogs.unshift(currentAutoReplyLog); if(autoReplyLogs.length > 50) autoReplyLogs.pop(); }
     if(apiSettings.enabled && apiSettings.key && apiSettings.url){
       waiting=true; if (!skipUI) { sendBtn.disabled = true; retryBtn.disabled = true; }
@@ -1696,7 +1780,8 @@ async function _clearCharsIDB(){
         // BLE 指令在这里就先从文本里摘掉（纯文本处理，不在这里真的发送），
         // 这样跨聊转发、改名解析看到的都是干净文本，不会把 [BLE:xx] 这种控制代码泄漏到转发消息里
         const bleExtraction = extractBleCommands(cleanTextRaw);
-        const cleanText = bleExtraction.cleaned;
+        const hongbaoExtraction = extractHongbao(bleExtraction.cleaned);
+        const cleanText = hongbaoExtraction.cleaned;
         // 群聊场景下，先按每一段自己的发言人解析一遍（不假设整轮只有一个人在说话），
         // 改名、跨聊转发都依赖"这段话到底是谁说的"，不再只在自动回复(allowedMemberIds)时才能正确识别
         const groupPreSegments = chatType==='group' ? parseGroupResponse(cleanText) : [];
@@ -1739,13 +1824,14 @@ async function _clearCharsIDB(){
           cleanedForSeg = cleanedForSeg.replace(/\[改名[：:].+?\]/g,'').replace(/\[切换[到]?[：:]?(?:私聊|见面|群聊)[：:].+?\]/g,'').trim();
         }
         await sendExtractedBleCommands(bleExtraction.bleMatches);
+        if(hongbaoExtraction.hongbaoList.length > 0) await processHongbao(hongbaoExtraction.hongbaoList);
         let segmentsRaw = cleanedForSeg.split(/\n{2,}/).filter(s=>s.trim()!==''); if(segmentsRaw.length===0 && cleanedForSeg) segmentsRaw = [cleanedForSeg];
         let newSegments = [];
         let skipReasons = [];
         if(chatType==='group'){
           const parsedSegments = parseGroupResponse(cleanedForSeg);
           parsedSegments.forEach(seg => {
-            seg.text = seg.text.replace(/\[BLE[:：]\d+(?:[:：]\d)?\]/g,'').replace(/\[切换[到]?[：:]?(?:私聊|见面|群聊)[：:].+?\]/g,'').replace(/\[改名[：:].+?\]/g,'').trim();
+            seg.text = seg.text.replace(/\[BLE[:：]\d+(?:[:：]\d)?\]/g,'').replace(/\[红包[:：]\d+(?:\.\d+)?(?:[:：].+?)?\]/g,'').replace(/\[切换[到]?[：:]?(?:私聊|见面|群聊)[：:].+?\]/g,'').replace(/\[改名[：:].+?\]/g,'').trim();
             if(seg.text.startsWith('[AUTO_SKIP]')){
               let reason = seg.text.replace('[AUTO_SKIP]','').trim() || '未提供具体理由';
               reason = reason.replace(/^(理由[：:]?\s*)/, '').trim();
@@ -1823,6 +1909,23 @@ async function _clearCharsIDB(){
           const hintId = 'msg_'+Date.now().toString(36)+Math.random().toString(36).substr(2,5);
           chatMessages.push({id:hintId, role:'hint', text:hintMsg, timestamp:Date.now()});
           if(fragment) { const hintDiv = document.createElement('div'); hintDiv.className='time-stamp'; hintDiv.textContent=hintMsg; fragment.appendChild(hintDiv); }
+        }
+        // 渲染红包气泡
+        if(!skipUI && hongbaoExtraction.hongbaoList.length > 0 && fragment){
+          const hbCharName = characters.find(c=>c.id===activeCharacterId)?.charSettings?.name || remarkVal || '角色';
+          hongbaoExtraction.hongbaoList.forEach(hb=>{
+            const wrapper = document.createElement('div');
+            wrapper.className = 'msg-wrapper msg-wrapper-left';
+            const row = document.createElement('div');
+            row.className = 'message-row message-left';
+            const avatarDiv = document.createElement('div');
+            avatarDiv.className = 'avatar avatar-dog';
+            applyAvatar(avatarDiv, avatarState.dog);
+            row.appendChild(avatarDiv);
+            row.appendChild(renderHongbaoBubble(hb.amount, hb.note, hbCharName, false));
+            wrapper.appendChild(row);
+            fragment.appendChild(wrapper);
+          });
         }
         messageHistory.push({role:'assistant',content:finalContent||''}); saveChatHistory();
         if (!skipUI && loadingWrapper) { loadingWrapper.replaceWith(fragment); } else if (loadingWrapper) { loadingWrapper.remove(); }
@@ -2129,6 +2232,212 @@ async function _clearCharsIDB(){
     document.getElementById('bleCh1Slider').value=0; document.getElementById('bleCh1Val').textContent='0';
     document.getElementById('bleCh2Slider').value=0; document.getElementById('bleCh2Val').textContent='0';
   });
+
+  // ===== 扩展面板 + 钱包模块 =====
+  const extPlusBtn = document.getElementById('extPlusBtn');
+  const extPanel = document.getElementById('extPanel');
+  const walletModal = document.getElementById('walletModal');
+  const walletCloseBtn = document.getElementById('walletCloseBtn');
+  const walletRecordBtn = document.getElementById('walletRecordBtn');
+  const walletTopupBtn = document.getElementById('walletTopupBtn');
+  const walletFormArea = document.getElementById('walletFormArea');
+  const walletTxList = document.getElementById('walletTxList');
+  const walletMyBalanceEl = document.getElementById('walletMyBalance');
+  const walletCharBalanceEl = document.getElementById('walletCharBalance');
+  const walletCharNameEl = document.getElementById('walletCharName');
+
+  if(extPlusBtn) extPlusBtn.addEventListener('click', ()=>{
+    const open = extPanel.classList.toggle('show');
+    extPlusBtn.classList.toggle('open', open);
+  });
+  if(document.getElementById('extWallet')) document.getElementById('extWallet').addEventListener('click', ()=>{
+    extPanel.classList.remove('show'); extPlusBtn.classList.remove('open');
+    openWallet();
+  });
+  if(walletCloseBtn) walletCloseBtn.addEventListener('click', ()=> walletModal.classList.remove('show'));
+  walletModal?.addEventListener('click', e=>{ if(e.target===walletModal) walletModal.classList.remove('show') });
+
+  // Wallet IndexedDB
+  const _WALLET_DB = 'lumos_wallet';
+  const _WALLET_STORE = 'transactions';
+  function _openWalletDB(){
+    return new Promise((res,rej)=>{
+      const r = indexedDB.open(_WALLET_DB, 1);
+      r.onupgradeneeded = ()=>{ const db=r.result; if(!db.objectStoreNames.contains(_WALLET_STORE)) db.createObjectStore(_WALLET_STORE, {keyPath:'id'}); };
+      r.onsuccess = ()=>res(r.result);
+      r.onerror = ()=>rej(r.error);
+    });
+  }
+  async function walletGetAllTx(){
+    try{
+      const db = await _openWalletDB();
+      return new Promise((res,rej)=>{
+        const tx = db.transaction(_WALLET_STORE,'readonly');
+        const req = tx.objectStore(_WALLET_STORE).getAll();
+        req.onsuccess = ()=> res(req.result || []);
+        req.onerror = ()=> rej(req.error);
+      });
+    }catch(e){ return []; }
+  }
+  async function walletAddTx(txData){
+    try{
+      const db = await _openWalletDB();
+      return new Promise((res,rej)=>{
+        const tx = db.transaction(_WALLET_STORE,'readwrite');
+        tx.objectStore(_WALLET_STORE).put(txData);
+        tx.oncomplete = ()=>res();
+        tx.onerror = ()=>rej(tx.error);
+      });
+    }catch(e){ console.error('wallet save error',e); }
+  }
+
+  function walletCalcBalances(txs, charId){
+    let my = 0, char = 0;
+    txs.filter(t => !charId || t.charId === charId).forEach(t=>{
+      if(t.type==='record_expense') my -= t.amount;
+      else if(t.type==='record_income') my += t.amount;
+      else if(t.type==='topup'){ my -= t.amount; char += t.amount; }
+      else if(t.type==='hongbao'){ char -= t.amount; my += t.amount; }
+    });
+    return {my, char};
+  }
+
+  async function openWallet(){
+    const ac = characters.find(c=>c.id===activeCharacterId);
+    if(walletCharNameEl) walletCharNameEl.textContent = ac?.charSettings?.name || ac?.remarkName || '角色';
+    walletFormArea.style.display = 'none';
+    walletFormArea.innerHTML = '';
+    await refreshWalletUI();
+    walletModal.classList.add('show');
+  }
+
+  async function refreshWalletUI(){
+    const allTx = await walletGetAllTx();
+    const charId = activeCharacterId;
+    const {my, char} = walletCalcBalances(allTx, charId);
+    if(walletMyBalanceEl) walletMyBalanceEl.textContent = my.toFixed(2).replace(/\.00$/,'');
+    if(walletCharBalanceEl) walletCharBalanceEl.textContent = char.toFixed(2).replace(/\.00$/,'');
+    const charTx = allTx.filter(t=>t.charId===charId).sort((a,b)=>b.timestamp-a.timestamp).slice(0,30);
+    if(!walletTxList) return;
+    if(charTx.length===0){ walletTxList.innerHTML='<div class="wallet-empty">还没有记录</div>'; return; }
+    walletTxList.innerHTML = charTx.map(t=>{
+      const isPos = t.type==='record_income' || t.type==='hongbao';
+      const iconClass = t.type==='hongbao' ? 'wt-hb' : (isPos ? 'wt-in' : 'wt-out');
+      const icons = {record_expense:'📉',record_income:'📈',topup:'💚',hongbao:'🧧'};
+      const labels = {record_expense:t.category||'支出',record_income:t.category||'收入',topup:'充值给角色',hongbao:(t.charName||'角色')+'的红包'};
+      const d = new Date(t.timestamp);
+      const dateStr = (d.getMonth()+1)+'/'+d.getDate()+' '+d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0');
+      const sign = isPos ? '+' : '-';
+      return `<div class="wallet-tx-item"><div class="wallet-tx-icon ${iconClass}">${icons[t.type]||'💰'}</div><div class="wallet-tx-info"><div class="wt-name">${escapeHtml(labels[t.type]||t.type)}</div><div class="wt-note">${t.note?escapeHtml(t.note)+' · ':''}${dateStr}</div></div><div class="wallet-tx-amount ${isPos?'wt-pos':'wt-neg'}">${sign}${t.amount}</div></div>`;
+    }).join('');
+  }
+
+  function showWalletForm(mode){
+    const isTopup = mode==='topup';
+    walletFormArea.style.display = 'block';
+    walletFormArea.innerHTML = `
+      <div class="wallet-form">
+        <div class="wallet-form-row"><label>金额</label><input type="number" id="wfAmount" placeholder="0.00" min="0.01" step="0.01"></div>
+        ${!isTopup ? '<div class="wallet-form-row"><label>类型</label><select id="wfType"><option value="record_expense">支出</option><option value="record_income">收入</option></select></div><div class="wallet-form-row"><label>分类</label><input type="text" id="wfCategory" placeholder="奶茶/午饭/交通..."></div>' : ''}
+        <div class="wallet-form-row"><label>备注</label><input type="text" id="wfNote" placeholder="可选"></div>
+        <div class="wallet-form-btns"><button class="wf-cancel" id="wfCancel">取消</button><button class="wf-confirm" id="wfConfirm">${isTopup?'确认充值':'确认'}</button></div>
+      </div>`;
+    document.getElementById('wfCancel').addEventListener('click', ()=>{ walletFormArea.style.display='none'; walletFormArea.innerHTML=''; });
+    document.getElementById('wfConfirm').addEventListener('click', async ()=>{
+      const amount = parseFloat(document.getElementById('wfAmount')?.value);
+      if(!amount || amount<=0){ alert('请输入有效金额'); return; }
+      const txData = {
+        id: 'wtx_'+Date.now().toString(36)+Math.random().toString(36).substr(2,5),
+        charId: activeCharacterId,
+        charName: characters.find(c=>c.id===activeCharacterId)?.charSettings?.name || '角色',
+        amount,
+        type: isTopup ? 'topup' : (document.getElementById('wfType')?.value || 'record_expense'),
+        category: document.getElementById('wfCategory')?.value?.trim() || '',
+        note: document.getElementById('wfNote')?.value?.trim() || '',
+        timestamp: Date.now()
+      };
+      await walletAddTx(txData);
+      walletFormArea.style.display='none'; walletFormArea.innerHTML='';
+      await refreshWalletUI();
+    });
+  }
+  if(walletRecordBtn) walletRecordBtn.addEventListener('click', ()=> showWalletForm('record'));
+  if(walletTopupBtn) walletTopupBtn.addEventListener('click', ()=> showWalletForm('topup'));
+
+  // 红包解析：从 AI 回复中提取 [红包:金额:留言]
+  function extractHongbao(content){
+    const matches = [];
+    const cleaned = content.replace(/\[红包[:：](\d+(?:\.\d+)?)(?:[:：](.+?))?\]/g, (m, amt, note)=>{
+      matches.push({amount: parseFloat(amt), note: note||''});
+      return '';
+    });
+    return {cleaned: cleaned.trim(), hongbaoList: matches};
+  }
+
+  async function processHongbao(hongbaoList){
+    for(const hb of hongbaoList){
+      const txData = {
+        id: 'wtx_'+Date.now().toString(36)+Math.random().toString(36).substr(2,5),
+        charId: activeCharacterId,
+        charName: characters.find(c=>c.id===activeCharacterId)?.charSettings?.name || '角色',
+        amount: hb.amount,
+        type: 'hongbao',
+        category: '',
+        note: hb.note,
+        timestamp: Date.now()
+      };
+      await walletAddTx(txData);
+    }
+  }
+
+  // 渲染红包气泡卡片
+  function renderHongbaoBubble(amount, note, charName, claimed){
+    const div = document.createElement('div');
+    div.className = 'hongbao-bubble';
+    div.innerHTML = `<div class="hongbao-bubble-top"><div class="hongbao-bubble-coin">🧧</div><div class="hongbao-bubble-text">${note?escapeHtml(note)+'<br>':''}<span class="hb-amt">¥${amount}</span></div></div><div class="hongbao-bubble-bottom"><span>${escapeHtml(charName||'角色')}的红包</span>${claimed?'<span class="hongbao-claimed">已领取</span>':'<button class="hongbao-claim-btn">领取</button>'}</div>`;
+    if(!claimed){
+      const btn = div.querySelector('.hongbao-claim-btn');
+      btn?.addEventListener('click', async (e)=>{
+        e.stopPropagation();
+        btn.textContent = '已领取';
+        btn.disabled = true;
+        btn.className = 'hongbao-claimed';
+      });
+    }
+    return div;
+  }
+
+  // 聊天记账：解析用户输入如 "记一笔 奶茶 15"
+  function parseChatRecord(text){
+    const m = text.match(/^记一笔\s+(.+?)\s+(\d+(?:\.\d+)?)\s*$/);
+    if(!m) return null;
+    return {category: m[1], amount: parseFloat(m[2])};
+  }
+
+  // 将钱包信息注入 system prompt
+  function getWalletPromptSnippet(){
+    return ''; // 异步数据需要在 triggerAiReply 中处理
+  }
+  async function getWalletContextForPrompt(){
+    const allTx = await walletGetAllTx();
+    const charId = activeCharacterId;
+    const {my, char} = walletCalcBalances(allTx, charId);
+    const charName = characters.find(c=>c.id===charId)?.charSettings?.name || '角色';
+    const recentTx = allTx.filter(t=>t.charId===charId).sort((a,b)=>b.timestamp-a.timestamp).slice(0,5);
+    let snippet = `\n## 钱包系统\n用户余额：¥${my}，${charName}的余额：¥${char}\n`;
+    if(recentTx.length>0){
+      snippet += '最近记录：' + recentTx.map(t=>{
+        const labels = {record_expense:'支出',record_income:'收入',topup:'用户充值',hongbao:'你发红包'};
+        return `${labels[t.type]||t.type} ¥${t.amount}${t.note?' ('+t.note+')':''}`;
+      }).join('；') + '\n';
+    }
+    if(char > 0){
+      snippet += `你可以在合适的时候用 [红包:金额:留言] 给用户发红包（从你的余额扣除）。不要每次都发，在特殊时刻或用户需要鼓励时才发。金额不能超过你的余额 ¥${char}。\n`;
+    } else {
+      snippet += '你的余额为0，无法发红包。\n';
+    }
+    return snippet;
+  }
 
   function extractBleCommands(content){
     if(!apiSettings.bleControlEnabled) return {cleaned: content, bleMatches: []};
