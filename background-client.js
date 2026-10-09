@@ -38,6 +38,8 @@ window.createLumosBackground = function(adapter) {
     <div class="hint-text">地址和口令会保存在这台设备，下次自动填入。</div>
     <div class="hint-text">启用会把当前角色的 API 密钥、设定和所选上下文上传到你自己的后台，加密保存用于调用 AI。7 天不打开本机页面则暂停调度；生成结果会在回来时同步。后台不执行蓝牙、红包、撤回或跨聊指令。</div>
     <label class="bg-consent"><input id="bgConsent" type="checkbox"><span>我同意上传这些信息到我填写的后台</span></label>\n    <label class="bg-consent"><input id="bgGeneration" type="checkbox"><span>退出页面后继续生成回复<br><small>关闭时使用原来的聊天方式；消息通知仍由上方开关控制。</small></span></label>
+    <div class="setting-row"><label for="bgDailyLimit">后台每日次数上限</label><input id="bgDailyLimit" type="number" min="0" max="20" step="1"></div>
+    <div class="hint-text">仅控制后台主动回复，与本地每日次数分开。0 表示暂停后台主动回复；你主动请求的普通回复不占此次数。</div>
     <div class="bg-actions">
     <button id="bgConnect" class="gen-btn" type="button">为当前角色启用后台</button>
     <button id="bgTest" class="gen-btn" type="button">测试手机推送</button>
@@ -49,7 +51,9 @@ window.createLumosBackground = function(adapter) {
   const el = name => box.querySelector('#' + name);
   el('bgUrl').value = config.url || ''; el('bgToken').value = config.token || '';
   function status(text, error = false) { el('bgStatus').textContent = text; el('bgStatus').dataset.error = String(error); }
+  function backgroundLimit() { return Number.isInteger(config.dailyLimit) ? Math.max(0, Math.min(20, config.dailyLimit)) : 3; }
   function renderConnection() {
+    el('bgDailyLimit').value = backgroundLimit();
     if (config.enabled) el('bgConsent').checked = true;
     el('bgConsent').disabled = Boolean(config.enabled);
     el('bgGeneration').checked = Boolean(config.backgroundGeneration);
@@ -71,6 +75,21 @@ window.createLumosBackground = function(adapter) {
     config.backgroundGeneration = el('bgGeneration').checked; persist();
     if (config.enabled) await sync();
   };
+  el('bgDailyLimit').onchange = async () => {
+    const value = Number(el('bgDailyLimit').value);
+    if (el('bgDailyLimit').value === '' || !Number.isInteger(value) || value < 0 || value > 20) {
+      status('后台每日次数请填写 0 到 20 的整数。', true); return;
+    }
+    config.dailyLimit = value; persist();
+    if (config.enabled) await sync(true);
+    else status('后台每日次数已保存，连接后生效。');
+  };
+  async function backgroundSnapshot(id, forReply = false) {
+    const snapshot = await adapter.snapshot(id, forReply);
+    if (!snapshot || snapshot.disabled) return snapshot;
+    const limit = backgroundLimit();
+    return {...snapshot, dailyMin:limit, dailyMax:limit, revision:snapshot.revision + ':bg-limit-' + limit};
+  }
   function validateConnectionToken(token) {
     if (!token) throw new Error('请填写连接口令');
     if (!/^[\x21-\x7e]+$/.test(token)) throw new Error('连接口令含中文、空格或不支持的特殊字符。请填写 Cloudflare 中 ACCESS_TOKEN 的完整值，不是账号密码；请勿把口令发给他人。');
@@ -106,7 +125,7 @@ window.createLumosBackground = function(adapter) {
       clearTimeout(replyPollTimer);
       if (pending) replyPollTimer = setTimeout(sync, 2500);
       if (ids.length) await api('/ack', 'POST', { ids });
-      const current = config.backgroundGeneration ? await adapter.snapshot(config.charId) : {disabled:true};
+      const current = config.backgroundGeneration ? await backgroundSnapshot(config.charId) : {disabled:true};
       if (current?.disabled) {
         await api('/job', 'DELETE', { charId: config.charId }); schedulerPaused = true;
         status(config.backgroundGeneration ? '后台已连接，自动回复未开启。普通回复可在后台继续。' : '后台已连接。退出后生成已关闭，普通聊天使用原来的方式；消息通知保持独立。');
@@ -161,12 +180,12 @@ window.createLumosBackground = function(adapter) {
     if (!config.enabled && !el('bgConsent').checked) throw new Error('请先勾选上传同意');
     if (config.enabled) { await sync(); return; }
     if (adapter.isBusy()) throw new Error('请等这一轮回复完成再连接');
-    const currentId = adapter.activeId(), job = await adapter.snapshot(currentId, true);
+    const currentId = adapter.activeId(), job = await backgroundSnapshot(currentId, true);
     if (!job || job.disabled) throw new Error('请先为当前单人角色配置 AI，并确保聊天中已有消息');
     const url = new URL(el('bgUrl').value.trim());
     if (url.protocol !== 'https:' || url.username || url.password || url.pathname !== '/' || url.search || url.hash) throw new Error('请填写 HTTPS 后台根地址，不带路径');
     validateConnectionToken(el('bgToken').value.trim());
-    config = { url: url.origin, token: el('bgToken').value.trim(), charId: currentId, enabled: false, backgroundGeneration: el('bgGeneration').checked };
+    config = { dailyLimit:backgroundLimit(), url: url.origin, token: el('bgToken').value.trim(), charId: currentId, enabled: false, backgroundGeneration: el('bgGeneration').checked };
     persist();
     const settings = await api('/config');
     // 先更新后台脚本，再启用 push；不清理聊天数据。
@@ -194,7 +213,7 @@ window.createLumosBackground = function(adapter) {
     busy = true;
     try {
       await api('/reset', 'DELETE');
-      config = {url:config.url, token:config.token, enabled:false, backgroundGeneration:false};
+      config = {dailyLimit:backgroundLimit(), url:config.url, token:config.token, enabled:false, backgroundGeneration:false};
       schedulerPaused = true; clearTimeout(replyPollTimer);
       persist(); el('bgConsent').checked = false;
       status('后台任务、API 密钥、上下文及待同步结果已删除；恢复本地模式。此设备保留地址和连接口令，下次连接无需重填。');
@@ -220,7 +239,7 @@ window.createLumosBackground = function(adapter) {
       const remote = await api('/state');
       const ids = await adapter.importReplies(remote.inbox || []);
       if (ids.length) await api('/ack','POST',{ids});
-      const snapshot = await adapter.snapshot(config.charId, true);
+      const snapshot = await backgroundSnapshot(config.charId, true);
       if (!snapshot || snapshot.disabled) throw new Error('请先检查当前后台角色的 AI 设置');
       const requestId = 'reply_' + crypto.randomUUID().replace(/-/g,'');
       await api('/presence','POST',adapter.presence());
