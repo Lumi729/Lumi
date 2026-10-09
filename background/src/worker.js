@@ -15,7 +15,7 @@ export default {
       const path = new URL(request.url).pathname;
       if (path === '/health') {
         const missing = ['ACCESS_TOKEN', 'STORAGE_KEY', 'VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY'].filter(name => !env[name]);
-        response = json({ service: 'Lumos background', version: 3, configured: missing.length === 0, missing });
+        response = json({ service: 'Lumos background', version: 4, configured: missing.length === 0, missing });
       }
       else if (!env.ACCESS_TOKEN || !env.STORAGE_KEY || !env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) response = json({ error: '请先完成后台密钥配置' }, 503);
       else if (!await sameToken(request.headers.get('Authorization')?.replace(/^Bearer /, ''), env.ACCESS_TOKEN)) response = json({ error: '后台连接口令不正确' }, 401);
@@ -146,7 +146,8 @@ export class LumosScheduler {
       try {
         const body = structuredClone(reserved.body);
         body.messages = [...body.messages, { role: 'system', content: `${reserved.manual ? '这是用户已明确请求的一轮普通回复，请直接回复最近用户消息，不输出 [AUTO_SKIP]。' : '这是服务端后台自动回复。'}实际当前时间：${new Date().toISOString()}。距最近消息约 ${Math.max(0, Math.floor((Date.now() - reserved.lastAt) / 60000))} 分钟；如早期快照时间描述冲突，以此为准。只输出聊天文本，用空行分段；不执行撤回、红包、蓝牙或场景切换。${reserved.manual ? '' : '不想主动聊天可输出 [AUTO_SKIP] 理由。'}` }];
-        const response = await fetch(reserved.url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + reserved.key }, body: JSON.stringify(body), signal: AbortSignal.timeout(90000), redirect: 'error' });
+        const response = await fetch(reserved.url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + reserved.key }, body: JSON.stringify(body), signal: AbortSignal.timeout(90000), redirect: 'manual' });
+        if (response.status >= 300 && response.status < 400) throw new Error('AI_REDIRECT');
         if (!response.ok) throw new Error('AI 接口返回 HTTP ' + response.status);
         stage = 'decode';
         const raw = await response.text();
@@ -161,6 +162,7 @@ export class LumosScheduler {
         if (reserved.manual && reply.skipped) throw new Error('普通回复未返回聊天文本');
       } catch (e) {
         const reasons = {
+          AI_REDIRECT:'AI 地址要求跳转，请使用服务商的最终接口地址',
           AI_RESPONSE_HTML:'AI 地址返回了网页，可能是验证页或重定向页面',
           AI_RESPONSE_STREAM:'AI 接口返回了流式内容，后台目前需要 JSON 回复',
           AI_RESPONSE_ERROR:'AI 接口返回了错误对象，请检查服务商的请求记录',

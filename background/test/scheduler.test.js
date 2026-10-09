@@ -149,3 +149,9 @@ for (const [name,response,expected] of [
  const original=globalThis.fetch;globalThis.fetch=async()=>response();
  try{await scheduler.alarm();const state=(await call('/state')).body;assert.match(state.jobs[0].error,expected);assert(!state.jobs[0].error.includes('secret'));assert.equal(state.jobs[0].daily.failed,1);}finally{globalThis.fetch=original;}
 });
+
+test('AI request uses Workers-supported manual redirect and does not follow redirects with credentials',async()=>{
+ const {scheduler,call,due}=setup();await call('/job','POST',job());await due();let count=0;
+ const original=globalThis.fetch;globalThis.fetch=async(url,init)=>{count++;assert.equal(init.redirect,'manual');return new Response(null,{status:307,headers:{Location:'https://other.example/'}});};
+ try{await scheduler.alarm();assert.equal(count,1);assert.match((await call('/state')).body.jobs[0].error,/要求跳转/);}finally{globalThis.fetch=original;}
+});
