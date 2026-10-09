@@ -9,7 +9,7 @@ const client=fs.readFileSync(new URL('background-client.js',root),'utf8');
 const source=fs.readFileSync(new URL('index.html',root),'utf8');
 const hooks=`window.__audit={
  setup(){const a=getActiveCharacter();a.name='A';a.type='single';a.activeConversationId=null;a.conversations=[];a.apiSettings={...a.apiSettings,enabled:true,url:'https://example.test/v1',key:'test-only',model:'test',notificationsEnabled:true,weatherEnabled:false,autoReplyEnabled:false,crossChatEnabled:false};a.chatMessages=[{id:'u1',role:'user',text:'hello',timestamp:Date.now()-600000}];a.messageHistory=[{role:'user',content:'hello'}];const b=structuredClone(a);b.id='test-b';b.name='B';b.chatMessages=[];b.messageHistory=[];characters.push(b);loadActiveCharToGlobals();showView('chat');return a.id;},
- request:()=>triggerAiReply(false),auto:()=>checkAutoReply(),view:showView,switch:()=>openCharacterChat('test-b'),data:()=>characters,
+ avatar(src){getActiveCharacter().avatarType="image";getActiveCharacter().avatarSrc=src;loadActiveCharToGlobals();},notify:sendAutoReplyNotifications,request:()=>triggerAiReply(false),auto:()=>checkAutoReply(),view:showView,switch:()=>openCharacterChat('test-b'),data:()=>characters,
  enableAuto(){apiSettings.autoReplyEnabled=true;apiSettings.autoReplyDelayMinutes=1;apiSettings.autoReplyDailyMin=1;apiSettings.autoReplyDailyMax=1;apiSettings.autoReplyTodayCount=0;saveGlobalsToActiveChar();},
  notifications(value){apiSettings.notificationsEnabled=value;saveGlobalsToActiveChar();},
  group(){getActiveCharacter().type='group';chatType='group';members=[{id:'m1',name:'Member'}];saveGlobalsToActiveChar();},
@@ -43,3 +43,16 @@ test('clicking in-app banner opens source and clears unread count',async t=>{con
 test('automatic skip produces neither banner nor unread reply',async t=>{const {w,api,id}=await app(t,async()=>Response.json({choices:[{message:{content:'[AUTO_SKIP] later'}}]}));api.enableAuto();api.view('profile');await api.auto();assert.equal(w.document.querySelector('#lumosIncomingBanner'),null);assert.equal(api.data().find(c=>c.id===id).unreadCount,0);});
 test('new user message age is separate from preceding conversation gap',async t=>{const {api}=await app(t);const now=2000000000000;const text=api.time([{role:'dog',timestamp:now-7200000},{role:'user',timestamp:now-1000}],now);assert.match(text,/距用户最近一次发言：不到 1 分钟/);assert.match(text,/距角色最近一次回复：2 小时/);assert.match(text,/用户最近一次发言与它前一条聊天消息的间隔：1 小时 59 分钟/);});
 test('background inbox import shows banner on other page and deduplicates',async t=>{const {w,api,id}=await app(t);api.view('library');const reply={id:'cloud-one',charId:id,convId:'',timestamp:Date.now(),segments:['cloud reply'],isAutoReply:true};await w.__auditAdapter.importReplies([reply]);assert(w.document.querySelector('#lumosIncomingBanner'));await w.__auditAdapter.importReplies([reply]);const c=api.data().find(c=>c.id===id);assert.equal(c.chatMessages.filter(m=>m.id==='bg_cloud-one_0').length,1);assert.equal(c.unreadCount,1);});
+test('banner uses originating role avatar after switching',async t=>{
+ const gate=deferred(),started=deferred();const {w,api,id}=await app(t,async()=>{started.resolve();await gate.promise;return Response.json({choices:[{message:{content:'reply'}}]});});api.avatar('https://example.test/avatar-a.png');const c=api.data().find(c=>c.id===id);
+ const request=api.request();await started.promise;api.switch();gate.resolve();await request;const img=w.document.querySelector('#lumosIncomingBanner img');assert.equal(img.src,c.avatarSrc);img.dispatchEvent(new w.Event('error'));assert(w.document.querySelector('.incoming-banner-avatar').textContent);
+});
+test('full notification batch hands off immediately without ping or ready wait',async t=>{
+ const {w,api}=await app(t);const posted=[];w.Notification={permission:'granted'};
+ w.MessageChannel=class{constructor(){this.port1={close(){}};this.port2={};}};
+ Object.defineProperty(w.navigator,'serviceWorker',{value:{controller:{postMessage:(data)=>posted.push(data)},get ready(){throw new Error('must not wait for ready');}}});
+ // Call the real function in the app closure using test-only hook.
+ await api.notify(['a'.repeat(200),'second','third']);
+ assert.equal(posted.length,1);assert.equal(posted[0].type,'LUMOS_NOTIFY_BATCH');assert.equal(posted[0].notices.length,3);assert.equal(posted[0].notices[0].options.body.length,200);
+ await api.notify(['one','two','three','four']);assert.equal(posted[1].notices.length,1);assert.match(posted[1].notices[0].options.body,/共4条/);
+});

@@ -616,7 +616,7 @@
   <div class="create-modal" id="createModal"><div class="create-panel"><h3>创建</h3><button id="createSingleBtn">✨ 创建角色</button><button id="createGroupBtn">👥 创建群聊</button><button class="close-create" id="closeCreateBtn">关闭</button></div></div>
   <div class="create-modal" id="groupCreateModal"><div class="create-panel"><h3>选择群聊成员</h3><div class="create-member-list" id="groupMemberList"></div><div style="display:flex;gap:8px;"><button id="confirmGroupBtn" style="flex:1;">确认创建</button><button id="createEmptyGroupBtn" style="flex:1;background:#576b95;">创建空群聊</button></div><button class="close-create" id="closeGroupCreateBtn" style="width:100%;">取消</button></div></div>
 </div>
-<script src="/Lumi/background-client.js?v=20261009-remember9"></script>
+<script src="/Lumi/background-client.js?v=20261009-notices10"></script>
 <script>
 // === IndexedDB for characters (large chat data, no 5MB limit) ===
 const _CHARS_DB_NAME = 'lumos_chars_v1';
@@ -819,8 +819,9 @@ async function _clearCharsIDB(){
       .catch(err => console.warn('Service Worker 注册失败:', err));
   }
 
-  function getNotificationIconUrl() {
-    const dog = avatarState.dog;
+  function getNotificationIconUrl(targetId) {
+    const target = characters.find(c => c.id === targetId);
+    const dog = target ? {type:target.avatarType,src:target.avatarSrc,text:target.avatarEmoji} : {}; 
     if (dog.type === 'image' && dog.src) return dog.src;
     if (dog.type === 'text' && dog.text) {
       try {
@@ -837,31 +838,26 @@ async function _clearCharsIDB(){
   async function sendAutoReplyNotifications(segments, targetId = activeCharacterId, enabled = apiSettings.notificationsEnabled) {
     if (!enabled || !('Notification' in window) || Notification.permission !== 'granted') return;
     const title = 'TA想对你说的是...';
-    const icon = getNotificationIconUrl();
+    const icon = getNotificationIconUrl(targetId);
     const batchId = 'auto-reply-' + Date.now() + '-' + Math.random().toString(36).slice(2);
     const bodies = segments.length <= 3
-      ? segments.map(seg => seg.trim().substring(0, 120))
+      ? segments.map(seg => seg.trim())
       : [`（共${segments.length}条新消息）${segments.slice(0,3).map(s => s.trim().substring(0,30)).join('；')}...`];
     if (!bodies.length) return;
     const notices = bodies.map((body, idx) => ({ title, options: {body, icon, tag: batchId + '-' + idx, requireInteraction: false, data: {charId: targetId}} }));
     try {
       if (navigator.serviceWorker) {
-        const reg = await navigator.serviceWorker.ready;
-        // 先确认新版后台支持整批接收，旧后台仍沿用浏览器原生通知接口。
-        const worker = reg.active;
-        const supported = worker && await new Promise(resolve => {
-          const channel = new MessageChannel();
-          const timer = setTimeout(() => { channel.port1.close(); resolve(false); }, 1500);
-          channel.port1.onmessage = e => { clearTimeout(timer); channel.port1.close(); resolve(e.data === 'LUMOS_NOTIFY_READY'); };
-          worker.postMessage({type:'LUMOS_NOTIFY_PING'}, [channel.port2]);
-        });
-        if (supported) {
+        // 已受控页面立即交付整轮；不等待页面端握手/定时器。
+        const controller = navigator.serviceWorker.controller;
+        const reg = controller ? null : await navigator.serviceWorker.ready;
+        const worker = controller || reg.active;
+        if (worker) {
           const resultChannel = new MessageChannel();
           const resultTimer = setTimeout(() => { resultChannel.port1.close(); addLog('warn', '通知已交给后台，尚未收到结果；不会重发以免重复'); }, 15000);
           resultChannel.port1.onmessage = e => {
             clearTimeout(resultTimer); resultChannel.port1.close();
             const result = e.data || {};
-            addLog(result.failed ? 'warn' : 'info', `通知提交结果：${result.sent || 0}/${notices.length}，失败 ${result.failed || 0}（不代表手机已显示横幅）`);
+            addLog(result.failed ? 'warn' : 'info', `通知批次 ${batchId}：${result.sent || 0}/${notices.length}，失败 ${result.failed || 0}；逐条 ${JSON.stringify(result.items || [])}（提交不代表手机已显示）`);
           };
           worker.postMessage({type:'LUMOS_NOTIFY_BATCH', notices}, [resultChannel.port2]);
           return;
@@ -1694,10 +1690,20 @@ async function _clearCharsIDB(){
     document.getElementById('lumosIncomingBanner')?.remove();
     const target = characters.find(c=>c.id===targetId); if(!target) return;
     const banner = document.createElement('button'); banner.id='lumosIncomingBanner'; banner.type='button';
-    banner.style.cssText='position:fixed;top:max(12px,env(safe-area-inset-top));left:16px;right:16px;max-width:480px;margin:0 auto;z-index:2147483000;padding:14px 18px;border:1px solid #dbe5dd;border-radius:16px;background:#fff;color:#26352b;box-shadow:0 6px 28px #0003;text-align:left;cursor:pointer';
+    banner.style.cssText='position:fixed;top:max(12px,env(safe-area-inset-top));left:16px;right:16px;max-width:480px;margin:0 auto;z-index:2147483000;display:flex;align-items:flex-start;gap:12px;padding:14px 18px;border:1px solid #dbe5dd;border-radius:16px;background:#fff;color:#26352b;box-shadow:0 6px 28px #0003;text-align:left;cursor:pointer';
     const title=document.createElement('strong'); title.textContent=target.name || '新消息'; title.style.cssText='display:block;font-size:16px;margin-bottom:5px';
     const body=document.createElement('span'); body.textContent=texts.length>3 ? '收到 '+texts.length+' 条新消息' : texts.join(' · ').slice(0,120); body.style.cssText='display:block;font-size:14px;line-height:1.5;max-height:3em;overflow:hidden';
-    banner.append(title,body); banner.onclick=()=>{banner.remove();queueNotificationChat(targetId);};
+    const avatar=document.createElement('span'); avatar.className='incoming-banner-avatar';
+    avatar.style.cssText='display:flex;align-items:center;justify-content:center;flex:0 0 44px;width:44px;height:44px;border-radius:12px;background:#edf4eb;overflow:hidden;font-size:28px';
+    avatar.textContent=target.avatarEmoji || '🌙';
+    if(target.avatarType==='image' && target.avatarSrc){
+      const img=document.createElement('img'); img.src=target.avatarSrc; img.alt=target.name || '角色头像';
+      img.style.cssText='width:100%;height:100%;object-fit:cover';
+      img.onerror=()=>{avatar.textContent=target.avatarEmoji || '🌙';};
+      avatar.replaceChildren(img);
+    }
+    const content=document.createElement('span'); content.style.cssText='flex:1;min-width:0;overflow-wrap:anywhere'; content.append(title,body);
+    banner.append(avatar,content); banner.onclick=()=>{banner.remove();queueNotificationChat(targetId);};
     document.body.appendChild(banner); setTimeout(()=>banner.remove(),6500);
   }
 
@@ -3323,3 +3329,4 @@ async function _clearCharsIDB(){
 </script>
 </body>
 </html>
+

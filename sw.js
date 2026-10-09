@@ -1,5 +1,5 @@
-const CACHE_NAME = 'lumos-v13';
-const urlsToCache = ['/Lumi/', '/Lumi/index.html', '/Lumi/manifest.json', '/Lumi/background-client.js?v=20261009-remember9', '/Lumi/月亮.png', '/Lumi/月亮512.png'];
+const CACHE_NAME = 'lumos-v14';
+const urlsToCache = ['/Lumi/', '/Lumi/index.html', '/Lumi/manifest.json', '/Lumi/background-client.js?v=20261009-notices10', '/Lumi/月亮.png', '/Lumi/月亮512.png'];
 const staticUrls = new Set(urlsToCache.map(path => new URL(path, self.location.origin).href));
 
 // 核心资源全部就绪后启用新版。
@@ -61,6 +61,26 @@ self.addEventListener('notificationclick', event => {
   })());
 });
 
+// 串行提交整轮通知，后续轮次不能插进当前轮次；整个任务由 waitUntil 保活。
+let notificationQueue = Promise.resolve();
+function submitNotificationBatch(notices) {
+  const job = notificationQueue.then(async () => {
+    const items = [];
+    for (const notice of notices) {
+      try {
+        await self.registration.showNotification(notice.title, notice.options);
+        items.push({tag:notice.options.tag, status:'submitted', at:Date.now()});
+      } catch (error) {
+        items.push({tag:notice.options.tag, status:'failed', error:error.name || 'Error', at:Date.now()});
+      }
+    }
+    const failed = items.filter(item => item.status === 'failed').length;
+    return {sent:items.length-failed, failed, items};
+  });
+  notificationQueue = job.catch(() => {});
+  return job;
+}
+
 // 接收后由后台保活到整批通知提交结束，页面切走不再留下逐条发送任务。
 self.addEventListener('message', event => {
   const source = event.source;
@@ -76,9 +96,8 @@ self.addEventListener('message', event => {
   if (data.type !== 'LUMOS_NOTIFY_BATCH' || !Array.isArray(data.notices)) return;
   const notices = data.notices.slice(0,3).filter(n => n && typeof n.title === 'string' && n.options && typeof n.options.body === 'string');
   event.waitUntil((async () => {
-    const results = await Promise.allSettled(notices.map(n => self.registration.showNotification(n.title, n.options)));
-    const failed = results.filter(r => r.status === 'rejected').length;
-    if (port) port.postMessage({sent: results.length-failed, failed});
+    const result = await submitNotificationBatch(notices);
+    if (port) port.postMessage(result);
   })());
 });
 
@@ -92,11 +111,12 @@ self.addEventListener('push', event => {
     const notices = data && data.type === 'LUMOS_PUSH_REPLY' && Array.isArray(data.notices)
       ? data.notices.slice(0,3).filter(n => typeof n.title === 'string' && typeof n.options?.body === 'string') : [];
     if (!notices.length) notices.push({title:'Lumos', options:{body:'后台有新消息，打开后同步。'}});
-    const results = await Promise.allSettled(notices.map(n => self.registration.showNotification(n.title, {
+    const result = await submitNotificationBatch(notices.map(n => ({title:n.title, options:{
       body:n.options.body, tag:n.options.tag, icon:'/Lumi/月亮.png', data:n.options.data || {}, requireInteraction:false
-    })));
-    if (results.every(r => r.status === 'rejected')) throw new Error('推送通知提交失败');
+    }})));
+    if (!result.sent) throw new Error('推送通知提交失败');
     const clients = await self.clients.matchAll({type:'window',includeUncontrolled:true});
     clients.forEach(client => client.postMessage({type:'LUMOS_BACKGROUND_CHANGED'}));
   })());
 });
+
