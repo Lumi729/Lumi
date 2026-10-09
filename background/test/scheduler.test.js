@@ -138,3 +138,14 @@ test('legacy imported 3/1 counter resumes without another reset and records succ
  const original=globalThis.fetch;globalThis.fetch=async()=>Response.json({choices:[{message:{content:'hello'}}]});
  try {await due();await scheduler.alarm();const result=await scheduler.load();assert.equal(result.daily[j.charId].count,1);assert.equal(result.daily[j.charId].succeeded,1);}finally{globalThis.fetch=original;}
 });
+
+for (const [name,response,expected] of [
+ ['html',()=>new Response('<html>secret</html>'),/返回了网页/],
+ ['reasoning',()=>Response.json({choices:[{message:{content:'',reasoning_content:'private'}}]}),/只返回了思考/],
+ ['json',()=>new Response('invalid secret'),/不是有效 JSON/],
+ ['network',()=>{throw new TypeError('secret endpoint');},/网络请求/]
+]) test('safe actionable AI failure: '+name,async()=>{
+ const {scheduler,call,due}=setup();await call('/job','POST',job());await due();
+ const original=globalThis.fetch;globalThis.fetch=async()=>response();
+ try{await scheduler.alarm();const state=(await call('/state')).body;assert.match(state.jobs[0].error,expected);assert(!state.jobs[0].error.includes('secret'));assert.equal(state.jobs[0].daily.failed,1);}finally{globalThis.fetch=original;}
+});

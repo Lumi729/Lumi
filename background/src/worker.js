@@ -15,7 +15,7 @@ export default {
       const path = new URL(request.url).pathname;
       if (path === '/health') {
         const missing = ['ACCESS_TOKEN', 'STORAGE_KEY', 'VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY'].filter(name => !env[name]);
-        response = json({ service: 'Lumos background', version: 2, configured: missing.length === 0, missing });
+        response = json({ service: 'Lumos background', version: 3, configured: missing.length === 0, missing });
       }
       else if (!env.ACCESS_TOKEN || !env.STORAGE_KEY || !env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) response = json({ error: '请先完成后台密钥配置' }, 503);
       else if (!await sameToken(request.headers.get('Authorization')?.replace(/^Bearer /, ''), env.ACCESS_TOKEN)) response = json({ error: '后台连接口令不正确' }, 401);
@@ -142,15 +142,39 @@ export class LumosScheduler {
       await this.save(data); await this.schedule(data);
     });
     if (reserved) {
-      let reply, error;
+      let reply, error, stage = 'request';
       try {
         const body = structuredClone(reserved.body);
         body.messages = [...body.messages, { role: 'system', content: `${reserved.manual ? '这是用户已明确请求的一轮普通回复，请直接回复最近用户消息，不输出 [AUTO_SKIP]。' : '这是服务端后台自动回复。'}实际当前时间：${new Date().toISOString()}。距最近消息约 ${Math.max(0, Math.floor((Date.now() - reserved.lastAt) / 60000))} 分钟；如早期快照时间描述冲突，以此为准。只输出聊天文本，用空行分段；不执行撤回、红包、蓝牙或场景切换。${reserved.manual ? '' : '不想主动聊天可输出 [AUTO_SKIP] 理由。'}` }];
         const response = await fetch(reserved.url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + reserved.key }, body: JSON.stringify(body), signal: AbortSignal.timeout(90000), redirect: 'error' });
         if (!response.ok) throw new Error('AI 接口返回 HTTP ' + response.status);
-        const result = await response.json(); reply = cleanReply(result.choices?.[0]?.message?.content);
+        stage = 'decode';
+        const raw = await response.text();
+        if (/^\s*</.test(raw)) throw new Error('AI_RESPONSE_HTML');
+        if (/^\s*data:/.test(raw)) throw new Error('AI_RESPONSE_STREAM');
+        const result = JSON.parse(raw);
+        stage = 'content';
+        if (result.error) throw new Error('AI_RESPONSE_ERROR');
+        const message = result.choices?.[0]?.message;
+        if (!message?.content?.trim()) throw new Error(message?.reasoning_content ? 'AI_REASONING_ONLY' : 'AI_EMPTY');
+        reply = cleanReply(message.content);
         if (reserved.manual && reply.skipped) throw new Error('普通回复未返回聊天文本');
-      } catch (e) { error = e.message.startsWith('AI 接口返回 HTTP ') ? e.message : 'AI 请求未完成；本轮不自动重试，避免重复扣费'; }
+      } catch (e) {
+        const reasons = {
+          AI_RESPONSE_HTML:'AI 地址返回了网页，可能是验证页或重定向页面',
+          AI_RESPONSE_STREAM:'AI 接口返回了流式内容，后台目前需要 JSON 回复',
+          AI_RESPONSE_ERROR:'AI 接口返回了错误对象，请检查服务商的请求记录',
+          AI_REASONING_ONLY:'AI 只返回了思考内容，没有聊天正文，可能耗尽了输出长度',
+          AI_EMPTY:'AI 返回了空正文或不兼容的回复格式',
+          '回复为空':'AI 正文过滤后为空',
+          '普通回复未返回聊天文本':'AI 未返回普通回复正文'
+        };
+        const reason = reasons[e.message] || (/^AI 接口返回 HTTP \d+$/.test(e.message) ? e.message :
+          ['TimeoutError','AbortError'].includes(e.name) ? 'AI 请求超过 90 秒未完成' :
+          stage === 'decode' ? 'AI 返回内容不是有效 JSON' :
+          stage === 'request' ? 'Cloudflare 无法完成到 AI 地址的网络请求（连接、证书或重定向失败）' : 'AI 回复解析失败');
+        error = reason + '；本轮不自动重试，避免重复扣费';
+      }
       await this.state.blockConcurrencyWhile(async () => {
         const data = await this.load(), current = reserved.manual ? data.requests?.[reserved.charId] : data.jobs[reserved.charId];
         // 新消息/关闭开关/删除任务在生成期间发生时，丢弃过期结果。
