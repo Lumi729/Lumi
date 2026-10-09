@@ -88,13 +88,16 @@ window.createLumosBackground = function(adapter) {
   }
   function managed(id) { return Boolean(config.enabled && config.backgroundGeneration && config.charId === id); }
   function managesAuto(id) { return Boolean(config.enabled && config.charId === id && (config.backgroundGeneration || !schedulerPaused)); }
-  async function sync() {
-    if (!config.enabled) return;
-    if (replySubmission || busy || adapter.isBusy()) { dirty = true; return; }
+  async function sync(manual = false) {
+    manual = manual === true;
+    if (!config.enabled) { if (manual) status('尚未连接后台。请先点击“连接后台”；仅勾选开关不会建立连接。', true); return; }
+    if (replySubmission || busy || adapter.isBusy()) { dirty = true; if (manual) status('正在回复或同步，本次同步已排队，完成后会继续。'); return; }
+    if (manual) status('正在连接后台并读取消息…');
     busy = true; dirty = false;
     try {
       await api('/presence', 'POST', adapter.presence());
       const remote = await api('/state');
+      if (manual) status('已连通后台，正在同步消息和检查自动回复任务…');
       if (adapter.isBusy()) { dirty = true; return; }
       const ids = await adapter.importReplies(remote.inbox || []);
       const pending = remote.pendingReplies?.find(r => r.charId === config.charId);
@@ -119,6 +122,20 @@ window.createLumosBackground = function(adapter) {
       if (failedReply) status('这次回复未完成：' + failedReply.error, true);
       if (job?.daily) adapter.updateDaily(config.charId, job.daily);
       if (ids.length) adapter.log('info', `后台已同步 ${ids.length} 轮结果，不重复发送本地通知`);
+      if (manual) {
+        const verified = await api('/state');
+        const task = verified.jobs?.find(j => j.charId === config.charId);
+        const lines = ['同步完成：' + new Date().toLocaleTimeString(), '本次同步 ' + ids.length + ' 轮结果'];
+        lines.push(task ? '自动回复任务：已登记' : '自动回复任务：未登记');
+        if (task?.nextAt) lines.push('下一次检查：' + new Date(task.nextAt).toLocaleString());
+        if (task?.daily) lines.push('今日已尝试：' + task.daily.count + ' / ' + task.daily.quota + ' 次');
+        if (task?.error) lines.push('任务错误：' + task.error);
+        lines.push('后台最近运行：' + (verified.heartbeat ? new Date(verified.heartbeat).toLocaleString() : '尚无运行记录'));
+        if (verified.pendingReplies?.some(r => r.charId === config.charId)) lines.push('普通回复：仍在后台处理中');
+        if (!task && config.backgroundGeneration) lines.push('若已开启自动回复，请打开已连接的角色后再次同步。');
+        el('bgStatus').textContent += '\n\n' + lines.join('\n');
+        adapter.log(task?.error ? 'warn' : 'info', lines.join('；'));
+      }
     } catch (error) { status('后台连接失败：' + error.message + '。后台启用期间不会同时启动本地自动回复；可关闭后台恢复本地模式。'); adapter.log('warn', '后台连接失败：' + error.message); }
     finally { releaseBusy(); if (dirty) queue(); }
   }
@@ -167,7 +184,7 @@ window.createLumosBackground = function(adapter) {
     status('后台已连接。是否在退出后继续生成，由独立开关控制；消息通知仍按上方设置。'); adapter.log('info', '已启用 Cloudflare 后台自动回复');
   });
   button('bgTest', async () => { if (!config.enabled) throw new Error('请先启用后台'); const r = await api('/test', 'POST', {}); status(r.submitted === true ? '测试推送已被推送服务接收，请检查通知栏。' : '手机推送订阅已失效，请重新连接。'); });
-  button('bgSync', sync);
+  button('bgSync', () => sync(true));
   button('bgStop', async () => {
     if (!config.url) return;
     // 服务端确认删除后才恢复本地调度，网络失败时保留接管状态防止双发。

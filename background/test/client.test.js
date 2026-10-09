@@ -37,3 +37,12 @@ test('invalid token gives actionable message before fetch without exposing it',a
  await w.document.querySelector('#bgConnect').onclick();
  assert.equal(calls.length,0);const status=w.document.querySelector('#bgStatus').textContent;assert.match(status,/ACCESS_TOKEN/);assert(!status.includes(secret));
 });
+
+test('manual sync while disconnected explains connection requirement',async t=>{
+ const {w,calls}=client(t);await w.document.querySelector('#bgSync').onclick();
+ assert.match(w.document.querySelector('#bgStatus').textContent,/尚未连接后台/);assert.equal(calls.length,0);
+});
+test('manual sync reports completion and scheduler state even with no messages',async t=>{
+ const {w}=client(t,{config:connection});await w.document.querySelector('#bgSync').onclick();
+ const text=w.document.querySelector('#bgStatus').textContent;assert.match(text,/同步完成/);assert.match(text,/本次同步 0/);assert.match(text,/任务：未登记/);assert.match(text,/尚无运行记录/);
+});
