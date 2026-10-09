@@ -2,7 +2,7 @@
 window.createLumosBackground = function(adapter) {
   const storageName = 'lumos_background_connection_v1';
   let config = {}; try { config = JSON.parse(localStorage.getItem(storageName) || '{}'); } catch (_) {}
-  let busy = false, dirty = false, timer = null, replySubmission = null;
+  let busy = false, dirty = false, timer = null, replySubmission = null, replyPollTimer = null;
   const idleWaiters = [];
   function releaseBusy() { busy = false; idleWaiters.splice(0).forEach(resolve => resolve()); }
   const box = document.createElement('div');
@@ -67,7 +67,10 @@ window.createLumosBackground = function(adapter) {
       if (adapter.isBusy()) { dirty = true; return; }
       const ids = await adapter.importReplies(remote.inbox || []);
       const pending = remote.pendingReplies?.find(r => r.charId === config.charId);
-      adapter.pending(config.charId, Boolean(pending));
+      const failedReply = (remote.inbox || []).find(r => r.charId === config.charId && r.error);
+      adapter.pending(config.charId, Boolean(pending), failedReply?.error);
+      clearTimeout(replyPollTimer);
+      if (pending) replyPollTimer = setTimeout(sync, 2500);
       if (ids.length) await api('/ack', 'POST', { ids });
       const current = await adapter.snapshot(config.charId);
       if (current?.disabled) {
@@ -81,6 +84,8 @@ window.createLumosBackground = function(adapter) {
       if (job?.error) status('后台状态：' + job.error);
       if (remote.subscribed === false) status('手机推送订阅已失效。请先同步消息，再关闭后台并重新连接；后台回复仍可同步。');
       if (job?.nextAt) el('bgStatus').textContent += '\n下一次检查：' + new Date(job.nextAt).toLocaleString();
+      if (pending) status('后台正在生成回复，结果会自动显示在聊天中…');
+      if (failedReply) status('这次回复未完成：' + failedReply.error, true);
       if (job?.daily) adapter.updateDaily(config.charId, job.daily);
       if (ids.length) adapter.log('info', `后台已同步 ${ids.length} 轮结果，不重复发送本地通知`);
     } catch (error) { status('后台连接失败：' + error.message + '。后台启用期间不会同时启动本地自动回复；可关闭后台恢复本地模式。'); adapter.log('warn', '后台连接失败：' + error.message); }
