@@ -35,6 +35,7 @@ window.createLumosBackground = function(adapter) {
     <div class="hint-text">连接你自己的 Cloudflare 后台后，关掉页面也可继续普通回复及定时生成回复。本版支持一个单人聊天角色；群聊仍需页面运行。</div>
     <div class="setting-row"><label>后台地址</label><input id="bgUrl" type="url" placeholder="https://lumos-background.…workers.dev"></div>
     <div class="setting-row"><label>连接口令</label><input id="bgToken" type="password" autocomplete="off" placeholder="部署时生成的连接口令"></div>
+    <div class="hint-text">地址和口令会保存在这台设备，下次自动填入。</div>
     <div class="hint-text">启用会把当前角色的 API 密钥、设定和所选上下文上传到你自己的后台，加密保存用于调用 AI。7 天不打开本机页面则暂停调度；生成结果会在回来时同步。后台不执行蓝牙、红包、撤回或跨聊指令。</div>
     <label class="bg-consent"><input id="bgConsent" type="checkbox"><span>我同意上传这些信息到我填写的后台</span></label>\n    <label class="bg-consent"><input id="bgGeneration" type="checkbox"><span>退出页面后继续生成回复<br><small>关闭时使用原来的聊天方式；消息通知仍由上方开关控制。</small></span></label>
     <div class="bg-actions">
@@ -49,7 +50,7 @@ window.createLumosBackground = function(adapter) {
   el('bgUrl').value = config.url || ''; el('bgToken').value = config.token || '';
   function status(text, error = false) { el('bgStatus').textContent = text; el('bgStatus').dataset.error = String(error); }
   function renderConnection() {
-    el('bgConsent').checked = Boolean(config.enabled);
+    if (config.enabled) el('bgConsent').checked = true;
     el('bgConsent').disabled = Boolean(config.enabled);
     el('bgGeneration').checked = Boolean(config.backgroundGeneration);
     el('bgConnect').textContent = config.enabled ? '已连接 · 同步状态' : '连接后台';
@@ -57,6 +58,15 @@ window.createLumosBackground = function(adapter) {
   }
   function persist() { localStorage.setItem(storageName, JSON.stringify(config)); renderConnection(); }
   renderConnection();
+  function saveConnectionDraft() {
+    if (config.enabled) return;
+    config.url = el('bgUrl').value.trim(); config.token = el('bgToken').value.trim();
+    localStorage.setItem(storageName, JSON.stringify(config));
+  }
+  for (const name of ['bgUrl', 'bgToken']) {
+    el(name).addEventListener('input', saveConnectionDraft);
+    el(name).addEventListener('change', saveConnectionDraft);
+  }
   el('bgGeneration').onchange = async () => {
     config.backgroundGeneration = el('bgGeneration').checked; persist();
     if (config.enabled) await sync();
@@ -132,6 +142,7 @@ window.createLumosBackground = function(adapter) {
     if (url.protocol !== 'https:' || url.username || url.password || url.pathname !== '/' || url.search || url.hash) throw new Error('请填写 HTTPS 后台根地址，不带路径');
     if (!el('bgToken').value.trim()) throw new Error('请填写连接口令');
     config = { url: url.origin, token: el('bgToken').value.trim(), charId: currentId, enabled: false, backgroundGeneration: el('bgGeneration').checked };
+    persist();
     const settings = await api('/config');
     // 先更新后台脚本，再启用 push；不清理聊天数据。
     const reg = await navigator.serviceWorker.ready; await reg.update();
