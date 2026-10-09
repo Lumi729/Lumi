@@ -2,7 +2,9 @@
 window.createLumosBackground = function(adapter) {
   const storageName = 'lumos_background_connection_v1';
   let config = {}; try { config = JSON.parse(localStorage.getItem(storageName) || '{}'); } catch (_) {}
-  let busy = false, dirty = false, timer = null;
+  let busy = false, dirty = false, timer = null, replySubmission = null;
+  const idleWaiters = [];
+  function releaseBusy() { busy = false; idleWaiters.splice(0).forEach(resolve => resolve()); }
   const box = document.createElement('div');
   box.id = 'lumosBackgroundPanel';
   box.style.cssText = 'border-top:1px solid #ddd;margin-top:24px;padding-top:20px';
@@ -57,7 +59,7 @@ window.createLumosBackground = function(adapter) {
   function managed(id) { return Boolean(config.enabled && config.charId === id); }
   async function sync() {
     if (!config.enabled) return;
-    if (busy || adapter.isBusy()) { dirty = true; return; }
+    if (replySubmission || busy || adapter.isBusy()) { dirty = true; return; }
     busy = true; dirty = false;
     try {
       await api('/presence', 'POST', adapter.presence());
@@ -82,7 +84,7 @@ window.createLumosBackground = function(adapter) {
       if (job?.daily) adapter.updateDaily(config.charId, job.daily);
       if (ids.length) adapter.log('info', `后台已同步 ${ids.length} 轮结果，不重复发送本地通知`);
     } catch (error) { status('后台连接失败：' + error.message + '。后台启用期间不会同时启动本地自动回复；可关闭后台恢复本地模式。'); adapter.log('warn', '后台连接失败：' + error.message); }
-    finally { busy = false; if (dirty) queue(); }
+    finally { releaseBusy(); if (dirty) queue(); }
   }
   function queue() { if (!config.enabled) return; dirty = true; clearTimeout(timer); timer = setTimeout(sync, 1500); }
   async function subscribe(publicKey) {
@@ -134,15 +136,23 @@ window.createLumosBackground = function(adapter) {
     // 服务端确认删除后才恢复本地调度，网络失败时保留接管状态防止双发。
     if (busy || adapter.isBusy()) throw new Error('正在同步或回复，请稍后关闭');
     busy = true;
-    try { await api('/reset', 'DELETE'); config = {}; persist(); el('bgToken').value = ''; status('后台任务、API 密钥、上下文及待同步结果已删除；恢复本地模式。'); } finally { busy = false; }
+    try { await api('/reset', 'DELETE'); config = {}; persist(); el('bgToken').value = ''; status('后台任务、API 密钥、上下文及待同步结果已删除；恢复本地模式。'); } finally { releaseBusy(); }
   });
   document.addEventListener('visibilitychange', () => { if (!config.enabled) return; api('/presence','POST',adapter.presence()).catch(()=>{}); if (document.visibilityState === 'visible') sync(); else queue(); });
   navigator.serviceWorker?.addEventListener('message', e => { if (e.data?.type === 'LUMOS_BACKGROUND_CHANGED') sync(); });
   setInterval(() => { if (config.enabled && document.visibilityState === 'visible') sync(); }, 30000);
   if (config.enabled) { status('正在连接已启用的后台…'); queue(); } else status('未启用；现有聊天与通知继续使用本地模式。');
-  async function submitReply(payload) {
+  function submitReply(payload) {
+    if (replySubmission) return replySubmission;
+    replySubmission = submitReplyOnce(payload).finally(() => { replySubmission = null; });
+    return replySubmission;
+  }
+  async function submitReplyOnce(payload) {
     if (!config.enabled) throw new Error('后台未启用');
-    if (busy) throw new Error('后台正在同步，请稍后再请求回复');
+    const requestedChar = config.charId;
+    if (busy) status('正在完成消息同步，随后会自动提交这次回复…');
+    while (busy) await new Promise(resolve => idleWaiters.push(resolve));
+    if (!config.enabled || config.charId !== requestedChar || adapter.activeId() !== requestedChar) throw new Error('聊天已切换，请在原聊天重新请求回复');
     busy = true;
     try {
       const remote = await api('/state');
@@ -158,7 +168,7 @@ window.createLumosBackground = function(adapter) {
       adapter.pending(config.charId,true);
       status('普通回复已交给后台。切走后会继续生成，回来自动同步；没在对应聊天页时推送通知。');
       adapter.log('info','普通回复已交给 Cloudflare 后台，页面不会再次调用 AI');
-    } finally { busy = false; queue(); }
+    } finally { releaseBusy(); queue(); }
   }
   return { managed, queue, sync, submitReply };
 };
