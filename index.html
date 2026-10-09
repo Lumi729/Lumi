@@ -1619,6 +1619,32 @@ async function _clearCharsIDB(){
 
   function resolveSenderId(senderName){ if(!senderName) return null; const member = members.find(m=> m.name === senderName || m.displayName === senderName); return member ? member.id : null; }
 
+  function formatElapsedTime(from, to) {
+    if (!Number.isFinite(from) || from <= 0 || !Number.isFinite(to) || to < from) return '时间未知';
+    const mins = Math.floor((to - from) / 60000);
+    if (mins < 1) return '不到 1 分钟';
+    if (mins < 60) return `${mins} 分钟`;
+    if (mins < 1440) return `${Math.floor(mins / 60)} 小时 ${mins % 60} 分钟`;
+    return `${Math.floor(mins / 1440)} 天 ${Math.floor(mins % 1440 / 60)} 小时`;
+  }
+  function buildTimeAwareness(messages, now) {
+    const actual = messages.filter(m => !m.recalled && (m.role === 'user' || m.role === 'dog' || m.role === 'assistant'));
+    const latest = actual[actual.length - 1];
+    const userIndex = actual.map(m => m.role).lastIndexOf('user');
+    const user = actual[userIndex];
+    const previous = userIndex > 0 ? actual[userIndex - 1] : null;
+    const roleReply = actual.slice().reverse().find(m => m.role === 'dog' || m.role === 'assistant');
+    const elapsed = m => m ? formatElapsedTime(m.timestamp, now) : '没有记录';
+    return `## 时间感知
+当前本地时间：${new Date(now).toLocaleString('zh-CN', {hour12:false})}。
+距最近一条聊天消息：${elapsed(latest)}。
+距角色最近一次回复：${elapsed(roleReply)}。
+距用户最近一次发言：${elapsed(user)}。
+用户最近一次发言与它前一条聊天消息的间隔：${user && previous ? formatElapsedTime(previous.timestamp, user.timestamp) : '没有足够记录'}。
+以上分别是消息发出后的等待时间和两条消息之间的间隔，不可混淆。用户刚发的新消息不代表距角色上次回复也不到一分钟。请结合实际间隔自然回应，不必复述计时；时间未知时不要猜测。
+
+`;
+  }
   async function triggerAiReply(isAutoReply=false, overrideMinMsgs=null, overrideMaxMsgs=null, skipUI=false, isActiveChat=false, options={}){
     if(!isAutoReply && waiting) return;
     const replyTargetId = activeCharacterId;
@@ -1651,11 +1677,7 @@ async function _clearCharsIDB(){
 
     const lastMsg = chatMessages.length>0 ? chatMessages[chatMessages.length-1] : null;
     const lastTs = lastMsg ? (lastMsg.timestamp || 0) : 0;
-    const minutesAgo = lastTs ? Math.floor((Date.now()-lastTs)/60000) : 0;
-    let timeAgoStr = '';
-    if(minutesAgo < 60) timeAgoStr = `${minutesAgo} 分钟`;
-    else if(minutesAgo < 1440) timeAgoStr = `${Math.floor(minutesAgo/60)} 小时`;
-    else timeAgoStr = `${Math.floor(minutesAgo/1440)} 天`;
+    const timeAgoStr = lastTs ? formatElapsedTime(lastTs, Date.now()) : '时间未知';
     const lastSender = lastMsg ? (lastMsg.role==='user' ? userName : (lastMsg.senderName || charName)) : '未知';
     const lastPreview = lastMsg ? (lastMsg.text||'').substring(0,50) : '';
     const allGlobalPresets = globalPresetsEnabled.map(p=>p.content).join('\n');
@@ -1694,7 +1716,7 @@ async function _clearCharsIDB(){
       const summaryPromptG = buildSummaryPrompt(); if(summaryPromptG) systemPrompt += summaryPromptG;
       if(historyStr){
         systemPrompt += `## 对话记录\n以下是最近的聊天记录。标注说明：[自动回复] = AI主动发送的消息；[引用了xxx的消息："..."] = 发言者在针对被引用的内容回复；[已撤回] = 该消息已被撤回。\n${historyStr}\n\n`;
-        if(apiSettings.timePerceptionEnabled && lastTs){ systemPrompt += `## 时间感知\n现在是 ${new Date().toLocaleTimeString("zh-CN",{hour:"2-digit",minute:"2-digit",hour12:false})}，${(()=>{const h=new Date().getHours();return h<6?"深夜":h<9?"清晨":h<12?"上午":h<14?"中午":h<18?"下午":h<22?"晚上":"深夜"})()}。距离上条消息已过去 ${timeAgoStr}。请根据这个时间间隔来调整角色的语气和反应——刚说完话和隔了很久再说话，情绪和表达方式是不同的。\n\n`; }
+        if(apiSettings.timePerceptionEnabled) systemPrompt += buildTimeAwareness(chatMessages, Date.now());
       }
 
       // --- 行动指令 ---
@@ -1790,7 +1812,7 @@ async function _clearCharsIDB(){
       const summaryPromptS = buildSummaryPrompt(); if(summaryPromptS) systemPrompt += summaryPromptS;
       if(historyStr){
         systemPrompt += `## 对话记录\n以下是最近的聊天记录。标注说明：[自动回复] = 你主动发送的消息；[引用了xxx的消息："..."] = 发言者在针对被引用的内容回复；[已撤回] = 该消息已被撤回。\n${historyStr}\n\n`;
-        if(apiSettings.timePerceptionEnabled && lastTs){ systemPrompt += `## 时间感知\n现在是 ${new Date().toLocaleTimeString("zh-CN",{hour:"2-digit",minute:"2-digit",hour12:false})}，${(()=>{const h=new Date().getHours();return h<6?"深夜":h<9?"清晨":h<12?"上午":h<14?"中午":h<18?"下午":h<22?"晚上":"深夜"})()}。距离上条消息已过去 ${timeAgoStr}。请根据这个时间间隔来调整你的语气和反应——刚说完话和隔了很久再说话，情绪和表达方式是不同的。\n\n`; }
+        if(apiSettings.timePerceptionEnabled) systemPrompt += buildTimeAwareness(chatMessages, Date.now());
       }
 
       // --- 行动指令 ---
