@@ -3215,7 +3215,7 @@ async function _clearCharsIDB(){
         const payload = await triggerAiReply(true, 1, apiSettings.autoReplyMsgCount, true, false, {prepareBackground:true});
         if (id !== activeCharacterId || convId !== (activeConvId || '') || last !== chatMessages.filter(m => m.role !== 'hint').at(-1)) return null;
         const walletBalance = walletCalcBalances(await walletGetAllTx(),id).char;
-        const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify({backgroundContextVersion:3, walletBalance, identity, url:payload.url, key:payload.key, model:payload.body.model, settings:char.charSettings, presets, worlds, enabledPresetIds, enabledWorldIds, history:messageHistory, persona:getActiveUserPersona(), notificationsEnabled:apiSettings.notificationsEnabled, delay:apiSettings.autoReplyDelayMinutes, min:apiSettings.autoReplyDailyMin, max:apiSettings.autoReplyDailyMax})));
+        const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify({backgroundContextVersion:4, replySettings:Object.fromEntries(["autoReplyMsgCount","autoReplyContextLayers","chatMode","chatModeSubtype","faceToFaceEnabled","timePerceptionEnabled","bleControlEnabled","crossChatEnabled","nicknameChangeEnabled"].map(key=>[key,apiSettings[key]])), walletBalance, identity, url:payload.url, key:payload.key, model:payload.body.model, settings:char.charSettings, presets, worlds, enabledPresetIds, enabledWorldIds, history:messageHistory, persona:getActiveUserPersona(), notificationsEnabled:apiSettings.notificationsEnabled, delay:apiSettings.autoReplyDelayMinutes, min:apiSettings.autoReplyDailyMin, max:apiSettings.autoReplyDailyMax})));
         const revision = Array.from(new Uint8Array(digest), x => x.toString(16).padStart(2,'0')).join('');
         const timeline = chatMessages.filter(m=>!m.recalled && ['user','dog','assistant'].includes(m.role)).map(m=>({role:m.role==='user'?'user':'assistant',content:String(m.text||''),timestamp:m.timestamp}));
         return { ...payload, actionVersion:1, charName:remarkVal||'角色', userName:getActiveUserPersona()?.name||'用户', walletBalance, recallTargets:chatMessages.filter(m=>m.role==='dog' && !m.recalled).slice(-100).reverse().map(m=>({id:m.id,text:m.text})), timeline:timeline.slice(-Math.max(2,(apiSettings.autoReplyContextLayers||5)*2)), latestUser:timeline.filter(m=>m.role==='user').at(-1), latestAssistant:timeline.filter(m=>m.role==='assistant').at(-1), charId:id, convId, revision, lastAt:last.timestamp, autoEnabled:Boolean(apiSettings.autoReplyEnabled), notificationsEnabled:Boolean(apiSettings.notificationsEnabled),
@@ -3228,11 +3228,11 @@ async function _clearCharsIDB(){
       async importReplies(inbox) {
         if (waiting || autoReplyInProgress) return [];
         if (!inbox.length) return [];
-        const ids = []; saveGlobalsToActiveChar();
+        const ids = [], orphaned = []; saveGlobalsToActiveChar();
         for (const reply of inbox) {
-          const char = characters.find(c => c.id === reply.charId); if (!char) continue;
+          const char = characters.find(c => c.id === reply.charId); if (!char) { orphaned.push(reply); ids.push(reply.id); continue; }
           const conv = reply.convId ? char.conversations?.find(c => c.id === reply.convId) : null;
-          if (reply.convId && !conv) { addLog('warn','后台消息对应的会话已删除，未覆盖现有聊天'); continue; }
+          if (reply.convId && !conv) { orphaned.push(reply); ids.push(reply.id); addLog('warn','后台消息对应的会话已删除，已保留到本机后台消息归档，不影响当前聊天'); continue; }
           const messages = conv ? conv.messages : char.chatMessages;
           const history = conv ? conv.history : char.messageHistory;
           if (!Array.isArray(messages) || !Array.isArray(history)) continue;
@@ -3264,7 +3264,7 @@ async function _clearCharsIDB(){
             history.splice(0,history.length,...messages.filter(m=>m.role!=='hint').map(m=>({role:m.role==='user'?'user':'assistant',content:m.recalled?'[AI撤回了一条消息]':m.text})));
           }
           if (reply.error) addLog('warn','后台普通回复：'+reply.error);
-          if (reply.daily) {
+          if (reply.daily && reply.daily.version !== 2) {
             char.apiSettings.autoReplyTodayCount = reply.daily.count;
             char.apiSettings.autoReplyLastDate = new Date(reply.daily.day + 'T12:00:00').toDateString();
           }
@@ -3274,7 +3274,16 @@ async function _clearCharsIDB(){
         const db = await _openCharsDB();
         await new Promise((resolve, reject) => {
           const tx = db.transaction(_CHARS_STORE_NAME,'readwrite');
-          tx.objectStore(_CHARS_STORE_NAME).put(characters,'main');
+          const store = tx.objectStore(_CHARS_STORE_NAME);
+          store.put(characters,'main');
+          if (orphaned.length) {
+            const read = store.get('background_orphan_replies_v1');
+            read.onsuccess = () => {
+              const archive = Array.isArray(read.result) ? read.result : [];
+              for (const reply of orphaned) if (!archive.some(item => item.id === reply.id)) archive.push(reply);
+              store.put(archive,'background_orphan_replies_v1');
+            };
+          }
           tx.oncomplete = resolve; tx.onerror = () => reject(tx.error); tx.onabort = () => reject(tx.error || new Error('消息存储未完成'));
         });
         loadActiveCharToGlobals(); reloadChatUI(); updateUnreadDisplay(); renderCharacterList();

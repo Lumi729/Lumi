@@ -71,3 +71,28 @@ test('background recall and red packet stay in source role, survive repeated syn
  const tooMuch={...reply,id:'too-much',segments:[],actions:[{type:'hongbao',amount:30,note:'no'}]};
  await w.__auditAdapter.importReplies([tooMuch]);assert.equal((await api.wallet()).filter(t=>t.type==='hongbao').length,1);
 });
+
+test('regression: backend daily counts must not overwrite local daily counts',async t=>{
+ const {w,api,id}=await app(t);api.enableAuto();
+ await w.__auditAdapter.importReplies([{id:'audit-daily',charId:id,convId:'',timestamp:Date.now(),segments:['hello'],daily:{version:2,day:'2026-10-10',count:7,quota:10}}]);
+ assert.equal(api.data().find(c=>c.id===id).apiSettings.autoReplyTodayCount,0);
+});
+test('regression: changing automatic message count must change snapshot revision',async t=>{
+ const {w,api,id}=await app(t);api.enableAuto();
+ const before=await w.__auditAdapter.snapshot(id);
+ const input=w.document.querySelector('#autoReplyMsgCountInput');input.value='5';input.dispatchEvent(new w.Event('change'));
+ const after=await w.__auditAdapter.snapshot(id);
+ assert.notEqual(before.body.messages[0].content,after.body.messages[0].content);
+ assert.notEqual(before.revision,after.revision);
+ assert.equal(after.revision,(await w.__auditAdapter.snapshot(id)).revision);
+ const layers=w.document.querySelector('#autoReplyContextLayersInput');layers.value='9';layers.dispatchEvent(new w.Event('change'));
+ assert.notEqual(after.revision,(await w.__auditAdapter.snapshot(id)).revision);
+});
+test('regression: deleted conversation inbox must not remain permanently unacknowledged',async t=>{
+ const {w,api,id}=await app(t);api.convSetup();
+ const ids=await w.__auditAdapter.importReplies([{id:'deleted-conversation',charId:id,convId:'already-deleted',timestamp:Date.now(),segments:['old reply']}]);
+ assert.deepEqual(Array.from(ids),['deleted-conversation']);
+ const archived=await new Promise((resolve,reject)=>{const r=w.indexedDB.open('lumos_chars_v1',1);r.onerror=()=>reject(r.error);r.onsuccess=()=>{const db=r.result;const q=db.transaction('chars').objectStore('chars').get('background_orphan_replies_v1');q.onsuccess=()=>{resolve(q.result);db.close();};};});
+ assert.equal(archived[0].segments[0],'old reply');
+ assert(!api.data().find(c=>c.id===id).chatMessages.some(m=>m.text==='old reply'));
+});
