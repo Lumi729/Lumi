@@ -40,6 +40,8 @@ window.createLumosBackground = function(adapter) {
     <label class="bg-consent"><input id="bgConsent" type="checkbox"><span>我同意上传这些信息到我填写的后台</span></label>\n    <label class="bg-consent"><input id="bgGeneration" type="checkbox"><span>退出页面后继续生成回复<br><small>关闭时使用原来的聊天方式；消息通知仍由上方开关控制。</small></span></label>
     <div class="setting-row"><label for="bgDailyLimit">后台每日次数上限</label><input id="bgDailyLimit" type="number" min="0" max="20" step="1"></div>
     <div class="hint-text">仅控制后台主动回复，与本地每日次数分开。0 表示暂停后台主动回复；你主动请求的普通回复不占此次数。</div>
+    <div class="setting-row"><label>后台每轮主动消息条数</label><div style="display:flex;gap:8px;align-items:center"><input aria-label="最少条数" id="bgMsgMin" type="number" min="1" max="5" style="width:75px"><span>到</span><input aria-label="最多条数" id="bgMsgMax" type="number" min="1" max="5" style="width:75px"></div></div>
+    <div class="hint-text">角色在范围内自行选择条数；没有想说的新内容可以跳过本轮。跳过仍计入后台每日尝试次数。</div>
     <div class="bg-actions">
     <button id="bgConnect" class="gen-btn" type="button">为当前角色启用后台</button>
     <button id="bgTest" class="gen-btn" type="button">测试手机推送</button>
@@ -52,7 +54,9 @@ window.createLumosBackground = function(adapter) {
   el('bgUrl').value = config.url || ''; el('bgToken').value = config.token || '';
   function status(text, error = false) { el('bgStatus').textContent = text; el('bgStatus').dataset.error = String(error); }
   function backgroundLimit() { return Number.isInteger(config.dailyLimit) ? Math.max(0, Math.min(20, config.dailyLimit)) : 3; }
+  function messageRange() { const min=Math.max(1,Math.min(5,Number(config.msgMin)||1)); return {min,max:Math.max(min,Math.min(5,Number(config.msgMax)||3))}; }
   function renderConnection() {
+    el('bgMsgMin').value=messageRange().min; el('bgMsgMax').value=messageRange().max;
     el('bgDailyLimit').value = backgroundLimit();
     if (config.enabled) el('bgConsent').checked = true;
     el('bgConsent').disabled = Boolean(config.enabled);
@@ -84,11 +88,17 @@ window.createLumosBackground = function(adapter) {
     if (config.enabled) await sync(true);
     else status('后台每日次数已保存，连接后生效。');
   };
+  for (const name of ['bgMsgMin','bgMsgMax']) el(name).onchange = async () => {
+    const min=Number(el('bgMsgMin').value),max=Number(el('bgMsgMax').value);
+    if(!Number.isInteger(min)||!Number.isInteger(max)||min<1||max>5||min>max){status('条数范围请填写 1 到 5 的整数，最少不能大于最多。',true);return;}
+    config.msgMin=min;config.msgMax=max;persist();if(config.enabled)await sync(true);
+  };
   async function backgroundSnapshot(id, forReply = false) {
-    const snapshot = await adapter.snapshot(id, forReply);
+    const range=messageRange();
+    const snapshot = await adapter.snapshot(id, forReply, range);
     if (!snapshot || snapshot.disabled) return snapshot;
     const limit = backgroundLimit();
-    return {...snapshot, dailyMin:limit, dailyMax:limit, revision:snapshot.revision + ':bg-limit-' + limit};
+    return {...snapshot, dailyMin:limit, dailyMax:limit, revision:snapshot.revision + ':bg-limit-' + limit + ':msgs-' + range.min + '-' + range.max};
   }
   function validateConnectionToken(token) {
     if (!token) throw new Error('请填写连接口令');
@@ -185,7 +195,7 @@ window.createLumosBackground = function(adapter) {
     const url = new URL(el('bgUrl').value.trim());
     if (url.protocol !== 'https:' || url.username || url.password || url.pathname !== '/' || url.search || url.hash) throw new Error('请填写 HTTPS 后台根地址，不带路径');
     validateConnectionToken(el('bgToken').value.trim());
-    config = { dailyLimit:backgroundLimit(), url: url.origin, token: el('bgToken').value.trim(), charId: currentId, enabled: false, backgroundGeneration: el('bgGeneration').checked };
+    config = { dailyLimit:backgroundLimit(), msgMin:messageRange().min, msgMax:messageRange().max, url: url.origin, token: el('bgToken').value.trim(), charId: currentId, enabled: false, backgroundGeneration: el('bgGeneration').checked };
     persist();
     const settings = await api('/config');
     // 先更新后台脚本，再启用 push；不清理聊天数据。
@@ -213,7 +223,7 @@ window.createLumosBackground = function(adapter) {
     busy = true;
     try {
       await api('/reset', 'DELETE');
-      config = {dailyLimit:backgroundLimit(), url:config.url, token:config.token, enabled:false, backgroundGeneration:false};
+      config = {dailyLimit:backgroundLimit(), msgMin:messageRange().min, msgMax:messageRange().max, url:config.url, token:config.token, enabled:false, backgroundGeneration:false};
       schedulerPaused = true; clearTimeout(replyPollTimer);
       persist(); el('bgConsent').checked = false;
       status('后台任务、API 密钥、上下文及待同步结果已删除；恢复本地模式。此设备保留地址和连接口令，下次连接无需重填。');

@@ -57,3 +57,12 @@ test('independent backend limit persists and overrides every scheduled snapshot 
  const reopened=client(t,{config:saved});assert.equal(reopened.w.document.querySelector('#bgDailyLimit').value,'6');
  input.value='0';await input.onchange();const last=calls.filter(x=>x.url.endsWith('/job')&&x.init.method==='POST').at(-1);assert.equal(JSON.parse(last.init.body).dailyMax,0);
 });
+
+test('background range persists, rejects reversed limits and reaches adapter',async t=>{
+ let range;const {w,api}=client(t,{config:{...connection,backgroundGeneration:true},snapshot:async(id,normal,r)=>{range=r;return {revision:'x',autoEnabled:true};}});
+ w.document.querySelector('#bgMsgMax').value='4';await w.document.querySelector('#bgMsgMax').onchange();
+ w.document.querySelector('#bgMsgMin').value='2';await w.document.querySelector('#bgMsgMin').onchange();
+ assert.equal(range.min,2);assert.equal(range.max,4);
+ const saved=JSON.parse(w.localStorage.getItem('lumos_background_connection_v1'));assert.equal(saved.msgMin,2);assert.equal(saved.msgMax,4);
+ w.document.querySelector('#bgMsgMin').value='5';await w.document.querySelector('#bgMsgMin').onchange();assert.match(w.document.querySelector('#bgStatus').textContent,/最少不能大于最多/);
+});

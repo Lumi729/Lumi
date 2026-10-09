@@ -13,8 +13,10 @@ export function validateSubscription(sub) {
   if (!hosts.includes(u.hostname)) throw new Error('暂不支持此浏览器的推送服务');
   return sub;
 }
-export function cleanReply(content, job) {
-  let text = String(content || '').replace(/【思考过程】\s*[\s\S]*?\s*【思考结束】/gi, '').trim();
+export function cleanReply(content, job, apiReasoning = '') {
+  const thoughts=[];
+  let text = String(content || '').replace(/【思考过程】\s*([\s\S]*?)\s*【思考结束】|<think>([\s\S]*?)<\/think>/gi, (_,a,b)=>{thoughts.push((a||b||'').trim());return '';}).trim();
+  const reasoning=(typeof apiReasoning==='string' && apiReasoning.trim() || thoughts.filter(Boolean).join('\n\n')).slice(0,50000);
   if (text.startsWith('[AUTO_SKIP]')) return { skipped: true, reason: text.slice(11).trim().slice(0, 500), segments: [] };
   const actions = [];
   if (job?.actionVersion === 1) {
@@ -36,7 +38,7 @@ export function cleanReply(content, job) {
   text = text.replace(/\[(?:RECALL:-?\d+|BLE[:：][^\]]*|红包[:：][^\]]*|改名[:：][^\]]*|切换[^\]]*)\]/g, '').trim();
   const segments = text.split(/\n{2,}/).map(x => x.trim()).filter(Boolean).slice(0, 5);
   if (!segments.length && !actions.length) throw new Error('回复为空');
-  return { skipped: false, segments, ...(actions.length ? {actions} : {}) };
+  return { skipped: false, segments, ...(reasoning ? {reasoning} : {}), ...(actions.length ? {actions} : {}) };
 }
 export function notificationBodies(segments) {
   return segments.length <= 3 ? segments.map(x => x.slice(0, 120))

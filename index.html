@@ -616,7 +616,7 @@
   <div class="create-modal" id="createModal"><div class="create-panel"><h3>创建</h3><button id="createSingleBtn">✨ 创建角色</button><button id="createGroupBtn">👥 创建群聊</button><button class="close-create" id="closeCreateBtn">关闭</button></div></div>
   <div class="create-modal" id="groupCreateModal"><div class="create-panel"><h3>选择群聊成员</h3><div class="create-member-list" id="groupMemberList"></div><div style="display:flex;gap:8px;"><button id="confirmGroupBtn" style="flex:1;">确认创建</button><button id="createEmptyGroupBtn" style="flex:1;background:#576b95;">创建空群聊</button></div><button class="close-create" id="closeGroupCreateBtn" style="width:100%;">取消</button></div></div>
 </div>
-<script src="/Lumi/background-client.js?v=20261009-actions18"></script>
+<script src="/Lumi/background-client.js?v=20261010-range-reasoning"></script>
 <script>
 // === IndexedDB for characters (large chat data, no 5MB limit) ===
 const _CHARS_DB_NAME = 'lumos_chars_v1';
@@ -3206,7 +3206,7 @@ async function _clearCharsIDB(){
         char.apiSettings.autoReplyLastDate = date; char.apiSettings.autoReplyTodayCount = daily.count;
         if (id === activeCharacterId) { apiSettings.autoReplyLastDate = date; apiSettings.autoReplyTodayCount = daily.count; }
       },
-      async snapshot(id, forReply = false) {
+      async snapshot(id, forReply = false, range = null) {
         if (waiting || autoReplyInProgress) return null;
         const char = characters.find(c => c.id === id);
         if (!char || !char.apiSettings.enabled || (!forReply && !char.apiSettings.autoReplyEnabled)) return {disabled:true};
@@ -3217,10 +3217,10 @@ async function _clearCharsIDB(){
         const last = chatMessages.filter(m => m.role !== 'hint').at(-1);
         if (!last) return {disabled:true};
         const identity = convId + ':' + last.id + ':' + last.timestamp;
-        const payload = await triggerAiReply(true, 1, apiSettings.autoReplyMsgCount, true, false, {prepareBackground:true});
+        const payload = await triggerAiReply(true, range?.min ?? 1, range?.max ?? apiSettings.autoReplyMsgCount, true, false, {prepareBackground:true});
         if (id !== activeCharacterId || convId !== (activeConvId || '') || last !== chatMessages.filter(m => m.role !== 'hint').at(-1)) return null;
         const walletBalance = walletCalcBalances(await walletGetAllTx(),id).char;
-        const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify({backgroundContextVersion:4, replySettings:Object.fromEntries(["autoReplyMsgCount","autoReplyContextLayers","chatMode","chatModeSubtype","faceToFaceEnabled","timePerceptionEnabled","bleControlEnabled","crossChatEnabled","nicknameChangeEnabled"].map(key=>[key,apiSettings[key]])), walletBalance, identity, url:payload.url, key:payload.key, model:payload.body.model, settings:char.charSettings, presets, worlds, enabledPresetIds, enabledWorldIds, history:messageHistory, persona:getActiveUserPersona(), notificationsEnabled:apiSettings.notificationsEnabled, delay:apiSettings.autoReplyDelayMinutes, min:apiSettings.autoReplyDailyMin, max:apiSettings.autoReplyDailyMax})));
+        const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify({backgroundContextVersion:5, backgroundMessageRange:range, replySettings:Object.fromEntries(["autoReplyMsgCount","autoReplyContextLayers","chatMode","chatModeSubtype","faceToFaceEnabled","timePerceptionEnabled","bleControlEnabled","crossChatEnabled","nicknameChangeEnabled"].map(key=>[key,apiSettings[key]])), walletBalance, identity, url:payload.url, key:payload.key, model:payload.body.model, settings:char.charSettings, presets, worlds, enabledPresetIds, enabledWorldIds, history:messageHistory, persona:getActiveUserPersona(), notificationsEnabled:apiSettings.notificationsEnabled, delay:apiSettings.autoReplyDelayMinutes, min:apiSettings.autoReplyDailyMin, max:apiSettings.autoReplyDailyMax})));
         const revision = Array.from(new Uint8Array(digest), x => x.toString(16).padStart(2,'0')).join('');
         const timeline = chatMessages.filter(m=>!m.recalled && ['user','dog','assistant'].includes(m.role)).map(m=>({role:m.role==='user'?'user':'assistant',content:String(m.text||''),timestamp:m.timestamp}));
         return { ...payload, actionVersion:1, charName:remarkVal||'角色', userName:getActiveUserPersona()?.name||'用户', walletBalance, recallTargets:chatMessages.filter(m=>m.role==='dog' && !m.recalled).slice(-100).reverse().map(m=>({id:m.id,text:m.text})), timeline:timeline.slice(-Math.max(2,(apiSettings.autoReplyContextLayers||5)*2)), latestUser:timeline.filter(m=>m.role==='user').at(-1), latestAssistant:timeline.filter(m=>m.role==='assistant').at(-1), charId:id, convId, revision, lastAt:last.timestamp, autoEnabled:Boolean(apiSettings.autoReplyEnabled), notificationsEnabled:Boolean(apiSettings.notificationsEnabled),
@@ -3246,7 +3246,7 @@ async function _clearCharsIDB(){
             reply.segments.forEach((text, i) => {
               const id = 'bg_' + reply.id + '_' + i;
               if (typeof text !== 'string' || messages.some(m => m.id === id)) return;
-              messages.push({ id, role:'dog', text, timestamp:reply.timestamp+i, reasoning:null, isAutoReply:reply.isAutoReply !== false, senderId:null, senderName:null });
+              messages.push({ id, role:'dog', text, timestamp:reply.timestamp+i, reasoning:i===0 && typeof reply.reasoning==='string' ? reply.reasoning : null, isAutoReply:reply.isAutoReply !== false, senderId:null, senderName:null });
             });
             if (fresh.length) {
               history.push({role:'assistant',content:fresh.join('\n\n')});

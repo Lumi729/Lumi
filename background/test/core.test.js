@@ -9,7 +9,7 @@ test('one to three separate notices, more than three summarized', () => {
   assert.match(notificationBodies(['a','b','c','d'])[0],/共4条/);
 });
 test('reasoning and controls never become push text, skips do not notify', () => {
-  assert.deepEqual(cleanReply('【思考过程】private【思考结束】\nhello[BLE:40]\n\nworld[RECALL:1][红包:5]'),{skipped:false,segments:['hello','world']});
+  assert.deepEqual(cleanReply('【思考过程】private【思考结束】\nhello[BLE:40]\n\nworld[RECALL:1][红包:5]'),{skipped:false,segments:['hello','world'],reasoning:'private'});
   assert.equal(cleanReply('[AUTO_SKIP] later').skipped,true);
   assert.throws(()=>cleanReply('【思考过程】only【思考结束】'));
 });
@@ -54,4 +54,10 @@ test('background controls are retained as actions with pinned recall IDs and cap
  assert.equal(cleanReply('[红包:5]',j).actions[0].amount,5);
  assert.equal(cleanReply('new[RECALL:0]',j).actions[0].segmentIndex,0);
  assert.match(backgroundTiming({...j,offset:0,charName:'长夏',userName:'你',latestAssistant:{role:'assistant',content:'刚才说的话',timestamp:Date.now()-60000}},Date.now()),/你们已经 .*没有聊天了/);
+});
+
+test('API reasoning and think blocks remain separate from notification text',()=>{
+ const r=cleanReply('<think>internal</think>Hello',null,'API thought');
+ assert.equal(r.reasoning,'API thought');assert.deepEqual(notificationBodies(r.segments),['Hello']);
+ assert.equal(cleanReply('<think>wait</think>[AUTO_SKIP] later').skipped,true);
 });

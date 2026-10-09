@@ -118,3 +118,15 @@ test('editing preserves quote and mention context and edited assistant text',asy
  assert.match(user,/\[@A\]/);assert.match(user,/quoted words/);assert.match(user,/new user words/);
  assert(snapshot.body.messages.some(m=>m.role==='assistant'&&m.content==='new character words'));
 });
+
+test('background range prompt and reasoning bubbles for ordinary and automatic replies',async t=>{
+ const {w,api,id}=await app(t);api.enableAuto();
+ const snapshot=await w.__auditAdapter.snapshot(id,false,{min:2,max:4});
+ assert.match(snapshot.body.messages[0].content,/2~4 条消息/);
+ for(const isAutoReply of [false,true]){
+  const reply={id:'thought-'+isAutoReply,charId:id,convId:'',timestamp:Date.now(),segments:['hello','again'],reasoning:'saved thought',isAutoReply};
+  await w.__auditAdapter.importReplies([reply]);await w.__auditAdapter.importReplies([reply]);
+  const first=w.document.getElementById('msg-bg_'+reply.id+'_0');first.querySelector('.reasoning-btn').click();assert.equal(first.querySelector('.reasoning-box').textContent,'saved thought');
+  assert.equal(w.document.getElementById('msg-bg_'+reply.id+'_1').querySelector('.reasoning-btn'),null);
+ }
+});

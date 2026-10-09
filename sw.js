@@ -1,5 +1,5 @@
-const CACHE_NAME = 'lumos-v24';
-const urlsToCache = ['/Lumi/', '/Lumi/index.html', '/Lumi/manifest.json', '/Lumi/background-client.js?v=20261009-actions18', '/Lumi/月亮.png', '/Lumi/月亮512.png'];
+const CACHE_NAME = 'lumos-v25';
+const urlsToCache = ['/Lumi/', '/Lumi/index.html', '/Lumi/manifest.json', '/Lumi/background-client.js?v=20261010-range-reasoning', '/Lumi/月亮.png', '/Lumi/月亮512.png'];
 const staticUrls = new Set(urlsToCache.map(path => new URL(path, self.location.origin).href));
 
 // 核心资源全部就绪后启用新版。

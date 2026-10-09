@@ -49,3 +49,9 @@
 `npm test`（18 项）验证普通回复优先处理、不受主动次数限制、可见聊天免推送、中断不重复调用，以及通知拆分、思考/控制指令过滤、加密及口令、时区和每日限额、任务版本变化、失败与重复调度、确认后删除等。`npx wrangler deploy --dry-run` 验证真实 Worker 打包；不连接用户 Cloudflare、不使用真实 API 密钥、不向真实手机发推送。
 
 参考：[Workers Builds 配置](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/)、[Durable Objects Alarm](https://developers.cloudflare.com/durable-objects/api/alarms/)、[Cloudflare SQLite Durable Objects 额度](https://developers.cloudflare.com/durable-objects/platform/pricing/)、[Web Crypto Web Push](https://github.com/block65/webcrypto-web-push)。
+
+## 2026-10-10 · 后台条数与思考气泡（Codex / g老师）
+
+后台面板新增每轮主动消息条数范围（1–5，默认 1–3），由角色选择实际条数，也允许 AUTO_SKIP；跳过仍占一次每日尝试。普通回复继续使用原普通消息条数设置。
+后台保留 API 的 reasoning_content，以及正文中的完整【思考过程】或 think 段；同步后显示在本轮第一条消息的 💭 中，不发送到通知，也不追加进后续聊天上下文。模型未返回思考内容时不虚构气泡。
+此次须同时更新网页及 Cloudflare Worker（health version 7）。已被旧后台丢弃的历史思考无法补回。

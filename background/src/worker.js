@@ -15,7 +15,7 @@ export default {
       const path = new URL(request.url).pathname;
       if (path === '/health') {
         const missing = ['ACCESS_TOKEN', 'STORAGE_KEY', 'VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY'].filter(name => !env[name]);
-        response = json({ service: 'Lumos background', version: 6, configured: missing.length === 0, missing });
+        response = json({ service: 'Lumos background', version: 7, configured: missing.length === 0, missing });
       }
       else if (!env.ACCESS_TOKEN || !env.STORAGE_KEY || !env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) response = json({ error: '请先完成后台密钥配置' }, 503);
       else if (!await sameToken(request.headers.get('Authorization')?.replace(/^Bearer /, ''), env.ACCESS_TOKEN)) response = json({ error: '后台连接口令不正确' }, 401);
@@ -158,7 +158,7 @@ export class LumosScheduler {
         if (result.error) throw new Error('AI_RESPONSE_ERROR');
         const message = result.choices?.[0]?.message;
         if (!message?.content?.trim()) throw new Error(message?.reasoning_content ? 'AI_REASONING_ONLY' : 'AI_EMPTY');
-        reply = cleanReply(message.content, reserved);
+        reply = cleanReply(message.content, reserved, message.reasoning_content);
         if (reserved.manual && reply.skipped) throw new Error('普通回复未返回聊天文本');
       } catch (e) {
         const reasons = {

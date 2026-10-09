@@ -161,3 +161,11 @@ test('unchanged polling snapshot preserves generated context after inbox acknowl
  const original=globalThis.fetch;globalThis.fetch=async()=>Response.json({choices:[{message:{content:'already answered'}}]});
  try {await scheduler.alarm();const state=(await call('/state')).body;await call('/ack','POST',{ids:state.inbox.map(r=>r.id)});await call('/job','POST',j);const stored=(await scheduler.load()).jobs[j.charId];assert.equal(stored.latestAssistant.content,'already answered');assert.equal(stored.body.messages.at(-1).content,'already answered');assert.equal(stored.latestUser.content,'hello');}finally{globalThis.fetch=original;}
 });
+
+for(const manual of [false,true]) test('retains API reasoning in '+(manual?'ordinary':'automatic')+' inbox, excluding future prompt',async()=>{
+ const {scheduler,call,due}=setup();await call('/job','POST',job());await due();
+ if(manual){await call('/reply','POST',{...job(),requestId:'thought-test'});const d=await scheduler.load();d.requests.char_demo.nextAt=Date.now()-1;await scheduler.save(d);}
+ const original=globalThis.fetch;globalThis.fetch=async()=>Response.json({choices:[{message:{content:'hello',reasoning_content:'private thought'}}]});
+ try {await scheduler.alarm();const d=await scheduler.load();assert.equal(d.inbox[0].reasoning,'private thought');assert(!JSON.stringify(d.jobs.char_demo.body).includes('private thought'));}
+ finally{globalThis.fetch=original;}
+});
