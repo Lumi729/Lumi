@@ -2,18 +2,18 @@
   "name": "Lumos",
   "short_name": "Lumos",
   "start_url": "/Lumi/",
-  “display”: “fullscreen”,
+  "display": "fullscreen",
   "background_color": "#ededed",
   "theme_color": "#ededed",
   "icons": [
     {
       "src": "/Lumi/月亮.png",
-      "sizes": "192x192",
+      "sizes": "600x600",
       "type": "image/png"
     },
     {
       "src": "/Lumi/月亮512.png",
-      "sizes": "512x512",
+      "sizes": "1600x1600",
       "type": "image/png"
     }
   ]

@@ -1,46 +1,48 @@
-const CACHE_NAME = 'lumos-v1';
-const urlsToCache = [
-  '/Lumi/',
-  '/Lumi/index.html',
-  '/Lumi/manifest.json',
-  '/Lumi/月亮.png',
-  '/Lumi/月亮512.png'
-];
+const CACHE_NAME = 'lumos-v2';
+const urlsToCache = ['/Lumi/', '/Lumi/index.html', '/Lumi/manifest.json', '/Lumi/月亮.png', '/Lumi/月亮512.png'];
+const staticUrls = new Set(urlsToCache.map(path => new URL(path, self.location.origin).href));
 
-// 安装时跳过等待并预缓存核心文件
+// 核心资源全部就绪后启用新版。
 self.addEventListener('install', event => {
-  self.skipWaiting();
-  事件.waitUntil(
-    缓存.打开(缓存名称)
-      .然后(缓存 => 缓存.addAll(要缓存的URL))
-  );
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    await cache.addAll(urlsToCache.map(path => new Request(path, { cache: 'reload' })));
+    await self.skipWaiting();
+  })());
 });
 
-// 激活时立即控制所有客户端，并清理旧缓存
+// 只清理 Lumos 的旧资源缓存，不影响同域其他应用。
 self.addEventListener('activate', event => {
-  event.waitUntil(clients.claim());
-  事件.waitUntil(
-    缓存.键().然后(缓存名称 => {
-      返回 Promise.全部(
-        cacheNames.filter(name => name !== CACHE_NAME)
-          .map(name => caches.delete(name))
-      );
-    })
-  );
+  event.waitUntil((async () => {
+    const names = await caches.keys();
+    await Promise.all(names.filter(name => /^lumos-v\d+$/.test(name) && name !== CACHE_NAME)
+      .map(name => caches.delete(name)));
+    await self.clients.claim();
+  })());
 });
 
-// 网络请求处理：缓存优先，若缓存未命中则从网络获取（适用于离线）
+// 仅缓存已知静态资源；联网获取新版，断网回退。聊天/API 请求不缓存。
 self.addEventListener('fetch', event => {
-  event.respondWith(
-    caches.match(event.request)
-      .然后(响应 =>  || 获取事件.请求)
-  );
+  const request = event.request;
+  if (request.method !== 'GET' || !staticUrls.has(request.url)) return;
+  event.respondWith((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    try {
+      const response = await fetch(request);
+      if (response.ok) {
+        try { await cache.put(request, response.clone()); } catch (_) {}
+        return response;
+      }
+      return (await cache.match(request)) || response;
+    } catch (error) {
+      const cached = await cache.match(request);
+      if (cached) return cached;
+      throw error;
+    }
+  })());
 });
 
-// 点击通知时关闭通知并打开主页
 self.addEventListener('notificationclick', event => {
   event.notification.close();
-  事件.waitUntil(
-    客户端.openWindow('/Lumi/')  // 替换为实际主页路径
-  );
+  event.waitUntil(self.clients.openWindow('/Lumi/'));
 });
