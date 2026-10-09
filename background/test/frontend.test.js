@@ -45,14 +45,14 @@ test('new user message age is separate from preceding conversation gap',async t=
 test('background inbox import shows banner on other page and deduplicates',async t=>{const {w,api,id}=await app(t);api.view('library');const reply={id:'cloud-one',charId:id,convId:'',timestamp:Date.now(),segments:['cloud reply'],isAutoReply:true};await w.__auditAdapter.importReplies([reply]);assert(w.document.querySelector('#lumosIncomingBanner'));await w.__auditAdapter.importReplies([reply]);const c=api.data().find(c=>c.id===id);assert.equal(c.chatMessages.filter(m=>m.id==='bg_cloud-one_0').length,1);assert.equal(c.unreadCount,1);});
 test('banner uses originating role avatar after switching',async t=>{
  const gate=deferred(),started=deferred();const {w,api,id}=await app(t,async()=>{started.resolve();await gate.promise;return Response.json({choices:[{message:{content:'reply'}}]});});api.avatar('https://example.test/avatar-a.png');const c=api.data().find(c=>c.id===id);
- const request=api.request();await started.promise;api.switch();gate.resolve();await request;const img=w.document.querySelector('#lumosIncomingBanner img');assert.equal(img.src,c.avatarSrc);img.dispatchEvent(new w.Event('error'));assert(w.document.querySelector('.incoming-banner-avatar').textContent);
+ const request=api.request();await started.promise;api.switch();gate.resolve();await request;const img=w.document.querySelector('#lumosIncomingBanner img');assert.equal(img.src,c.avatarSrc);const preview=w.document.querySelector('#lumosIncomingBanner strong').nextElementSibling;assert.equal(preview.style.whiteSpace,'nowrap');assert.equal(preview.style.textOverflow,'ellipsis');img.dispatchEvent(new w.Event('error'));assert(w.document.querySelector('.incoming-banner-avatar').textContent);
 });
-test('full notification batch hands off immediately without ping or ready wait',async t=>{
+test('short previews preserve full batch and hand off without ping or ready wait',async t=>{
  const {w,api}=await app(t);const posted=[];w.Notification={permission:'granted'};
  w.MessageChannel=class{constructor(){this.port1={close(){}};this.port2={};}};
  Object.defineProperty(w.navigator,'serviceWorker',{value:{controller:{postMessage:(data)=>posted.push(data)},get ready(){throw new Error('must not wait for ready');}}});
  // Call the real function in the app closure using test-only hook.
  await api.notify(['a'.repeat(200),'second','third']);
- assert.equal(posted.length,1);assert.equal(posted[0].type,'LUMOS_NOTIFY_BATCH');assert.equal(posted[0].notices.length,3);assert.equal(posted[0].notices[0].options.body.length,200);
+ assert.equal(posted.length,1);assert.equal(posted[0].type,'LUMOS_NOTIFY_BATCH');assert.equal(posted[0].notices.length,3);assert.equal(posted[0].notices[0].options.body,'a'.repeat(24)+'…');assert.equal(posted[0].notices[1].options.body,'second');
  await api.notify(['one','two','three','four']);assert.equal(posted[1].notices.length,1);assert.match(posted[1].notices[0].options.body,/共4条/);
 });
