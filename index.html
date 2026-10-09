@@ -616,7 +616,7 @@
   <div class="create-modal" id="createModal"><div class="create-panel"><h3>创建</h3><button id="createSingleBtn">✨ 创建角色</button><button id="createGroupBtn">👥 创建群聊</button><button class="close-create" id="closeCreateBtn">关闭</button></div></div>
   <div class="create-modal" id="groupCreateModal"><div class="create-panel"><h3>选择群聊成员</h3><div class="create-member-list" id="groupMemberList"></div><div style="display:flex;gap:8px;"><button id="confirmGroupBtn" style="flex:1;">确认创建</button><button id="createEmptyGroupBtn" style="flex:1;background:#576b95;">创建空群聊</button></div><button class="close-create" id="closeGroupCreateBtn" style="width:100%;">取消</button></div></div>
 </div>
-<script src="/Lumi/background-client.js?v=20261009-switch6"></script>
+<script src="/Lumi/background-client.js?v=20261009-routing7"></script>
 <script>
 // === IndexedDB for characters (large chat data, no 5MB limit) ===
 const _CHARS_DB_NAME = 'lumos_chars_v1';
@@ -1609,7 +1609,7 @@ async function _clearCharsIDB(){
   function showRecallHint(recalledIds) { if (!recalledIds || recalledIds.length === 0) return; const count = recalledIds.length; const hint = document.createElement('div'); hint.className = 'recall-system-hint'; hint.textContent = `对方撤回了 ${count} 条消息`; const firstId = recalledIds[0]; hint.addEventListener('click', () => { if (hint.parentNode) hint.parentNode.removeChild(hint); if (firstId) scrollToMessage(firstId); }); chatArea.appendChild(hint); }
   function processAiRecall(content, newSegments, senderId) { const regex = /\[RECALL:(-?\d+)\]/g; let match; let cleanContent = content; const recalledIds = []; while ((match = regex.exec(content)) !== null) { const n = parseInt(match[1]); cleanContent = cleanContent.replace(match[0], ''); if (isNaN(n)) continue; if (n >= 1) { const msgId = recallDogMessage(n, senderId); if (msgId) recalledIds.push(msgId); } else if (n <= 0) { const idx = Math.abs(n); if (idx < newSegments.length) { const seg = newSegments[idx]; seg.recalled = true; seg.recalledText = seg.text; seg.text = ''; recalledIds.push(seg.id); } } } lastTurnRecalledIds = recalledIds; return { content: cleanContent.trim(), recalledIds }; }
 
-  function parseGroupResponse(content){
+  function parseGroupResponse(content, replyMembers = members){
     const segments = [];
     const lines = content.split(/\n/);
     let currentSender = null;
@@ -1618,14 +1618,14 @@ async function _clearCharsIDB(){
       let match = line.match(/^\[(.+?)\]:\s*(.*)/);
       if(!match) {
         match = line.match(/^(.+?):\s*(.*)/);
-        if(match && members.some(m=> m.name === match[1].trim())) {
+        if(match && replyMembers.some(m=> m.name === match[1].trim())) {
         } else {
           match = null;
         }
       }
       if(match){
         if(currentSender && currentText.trim()){
-          segments.push({ senderId: resolveSenderId(currentSender), senderName: currentSender, text: currentText.trim() });
+          segments.push({ senderId: resolveSenderId(currentSender, replyMembers), senderName: currentSender, text: currentText.trim() });
         }
         currentSender = match[1].trim();
         currentText = match[2];
@@ -1635,14 +1635,14 @@ async function _clearCharsIDB(){
       }
     }
     if(currentSender && currentText.trim()){
-      segments.push({ senderId: resolveSenderId(currentSender), senderName: currentSender, text: currentText.trim() });
+      segments.push({ senderId: resolveSenderId(currentSender, replyMembers), senderName: currentSender, text: currentText.trim() });
     } else if(!currentSender && currentText.trim()){
       segments.push({ senderId: null, senderName: null, text: currentText.trim() });
     }
     return segments;
   }
 
-  function resolveSenderId(senderName){ if(!senderName) return null; const member = members.find(m=> m.name === senderName || m.displayName === senderName); return member ? member.id : null; }
+  function resolveSenderId(senderName, replyMembers = members){ if(!senderName) return null; const member = replyMembers.find(m=> m.name === senderName || m.displayName === senderName); return member ? member.id : null; }
 
   function formatElapsedTime(from, to) {
     if (!Number.isFinite(from) || from <= 0 || !Number.isFinite(to) || to < from) return '时间未知';
@@ -1670,16 +1670,50 @@ async function _clearCharsIDB(){
 
 `;
   }
+
+  function captureReplySource() {
+    return { id:activeCharacterId, convId:activeConvId || '', chatMessages, messageHistory,
+      historyLength:messageHistory.length, initialIds:new Set(chatMessages.map(m=>m.id)),
+      apiSettings, chatType, members:[...members], remarkVal, avatarState:structuredClone(avatarState) };
+  }
+  function isReplySourceActive(source) { return activeCharacterId === source.id && (activeConvId || '') === source.convId; }
+  function persistReplySource(source) {
+    const target = characters.find(c=>c.id===source.id); if(!target) return;
+    const conv = source.convId ? target.conversations?.find(c=>c.id===source.convId) : null;
+    if(source.convId && !conv) return;
+    const msgs = conv ? conv.messages : target.chatMessages;
+    const hist = conv ? conv.history : target.messageHistory;
+    for(const m of source.chatMessages) if(!source.initialIds.has(m.id) && !msgs.some(x=>x.id===m.id)) msgs.push(m);
+    if(hist !== source.messageHistory) hist.push(...source.messageHistory.slice(source.historyLength));
+    source.historyLength = source.messageHistory.length;
+    if(isReplySourceActive(source)) { chatMessages = msgs; messageHistory = hist; }
+    target.lastActive = new Date().toISOString(); saveAllData();
+  }
+  function showIncomingBanner(targetId, texts) {
+    if(document.visibilityState !== 'visible' || !texts.length) return;
+    document.getElementById('lumosIncomingBanner')?.remove();
+    const target = characters.find(c=>c.id===targetId); if(!target) return;
+    const banner = document.createElement('button'); banner.id='lumosIncomingBanner'; banner.type='button';
+    banner.style.cssText='position:fixed;top:max(12px,env(safe-area-inset-top));left:16px;right:16px;max-width:480px;margin:0 auto;z-index:2147483000;padding:14px 18px;border:1px solid #dbe5dd;border-radius:16px;background:#fff;color:#26352b;box-shadow:0 6px 28px #0003;text-align:left;cursor:pointer';
+    const title=document.createElement('strong'); title.textContent=target.name || '新消息'; title.style.cssText='display:block;font-size:16px;margin-bottom:5px';
+    const body=document.createElement('span'); body.textContent=texts.length>3 ? '收到 '+texts.length+' 条新消息' : texts.join(' · ').slice(0,120); body.style.cssText='display:block;font-size:14px;line-height:1.5;max-height:3em;overflow:hidden';
+    banner.append(title,body); banner.onclick=()=>{banner.remove();queueNotificationChat(targetId);};
+    document.body.appendChild(banner); setTimeout(()=>banner.remove(),6500);
+  }
+
   async function triggerAiReply(isAutoReply=false, overrideMinMsgs=null, overrideMaxMsgs=null, skipUI=false, isActiveChat=false, options={}){
     if(!isAutoReply && waiting) return;
-    const replyTargetId = activeCharacterId;
+    const replySource = captureReplySource();
+    let {chatMessages, messageHistory, apiSettings, chatType, members, remarkVal, avatarState} = replySource;
+    function saveChatHistory() { persistReplySource(replySource); }
+    const replyTargetId = replySource.id;
     const replyNotificationsEnabled = apiSettings.notificationsEnabled;
     function notifyIncomingReply(messages) {
       const incoming = messages.filter(m => !m.recalled).map(m => typeof m === 'string' ? m : m.text).filter(t => typeof t === 'string' && t.trim());
       const viewing = document.visibilityState === 'visible' && chatViewWrap.classList.contains('active') &&
-        displayedChatId === replyTargetId;
+        displayedChatId === replyTargetId && (activeConvId || '') === replySource.convId;
       if (!incoming.length || viewing) return;
-      if (activeCharacterId === replyTargetId) {
+      if (isReplySourceActive(replySource)) {
         unreadCount += incoming.length;
         saveGlobalsToActiveChar();
       } else {
@@ -1688,6 +1722,7 @@ async function _clearCharsIDB(){
       }
       updateUnreadDisplay();
       if (messageListViewWrap.classList.contains('active')) renderCharacterList();
+      if(replyNotificationsEnabled) showIncomingBanner(replyTargetId, incoming);
       sendAutoReplyNotifications(incoming, replyTargetId, replyNotificationsEnabled);
     }
 
@@ -1898,7 +1933,8 @@ async function _clearCharsIDB(){
       try{
         let messages = [{role:"system", content:systemPrompt}]; const layers = isAutoReply ? (apiSettings.autoReplyContextLayers || 5) : apiSettings.contextLayers; if(layers>0) messages = messages.concat(messageHistory.slice(-layers*2));
         const res = await fetch(buildChatUrl(apiSettings.url),{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiSettings.key}`},body:JSON.stringify({model:apiSettings.model,messages,temperature:0.9,max_tokens:1024})});
-        if(!res.ok) throw new Error(`HTTP ${res.status}`); const data = await res.json(); const choice = data.choices?.[0]?.message; const content = choice?.content?.trim(), apiReasoning = choice?.reasoning_content?.trim();
+        if(!res.ok) throw new Error(`HTTP ${res.status}`); const data = await res.json(); if (!isReplySourceActive(replySource)) { skipUI = true; loadingWrapper?.remove(); }
+        const choice = data.choices?.[0]?.message; const content = choice?.content?.trim(), apiReasoning = choice?.reasoning_content?.trim();
         if(!content && !apiReasoning) throw new Error('AI 返回内容为空'); let finalContent = content||''; let finalReasoning = apiReasoning||null;
         const thinkRegex = /【思考过程】\s*([\s\S]*?)\s*【思考结束】/gi;
         let allThinkBlocks = []; let tm;
@@ -1926,7 +1962,7 @@ async function _clearCharsIDB(){
         const cleanText = hongbaoExtraction.cleaned;
         // 群聊场景下，先按每一段自己的发言人解析一遍（不假设整轮只有一个人在说话），
         // 改名、跨聊转发都依赖"这段话到底是谁说的"，不再只在自动回复(allowedMemberIds)时才能正确识别
-        const groupPreSegments = chatType==='group' ? parseGroupResponse(cleanText) : [];
+        const groupPreSegments = chatType==='group' ? parseGroupResponse(cleanText, members) : [];
         function findSegmentSenderName(tagSnippet){
           const seg = groupPreSegments.find(s => s.text.includes(tagSnippet));
           if(!seg) return null;
@@ -1935,7 +1971,7 @@ async function _clearCharsIDB(){
         }
         // 改名解析
         let needsRenameReload = false;
-        if(chatType==='group' && apiSettings.nicknameChangeEnabled){
+        if(isReplySourceActive(replySource) && chatType==='group' && apiSettings.nicknameChangeEnabled){
           const renameRegex = /\[改名[：:](.+?)\]/g;
           groupPreSegments.forEach(pseg => {
             let m2; renameRegex.lastIndex = 0;
@@ -1949,7 +1985,7 @@ async function _clearCharsIDB(){
         }
         let cleanedForSeg = cleanText.replace(/\[改名[：:].+?\]/g,'').replace(/\[切换[：:](?:私聊|见面)[：:].+?\]/g,'').trim();
         // 跨聊转发处理
-        if(apiSettings.crossChatEnabled){
+        if(isReplySourceActive(replySource) && apiSettings.crossChatEnabled){
           let sName = remarkVal, presetMsgText = null;
           if(chatType==='group'){
             const switchMatch = /\[切换[到]?[：:]?(?:私聊|见面|群聊)[：:].+?\]/.exec(cleanText);
@@ -1965,13 +2001,14 @@ async function _clearCharsIDB(){
           cleanedForSeg = processCrossChatSwitch(cleanText, sName, switchSenderId, presetMsgText);
           cleanedForSeg = cleanedForSeg.replace(/\[改名[：:].+?\]/g,'').replace(/\[切换[到]?[：:]?(?:私聊|见面|群聊)[：:].+?\]/g,'').trim();
         }
-        await sendExtractedBleCommands(bleExtraction.bleMatches);
-        if(hongbaoExtraction.hongbaoList.length > 0) await processHongbao(hongbaoExtraction.hongbaoList);
+        if(isReplySourceActive(replySource)) await sendExtractedBleCommands(bleExtraction.bleMatches);
+        if(isReplySourceActive(replySource) && hongbaoExtraction.hongbaoList.length > 0) await processHongbao(hongbaoExtraction.hongbaoList);
+        if(!isReplySourceActive(replySource)) { skipUI = true; loadingWrapper?.remove(); }
         let segmentsRaw = cleanedForSeg.split(/\n{2,}/).filter(s=>s.trim()!==''); if(segmentsRaw.length===0 && cleanedForSeg) segmentsRaw = [cleanedForSeg];
         let newSegments = [];
         let skipReasons = [];
         if(chatType==='group'){
-          const parsedSegments = parseGroupResponse(cleanedForSeg);
+          const parsedSegments = parseGroupResponse(cleanedForSeg, members);
           parsedSegments.forEach(seg => {
             seg.text = seg.text.replace(/\[BLE[:：]\d+(?:[:：]\d)?\]/g,'').replace(/\[红包[:：]\d+(?:\.\d+)?(?:[:：].+?)?\]/g,'').replace(/\[切换[到]?[：:]?(?:私聊|见面|群聊)[：:].+?\]/g,'').replace(/\[改名[：:].+?\]/g,'').trim();
             if(seg.text.startsWith('[AUTO_SKIP]')){
@@ -2017,7 +2054,7 @@ async function _clearCharsIDB(){
           }));
         }
         const recallSenderId = options.allowedMemberIds?.length===1 ? options.allowedMemberIds[0] : null;
-        const { recalledIds } = processAiRecall(finalContent, newSegments, recallSenderId); if (recalledIds.length > 0) showRecallHint(recalledIds);
+        const { recalledIds } = isReplySourceActive(replySource) ? processAiRecall(finalContent, newSegments, recallSenderId) : {recalledIds:[]}; if (recalledIds.length > 0) showRecallHint(recalledIds);
         if(newSegments.length === 0 && skipReasons.length === 0){
           if(!skipUI && loadingWrapper) loadingWrapper.remove();
           if(!skipUI) addCenteredHint('AI 本轮没有输出有效消息');
@@ -2085,9 +2122,9 @@ async function _clearCharsIDB(){
           saveChatHistory();
         }
         if (options && options.onReply) options.onReply(newSegments);
-        checkSummaryTrigger();
-      } catch(err){ console.error(err); const errorMsg = `😢 AI 请求失败：${err.message}`; const msgId = 'msg_'+Date.now().toString(36)+Math.random().toString(36).substr(2,5); const ts = Date.now(); messageHistory.push({role:'assistant',content:errorMsg}); chatMessages.push({id:msgId,role:'dog',text:errorMsg,reasoning:null,timestamp:ts, isAutoReply: false, senderId: null, senderName: null}); saveChatHistory(); if (!skipUI) { const fragment = document.createDocumentFragment(); const prevLastTs = chatMessages.length>1?(chatMessages[chatMessages.length-2]?.timestamp||0):0; if(prevLastTs===0||(ts-prevLastTs)>=300000) fragment.appendChild(createTimeStampDiv(ts)); fragment.appendChild(createDogMsg(errorMsg,null,false,msgId)); loadingWrapper.replaceWith(fragment); } else if (loadingWrapper) { loadingWrapper.remove(); } if(currentAutoReplyLog){ currentAutoReplyLog.response = errorMsg; currentAutoReplyLog.skipped = false; currentAutoReplyLog = null; } }
-      finally { if (!skipUI) { sendBtn.disabled=false; retryBtn.disabled=false; } waiting=false; if (!skipUI) chatArea.scrollTop = chatArea.scrollHeight; }
+        if(isReplySourceActive(replySource)) checkSummaryTrigger();
+      } catch(err){ if(!isReplySourceActive(replySource)) { skipUI = true; loadingWrapper?.remove(); } console.error(err); const errorMsg = `😢 AI 请求失败：${err.message}`; const msgId = 'msg_'+Date.now().toString(36)+Math.random().toString(36).substr(2,5); const ts = Date.now(); messageHistory.push({role:'assistant',content:errorMsg}); chatMessages.push({id:msgId,role:'dog',text:errorMsg,reasoning:null,timestamp:ts, isAutoReply: false, senderId: null, senderName: null}); saveChatHistory(); if (!skipUI) { const fragment = document.createDocumentFragment(); const prevLastTs = chatMessages.length>1?(chatMessages[chatMessages.length-2]?.timestamp||0):0; if(prevLastTs===0||(ts-prevLastTs)>=300000) fragment.appendChild(createTimeStampDiv(ts)); fragment.appendChild(createDogMsg(errorMsg,null,false,msgId)); loadingWrapper.replaceWith(fragment); } else if (loadingWrapper) { loadingWrapper.remove(); } if(currentAutoReplyLog){ currentAutoReplyLog.response = errorMsg; currentAutoReplyLog.skipped = false; currentAutoReplyLog = null; } }
+      finally { if (!isAutoReply || !skipUI) { sendBtn.disabled=false; retryBtn.disabled=false; } waiting=false; if (!skipUI) chatArea.scrollTop = chatArea.scrollHeight; }
     } else {
       if (!skipUI) { setTimeout(()=>{ const reply = getRandomReply(); const msgId = 'msg_'+Date.now().toString(36)+Math.random().toString(36).substr(2,5); const ts = Date.now(); messageHistory.push({role:'assistant',content:reply}); chatMessages.push({id:msgId,role:'dog',text:reply,reasoning:null,timestamp:ts, isAutoReply: isAutoReply || false, senderId: null, senderName: null}); saveChatHistory(); notifyIncomingReply([reply]); },600) }
     }
@@ -3179,7 +3216,7 @@ async function _clearCharsIDB(){
             if (fresh.length) {
               history.push({role:'assistant',content:fresh.join('\n\n')});
               const viewing = document.visibilityState === 'visible' && chatViewWrap.classList.contains('active') && displayedChatId === char.id && (char.activeConversationId || '') === (reply.convId || '');
-              if (!viewing) char.unreadCount = (char.unreadCount || 0) + fresh.length;
+              if (!viewing) { char.unreadCount = (char.unreadCount || 0) + fresh.length; if(char.apiSettings.notificationsEnabled) showIncomingBanner(char.id, fresh); }
             }
           }
           if (reply.error) addLog('warn','后台普通回复：'+reply.error);
