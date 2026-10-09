@@ -155,3 +155,9 @@ test('AI request uses Workers-supported manual redirect and does not follow redi
  const original=globalThis.fetch;globalThis.fetch=async(url,init)=>{count++;assert.equal(init.redirect,'manual');return new Response(null,{status:307,headers:{Location:'https://other.example/'}});};
  try{await scheduler.alarm();assert.equal(count,1);assert.match((await call('/state')).body.jobs[0].error,/要求跳转/);}finally{globalThis.fetch=original;}
 });
+
+test('unchanged polling snapshot preserves generated context after inbox acknowledgement',async()=>{
+ const {scheduler,call,due}=setup();const j=job();j.timeline=[{role:'user',content:'hello',timestamp:j.lastAt}];j.latestUser=j.timeline[0];await call('/job','POST',j);await due();
+ const original=globalThis.fetch;globalThis.fetch=async()=>Response.json({choices:[{message:{content:'already answered'}}]});
+ try {await scheduler.alarm();const state=(await call('/state')).body;await call('/ack','POST',{ids:state.inbox.map(r=>r.id)});await call('/job','POST',j);const stored=(await scheduler.load()).jobs[j.charId];assert.equal(stored.latestAssistant.content,'already answered');assert.equal(stored.body.messages.at(-1).content,'already answered');assert.equal(stored.latestUser.content,'hello');}finally{globalThis.fetch=original;}
+});

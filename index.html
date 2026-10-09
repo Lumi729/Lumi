@@ -616,7 +616,7 @@
   <div class="create-modal" id="createModal"><div class="create-panel"><h3>创建</h3><button id="createSingleBtn">✨ 创建角色</button><button id="createGroupBtn">👥 创建群聊</button><button class="close-create" id="closeCreateBtn">关闭</button></div></div>
   <div class="create-modal" id="groupCreateModal"><div class="create-panel"><h3>选择群聊成员</h3><div class="create-member-list" id="groupMemberList"></div><div style="display:flex;gap:8px;"><button id="confirmGroupBtn" style="flex:1;">确认创建</button><button id="createEmptyGroupBtn" style="flex:1;background:#576b95;">创建空群聊</button></div><button class="close-create" id="closeGroupCreateBtn" style="width:100%;">取消</button></div></div>
 </div>
-<script src="/Lumi/background-client.js?v=20261009-limits15"></script>
+<script src="/Lumi/background-client.js?v=20261009-context16"></script>
 <script>
 // === IndexedDB for characters (large chat data, no 5MB limit) ===
 const _CHARS_DB_NAME = 'lumos_chars_v1';
@@ -1786,7 +1786,7 @@ async function _clearCharsIDB(){
       const summaryPromptG = buildSummaryPrompt(); if(summaryPromptG) systemPrompt += summaryPromptG;
       if(historyStr){
         systemPrompt += `## 对话记录\n以下是最近的聊天记录。标注说明：[自动回复] = AI主动发送的消息；[引用了xxx的消息："..."] = 发言者在针对被引用的内容回复；[已撤回] = 该消息已被撤回。\n${historyStr}\n\n`;
-        if(apiSettings.timePerceptionEnabled) systemPrompt += buildTimeAwareness(chatMessages, Date.now());
+        if(apiSettings.timePerceptionEnabled && !options.prepareBackground) systemPrompt += buildTimeAwareness(chatMessages, Date.now());
       }
 
       // --- 行动指令 ---
@@ -1882,7 +1882,7 @@ async function _clearCharsIDB(){
       const summaryPromptS = buildSummaryPrompt(); if(summaryPromptS) systemPrompt += summaryPromptS;
       if(historyStr){
         systemPrompt += `## 对话记录\n以下是最近的聊天记录。标注说明：[自动回复] = 你主动发送的消息；[引用了xxx的消息："..."] = 发言者在针对被引用的内容回复；[已撤回] = 该消息已被撤回。\n${historyStr}\n\n`;
-        if(apiSettings.timePerceptionEnabled) systemPrompt += buildTimeAwareness(chatMessages, Date.now());
+        if(apiSettings.timePerceptionEnabled && !options.prepareBackground) systemPrompt += buildTimeAwareness(chatMessages, Date.now());
       }
 
       // --- 行动指令 ---
@@ -1918,7 +1918,7 @@ async function _clearCharsIDB(){
         }
       }
 
-      if(isAutoReply){
+      if(isAutoReply && !options.prepareBackground){
         systemPrompt += `## 自动回复\n你们已经 ${timeAgoStr} 没有聊天了。最后一条是「${lastSender}」发的：「${lastPreview}」，之后「${userName}」一直没回复。\n请以「${charName}」的人设判断：在这个时间点，你会主动发消息吗？\n想发 → 按正常格式回复（会标注为自动回复）\n不想发 → 输出 [AUTO_SKIP] 理由\n\n`;
       }
     }
@@ -3196,9 +3196,10 @@ async function _clearCharsIDB(){
         const identity = convId + ':' + last.id + ':' + last.timestamp;
         const payload = await triggerAiReply(true, 1, apiSettings.autoReplyMsgCount, true, false, {prepareBackground:true});
         if (id !== activeCharacterId || convId !== (activeConvId || '') || last !== chatMessages.filter(m => m.role !== 'hint').at(-1)) return null;
-        const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify({identity, url:payload.url, key:payload.key, model:payload.body.model, settings:char.charSettings, presets, worlds, enabledPresetIds, enabledWorldIds, history:messageHistory, persona:getActiveUserPersona(), notificationsEnabled:apiSettings.notificationsEnabled, delay:apiSettings.autoReplyDelayMinutes, min:apiSettings.autoReplyDailyMin, max:apiSettings.autoReplyDailyMax})));
+        const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify({backgroundContextVersion:2, identity, url:payload.url, key:payload.key, model:payload.body.model, settings:char.charSettings, presets, worlds, enabledPresetIds, enabledWorldIds, history:messageHistory, persona:getActiveUserPersona(), notificationsEnabled:apiSettings.notificationsEnabled, delay:apiSettings.autoReplyDelayMinutes, min:apiSettings.autoReplyDailyMin, max:apiSettings.autoReplyDailyMax})));
         const revision = Array.from(new Uint8Array(digest), x => x.toString(16).padStart(2,'0')).join('');
-        return { ...payload, charId:id, convId, revision, lastAt:last.timestamp, autoEnabled:Boolean(apiSettings.autoReplyEnabled), notificationsEnabled:Boolean(apiSettings.notificationsEnabled),
+        const timeline = chatMessages.filter(m=>!m.recalled && ['user','dog','assistant'].includes(m.role)).map(m=>({role:m.role==='user'?'user':'assistant',content:String(m.text||''),timestamp:m.timestamp}));
+        return { ...payload, timeline:timeline.slice(-Math.max(2,(apiSettings.autoReplyContextLayers||5)*2)), latestUser:timeline.filter(m=>m.role==='user').at(-1), latestAssistant:timeline.filter(m=>m.role==='assistant').at(-1), charId:id, convId, revision, lastAt:last.timestamp, autoEnabled:Boolean(apiSettings.autoReplyEnabled), notificationsEnabled:Boolean(apiSettings.notificationsEnabled),
           delayMinutes: Math.max(1, Math.min(120, Math.floor(Number(apiSettings.autoReplyDelayMinutes) || 5))),
           dailyMin: Math.max(0, Math.min(20, Math.floor(Number(apiSettings.autoReplyDailyMin) || 0))),
           dailyMax: Math.max(0, Math.min(20, Math.floor(Number(apiSettings.autoReplyDailyMax) || 0))),

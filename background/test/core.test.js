@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { notificationBodies, cleanReply, safeApiUrl, seal, unseal, sameToken, dayKey, nextDay, dailyState, validateJob, validateSubscription } from '../src/core.js';
+import { notificationBodies, cleanReply, safeApiUrl, seal, unseal, sameToken, dayKey, nextDay, dailyState, backgroundTiming, appendBackgroundContext, validateJob, validateSubscription } from '../src/core.js';
 const secret = Buffer.alloc(32, 7).toString('base64');
 export const job = (now = Date.now()) => ({ charId:'char_demo',convId:'',revision:'one',url:'https://api.example.com/v1/chat/completions',key:'test-only-key',body:{model:'demo',messages:[{role:'system',content:'demo'},{role:'user',content:'hello'}]},lastAt:now-60000,delayMinutes:1,dailyMin:2,dailyMax:2,offset:-480,todayCount:0,todayDate:'' });
 test('one to three separate notices, more than three summarized', () => {
@@ -39,4 +39,10 @@ test('backend uses maximum and never imports local counters into new day',()=>{
  const migrated=dailyState({day:j.todayDate,count:3,quota:1},j,now);assert.equal(migrated.count,0);
  migrated.count=2;assert.equal(dailyState(migrated,j,now).count,2);
  assert.equal(dailyState(migrated,{...j,dailyMax:8},now).quota,8);
+});
+
+test('background timing keeps user age distinct and advances role after autonomous replies',()=>{
+ const now=Date.now(),j={offset:-480,latestUser:{role:'user',content:'old question',timestamp:now-600000},timeline:[{role:'user',content:'old question',timestamp:now-600000}]};
+ appendBackgroundContext(j,['already answered'],now-120000);appendBackgroundContext(j,['new topic'],now-60000);
+ const prompt=backgroundTiming(j,now);assert.match(prompt,/600 秒/);assert.match(prompt,/60 秒/);assert.match(prompt,/already answered/);assert.match(prompt,/new topic/);assert.match(prompt,/用户尚未再次回应/);assert.match(prompt,/不是重新回答用户最后一句/);
 });

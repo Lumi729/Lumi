@@ -70,3 +70,21 @@ export function validateJob(input, now) {
   for (const m of input.body.messages) if (!['system', 'user', 'assistant'].includes(m.role) || typeof m.content !== 'string') throw new Error('上下文格式无效');
   return { ...input, url: safeApiUrl(input.url), todayCount: Math.min(20, Math.max(0, Number(input.todayCount) || 0)), leaseUntil: now + 7 * 86400000 };
 }
+
+export function backgroundTiming(job, now) {
+  const time = value => Number.isFinite(value) ? new Date(value - job.offset*60000).toISOString().replace('T',' ').replace('Z','') : '未知';
+  const age = value => Number.isFinite(value) ? Math.max(0,Math.floor((now-value)/1000))+' 秒' : '未知';
+  const timeline = job.timeline || [];
+  const latestUser = job.latestUser || [...timeline].reverse().find(m=>m.role==='user');
+  const latestAssistant = job.latestAssistant || [...timeline].reverse().find(m=>m.role==='assistant');
+  const describe = m => m ? time(m.timestamp)+'；距现在 '+age(m.timestamp)+'；内容：'+m.content : '无记录';
+  const waiting = latestUser && latestAssistant && latestAssistant.timestamp >= latestUser.timestamp;
+  return '## 当前聊天时间与状态（每轮更新）\n当前用户本地时间：'+time(now)+
+    '\n用户最后一次发言：'+describe(latestUser)+'\n角色最后一次发言：'+describe(latestAssistant)+
+    '\n上下文消息时间线：\n'+timeline.map((m,i)=>time(m.timestamp)+' '+(m.role==='user'?'用户':'角色')+'；距前一条 '+(i && Number.isFinite(m.timestamp) && Number.isFinite(timeline[i-1].timestamp)?Math.max(0,Math.floor((m.timestamp-timeline[i-1].timestamp)/1000))+' 秒':'未知')+'；'+m.content).join('\n')+
+    (job.manual ? '\n本轮是用户明确请求的普通回复。' : '\n本轮是主动发言判断，不是重新回答用户最后一句。'+(waiting?'角色已在用户最后发言后回复，用户尚未再次回应。':'')+'结合完整的已提供上下文、双方最后发言及等待间隔判断是否有必要主动说话。不要重复已经答过的问题、换句话重说上一轮或虚构用户的新回复；没有自然的新内容就输出 [AUTO_SKIP] 理由。');
+}
+export function appendBackgroundContext(job, segments, now) {
+  const message={role:'assistant',content:segments.join('\n\n'),timestamp:now};
+  job.latestAssistant=message;job.timeline=[...(job.timeline||[]),message].slice(-40);
+}
