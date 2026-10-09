@@ -839,10 +839,10 @@ async function _clearCharsIDB(){
     const title = 'TA想对你说的是...';
     const iconUrl = getNotificationIconUrl();
     async function showOne(body, tag) {
-        const options = { body, icon: iconUrl, tag, requireInteraction: false };
+        const options = { body, icon: iconUrl, tag, requireInteraction: false, data: { charId: targetId } };
         try {
             const n = new Notification(title, options);
-            n.onclick = () => { window.focus(); openCharacterChat(targetId); };
+            n.onclick = () => { window.focus(); queueNotificationChat(targetId); n.close(); };
         } catch (e) {
             if (navigator.serviceWorker && navigator.serviceWorker.ready) {
                 try { const reg = await navigator.serviceWorker.ready; await reg.showNotification(title, options); } catch(e2) { addLog('warn','通知失败'); }
@@ -1064,10 +1064,45 @@ async function _clearCharsIDB(){
   // ===== 时间感知 =====
   const timePerceptionCheck = document.getElementById('timePerceptionCheck');
   function updateAllTabBars(activeTab){ document.querySelectorAll('.bottom-tab-bar').forEach(bar=>{ bar.querySelectorAll('.bottom-tab-item').forEach(item=> item.classList.toggle('active', item.dataset.tab===activeTab)) }) }
+  let displayedChatId = null;
+  let pendingNotificationChat = null;
+  let notificationRouteTimer = null;
+  function markVisibleChatRead() {
+    if (document.visibilityState !== 'visible' || !chatViewWrap.classList.contains('active') || !displayedChatId) return;
+    const target = characters.find(c => c.id === displayedChatId);
+    if (!target) return;
+    target.unreadCount = 0;
+    if (activeCharacterId === displayedChatId) unreadCount = 0;
+    saveAllData();
+    updateUnreadDisplay();
+    if (navigator.serviceWorker) navigator.serviceWorker.getRegistration('/Lumi/').then(async reg => {
+      if (!reg) return;
+      const notices = await reg.getNotifications();
+      notices.filter(n => n.data && n.data.charId === target.id).forEach(n => n.close());
+    }).catch(() => {});
+  }
+  function queueNotificationChat(charId) {
+    if (typeof charId !== 'string' || !characters.some(c => c.id === charId)) return;
+    pendingNotificationChat = charId;
+    clearTimeout(notificationRouteTimer);
+    function attempt() {
+      if (autoReplyInProgress || waiting) { notificationRouteTimer = setTimeout(attempt, 250); return; }
+      const id = pendingNotificationChat;
+      pendingNotificationChat = null;
+      openCharacterChat(id);
+      markVisibleChatRead();
+    }
+    attempt();
+  }
+  document.addEventListener('visibilitychange', markVisibleChatRead);
+  window.addEventListener('focus', markVisibleChatRead);
+  if (navigator.serviceWorker) navigator.serviceWorker.addEventListener('message', event => {
+    if (event.data && event.data.type === 'LUMOS_OPEN_CHAT') queueNotificationChat(event.data.charId);
+  });
   function showView(viewName){
     saveGlobalsToActiveChar();
     chatViewWrap.classList.remove('active'); messageListViewWrap.classList.remove('active'); libraryViewWrap.classList.remove('active'); profileViewWrap.classList.remove('active');
-    if(viewName==='chat') chatViewWrap.classList.add('active');
+    if(viewName==='chat') { displayedChatId = activeCharacterId; chatViewWrap.classList.add('active'); markVisibleChatRead(); }
     else if(viewName==='messages'){ messageListViewWrap.classList.add('active'); renderCharacterList() }
     else if(viewName==='library'){ libraryViewWrap.classList.add('active'); renderLibraryView() }
     else if(viewName==='profile'){ profileViewWrap.classList.add('active'); renderProfileView() }
@@ -1591,7 +1626,7 @@ async function _clearCharsIDB(){
     function notifyIncomingReply(messages) {
       const incoming = messages.filter(m => !m.recalled).map(m => typeof m === 'string' ? m : m.text).filter(t => typeof t === 'string' && t.trim());
       const viewing = document.visibilityState === 'visible' && chatViewWrap.classList.contains('active') &&
-        (isAutoReply ? isActiveChat : activeCharacterId === replyTargetId);
+        displayedChatId === replyTargetId;
       if (!incoming.length || viewing) return;
       if (activeCharacterId === replyTargetId) {
         unreadCount += incoming.length;
@@ -3029,6 +3064,8 @@ async function _clearCharsIDB(){
     setInterval(updateAllTimestamps,30000); updateWeatherStatusUI();
     if(apiSettings.weatherEnabled) startWeatherAutoRefresh();
     if(apiSettings.autoReplyEnabled) startAutoReplyTimer();
+    const notificationCharId = new URL(location.href).searchParams.get('notificationChat');
+    if (notificationCharId) { const cleanUrl = new URL(location.href); cleanUrl.searchParams.delete('notificationChat'); history.replaceState(history.state, '', cleanUrl); queueNotificationChat(notificationCharId); }
     updateUnreadDisplay();
     if (statusTimeEl) { statusTimeEl.addEventListener('dblclick', () => { if (document.fullscreenElement || document.webkitFullscreenElement) { if(document.exitFullscreen) document.exitFullscreen(); else if(document.webkitExitFullscreen) document.webkitExitFullscreen(); } else { if(document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(()=>{}); else if(document.documentElement.webkitRequestFullscreen) document.documentElement.webkitRequestFullscreen(); } }); }
   }

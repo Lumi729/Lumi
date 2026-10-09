@@ -1,4 +1,4 @@
-const CACHE_NAME = 'lumos-v2';
+const CACHE_NAME = 'lumos-v3';
 const urlsToCache = ['/Lumi/', '/Lumi/index.html', '/Lumi/manifest.json', '/Lumi/月亮.png', '/Lumi/月亮512.png'];
 const staticUrls = new Set(urlsToCache.map(path => new URL(path, self.location.origin).href));
 
@@ -44,5 +44,19 @@ self.addEventListener('fetch', event => {
 
 self.addEventListener('notificationclick', event => {
   event.notification.close();
-  event.waitUntil(self.clients.openWindow('/Lumi/'));
+  const charId = event.notification.data && event.notification.data.charId;
+  const url = new URL('/Lumi/', self.location.origin);
+  if (typeof charId === 'string') url.searchParams.set('notificationChat', charId);
+  event.waitUntil((async () => {
+    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const client of windows) {
+      const current = new URL(client.url);
+      if (current.origin === url.origin && current.pathname.startsWith('/Lumi/')) {
+        await client.focus();
+        if (typeof charId === 'string') client.postMessage({ type: 'LUMOS_OPEN_CHAT', charId });
+        return;
+      }
+    }
+    await self.clients.openWindow(url.href);
+  })());
 });
