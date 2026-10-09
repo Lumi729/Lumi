@@ -70,7 +70,7 @@ window.createLumosBackground = function(adapter) {
       const current = await adapter.snapshot(config.charId);
       if (current?.disabled) {
         await api('/job', 'DELETE', { charId: config.charId });
-        status('后台任务已暂停：角色不存在或已关闭 AI／自动回复。');
+        status('主动回复调度已暂停。普通回复仍可使用后台；请保持该角色的 AI 已启用。');
       } else if (current) {
         try { await api('/job', 'POST', current); } catch (error) { if (error.status === 409) { dirty = true; } else throw error; }
         status(`已连接：${adapter.name(config.charId)}。后台会继续普通回复并独立调度主动回复，回来时同步消息。\n手机推送仍受系统权限、网络与省电影响。`);
@@ -104,8 +104,8 @@ window.createLumosBackground = function(adapter) {
     if (!el('bgConsent').checked) throw new Error('请先勾选上传同意');
     if (config.enabled) throw new Error('已有后台角色，请先关闭并删除后台数据，再重新连接');
     if (adapter.isBusy()) throw new Error('请等这一轮回复完成再连接');
-    const currentId = adapter.activeId(), job = await adapter.snapshot(currentId);
-    if (!job || job.disabled) throw new Error('请先为当前单人角色配置 AI 并启用自动回复');
+    const currentId = adapter.activeId(), job = await adapter.snapshot(currentId, true);
+    if (!job || job.disabled) throw new Error('请先为当前单人角色配置 AI，并确保聊天中已有消息');
     const url = new URL(el('bgUrl').value.trim());
     if (url.protocol !== 'https:' || url.username || url.password || url.pathname !== '/' || url.search || url.hash) throw new Error('请填写 HTTPS 后台根地址，不带路径');
     if (!el('bgToken').value.trim()) throw new Error('请填写连接口令');
@@ -124,8 +124,8 @@ window.createLumosBackground = function(adapter) {
     });
     await subscribe(settings.publicKey);
     config.enabled = true; persist();
-    try { await api('/job', 'POST', job); } catch (error) { config.enabled = false; persist(); throw error; }
-    status('后台已启用。请点击“测试手机推送”，然后切后台检查通知。'); adapter.log('info', '已启用 Cloudflare 后台自动回复');
+    try { if (job.autoEnabled) await api('/job', 'POST', job); else await api('/job', 'DELETE', { charId: currentId }); } catch (error) { config.enabled = false; persist(); throw error; }
+    status('后台已启用，普通回复可以在切走后继续。自动回复按角色开关单独控制。请点击“测试手机推送”检查通知。'); adapter.log('info', '已启用 Cloudflare 后台自动回复');
   });
   button('bgTest', async () => { if (!config.enabled) throw new Error('请先启用后台'); const r = await api('/test', 'POST', {}); status(r.submitted === true ? '测试推送已被推送服务接收，请检查通知栏。' : '手机推送订阅已失效，请重新连接。'); });
   button('bgSync', sync);
