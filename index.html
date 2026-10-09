@@ -1879,9 +1879,16 @@ async function _clearCharsIDB(){
     }
     try{ const walletCtx = await getWalletContextForPrompt(); if(walletCtx) systemPrompt += walletCtx; }catch(e){ console.warn('wallet prompt inject failed',e); }
     if(options.prepareBackground) {
-      const layers = apiSettings.autoReplyContextLayers || 5;
+      const layers = isAutoReply ? (apiSettings.autoReplyContextLayers || 5) : apiSettings.contextLayers;
       return { url: buildChatUrl(apiSettings.url), key: apiSettings.key,
         body: { model: apiSettings.model, messages: [{role:'system',content:systemPrompt}, ...messageHistory.slice(-layers*2)], temperature:0.9, max_tokens:1024 } };
+    }
+    if (!isAutoReply && lumosBackground?.managed(replyTargetId) && apiSettings.enabled && apiSettings.key && apiSettings.url) {
+      const layers = apiSettings.contextLayers;
+      const payload = {url:buildChatUrl(apiSettings.url),key:apiSettings.key,body:{model:apiSettings.model,messages:[{role:'system',content:systemPrompt},...(layers>0 ? messageHistory.slice(-layers*2) : [])],temperature:0.9,max_tokens:1024}};
+      try { await lumosBackground.submitReply(payload); }
+      catch(error) { addLog('warn','普通回复未交给后台：'+error.message); alert('普通回复未交给后台：'+error.message+'。不会切换到本地重发，以免重复调用。'); }
+      return;
     }
     if(isAutoReply){ currentAutoReplyLog = { time: new Date().toISOString(), prompt: systemPrompt, response: null, skipped: false, reason: '' }; autoReplyLogs.unshift(currentAutoReplyLog); if(autoReplyLogs.length > 50) autoReplyLogs.pop(); }
     if(apiSettings.enabled && apiSettings.key && apiSettings.url){
@@ -3115,16 +3122,23 @@ async function _clearCharsIDB(){
       presence: () => ({ charId: document.visibilityState === 'visible' && chatViewWrap.classList.contains('active') ? displayedChatId : null, convId:activeConvId || '' }),
       name: id => characters.find(c => c.id === id)?.name || '已删除的角色',
       log: addLog,
+      pending(id, enabled) {
+        if (id !== activeCharacterId) return;
+        chatArea.querySelectorAll('.bg-reply-pending').forEach(el => el.remove());
+        if (enabled && chatViewWrap.classList.contains('active')) {
+          const hint = document.createElement('div'); hint.className = 'recall-system-hint bg-reply-pending'; hint.textContent = '☁️ 后台回复中，切走也会继续生成'; chatArea.appendChild(hint);
+        }
+      },
       updateDaily(id, daily) {
         const char = characters.find(c => c.id === id); if (!char) return;
         const date = new Date(daily.day + 'T12:00:00').toDateString();
         char.apiSettings.autoReplyLastDate = date; char.apiSettings.autoReplyTodayCount = daily.count;
         if (id === activeCharacterId) { apiSettings.autoReplyLastDate = date; apiSettings.autoReplyTodayCount = daily.count; }
       },
-      async snapshot(id) {
+      async snapshot(id, forReply = false) {
         if (waiting || autoReplyInProgress) return null;
         const char = characters.find(c => c.id === id);
-        if (!char || !char.apiSettings.enabled || !char.apiSettings.autoReplyEnabled) return {disabled:true};
+        if (!char || !char.apiSettings.enabled || (!forReply && !char.apiSettings.autoReplyEnabled)) return {disabled:true};
         if (id !== activeCharacterId) return null;
         if (chatType === 'group') throw new Error('后台第一版支持单人聊天；群聊请使用本地模式');
         if (!apiSettings.url || !apiSettings.key) return {disabled:true};
@@ -3134,9 +3148,9 @@ async function _clearCharsIDB(){
         const identity = convId + ':' + last.id + ':' + last.timestamp;
         const payload = await triggerAiReply(true, 1, apiSettings.autoReplyMsgCount, true, false, {prepareBackground:true});
         if (id !== activeCharacterId || convId !== (activeConvId || '') || last !== chatMessages.filter(m => m.role !== 'hint').at(-1)) return null;
-        const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify({identity, url:payload.url, key:payload.key, model:payload.body.model, settings:char.charSettings, presets, worlds, enabledPresetIds, enabledWorldIds, history:messageHistory, persona:getActiveUserPersona(), delay:apiSettings.autoReplyDelayMinutes, min:apiSettings.autoReplyDailyMin, max:apiSettings.autoReplyDailyMax})));
+        const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify({identity, url:payload.url, key:payload.key, model:payload.body.model, settings:char.charSettings, presets, worlds, enabledPresetIds, enabledWorldIds, history:messageHistory, persona:getActiveUserPersona(), notificationsEnabled:apiSettings.notificationsEnabled, delay:apiSettings.autoReplyDelayMinutes, min:apiSettings.autoReplyDailyMin, max:apiSettings.autoReplyDailyMax})));
         const revision = Array.from(new Uint8Array(digest), x => x.toString(16).padStart(2,'0')).join('');
-        return { ...payload, charId:id, convId, revision, lastAt:last.timestamp,
+        return { ...payload, charId:id, convId, revision, lastAt:last.timestamp, autoEnabled:Boolean(apiSettings.autoReplyEnabled), notificationsEnabled:Boolean(apiSettings.notificationsEnabled),
           delayMinutes: Math.max(1, Math.min(120, Math.floor(Number(apiSettings.autoReplyDelayMinutes) || 5))),
           dailyMin: Math.max(0, Math.min(20, Math.floor(Number(apiSettings.autoReplyDailyMin) || 0))),
           dailyMax: Math.max(0, Math.min(20, Math.floor(Number(apiSettings.autoReplyDailyMax) || 0))),
@@ -3159,7 +3173,7 @@ async function _clearCharsIDB(){
             reply.segments.forEach((text, i) => {
               const id = 'bg_' + reply.id + '_' + i;
               if (typeof text !== 'string' || messages.some(m => m.id === id)) return;
-              messages.push({ id, role:'dog', text, timestamp:reply.timestamp+i, reasoning:null, isAutoReply:true, senderId:null, senderName:null });
+              messages.push({ id, role:'dog', text, timestamp:reply.timestamp+i, reasoning:null, isAutoReply:reply.isAutoReply !== false, senderId:null, senderName:null });
             });
             if (fresh.length) {
               history.push({role:'assistant',content:fresh.join('\n\n')});
@@ -3167,6 +3181,7 @@ async function _clearCharsIDB(){
               if (!viewing) char.unreadCount = (char.unreadCount || 0) + fresh.length;
             }
           }
+          if (reply.error) addLog('warn','后台普通回复：'+reply.error);
           if (reply.daily) {
             char.apiSettings.autoReplyTodayCount = reply.daily.count;
             char.apiSettings.autoReplyLastDate = new Date(reply.daily.day + 'T12:00:00').toDateString();

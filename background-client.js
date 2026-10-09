@@ -6,7 +6,7 @@ window.createLumosBackground = function(adapter) {
   const box = document.createElement('div');
   box.style.cssText = 'border-top:1px solid #ddd;margin-top:18px;padding-top:14px';
   box.innerHTML = `<h4 style="margin-bottom:10px">☁️ 后台自动回复</h4>
-    <div class="hint-text">连接你自己的 Cloudflare 后台后，关掉页面也可定时生成回复。本版支持一个单人聊天角色；群聊仍需页面运行。</div>
+    <div class="hint-text">连接你自己的 Cloudflare 后台后，关掉页面也可继续普通回复及定时生成回复。本版支持一个单人聊天角色；群聊仍需页面运行。</div>
     <div class="setting-row"><label>后台地址</label><input id="bgUrl" type="url" placeholder="https://lumos-background.…workers.dev"></div>
     <div class="setting-row"><label>连接口令</label><input id="bgToken" type="password" autocomplete="off" placeholder="部署时生成的连接口令"></div>
     <div class="hint-text">启用会把当前角色的 API 密钥、设定和所选上下文上传到你自己的后台，加密保存用于调用 AI。7 天不打开本机页面则暂停调度；生成结果会在回来时同步。后台不执行蓝牙、红包、撤回或跨聊指令。</div>
@@ -36,6 +36,8 @@ window.createLumosBackground = function(adapter) {
       const remote = await api('/state');
       if (adapter.isBusy()) { dirty = true; return; }
       const ids = await adapter.importReplies(remote.inbox || []);
+      const pending = remote.pendingReplies?.find(r => r.charId === config.charId);
+      adapter.pending(config.charId, Boolean(pending));
       if (ids.length) await api('/ack', 'POST', { ids });
       const current = await adapter.snapshot(config.charId);
       if (current?.disabled) {
@@ -43,7 +45,7 @@ window.createLumosBackground = function(adapter) {
         status('后台任务已暂停：角色不存在或已关闭 AI／自动回复。');
       } else if (current) {
         try { await api('/job', 'POST', current); } catch (error) { if (error.status === 409) { dirty = true; } else throw error; }
-        status(`已连接：${adapter.name(config.charId)}。后台会独立调度，回来时同步消息。\n手机推送仍受系统权限、网络与省电影响。`);
+        status(`已连接：${adapter.name(config.charId)}。后台会继续普通回复并独立调度主动回复，回来时同步消息。\n手机推送仍受系统权限、网络与省电影响。`);
       } else status(`后台角色：${adapter.name(config.charId)}。打开该角色可更新后台设定。`);
       const job = remote.jobs?.find(x => x.charId === config.charId);
       if (job?.error) status('后台状态：' + job.error);
@@ -110,5 +112,25 @@ window.createLumosBackground = function(adapter) {
   navigator.serviceWorker?.addEventListener('message', e => { if (e.data?.type === 'LUMOS_BACKGROUND_CHANGED') sync(); });
   setInterval(() => { if (config.enabled && document.visibilityState === 'visible') sync(); }, 30000);
   if (config.enabled) { status('正在连接已启用的后台…'); queue(); } else status('未启用；现有聊天与通知继续使用本地模式。');
-  return { managed, queue, sync };
+  async function submitReply(payload) {
+    if (!config.enabled) throw new Error('后台未启用');
+    if (busy) throw new Error('后台正在同步，请稍后再请求回复');
+    busy = true;
+    try {
+      const remote = await api('/state');
+      const ids = await adapter.importReplies(remote.inbox || []);
+      if (ids.length) await api('/ack','POST',{ids});
+      const snapshot = await adapter.snapshot(config.charId, true);
+      if (!snapshot || snapshot.disabled) throw new Error('请先检查当前后台角色的 AI 设置');
+      const requestId = 'reply_' + crypto.randomUUID().replace(/-/g,'');
+      await api('/presence','POST',adapter.presence());
+      // 快照继续供自动回复使用；当前普通回复采用原普通回复提示词和上下文层数。
+      if (snapshot.autoEnabled) await api('/job','POST',snapshot);
+      await api('/reply','POST',{...snapshot,...payload,requestId});
+      adapter.pending(config.charId,true);
+      status('普通回复已交给后台。切走后会继续生成，回来自动同步；没在对应聊天页时推送通知。');
+      adapter.log('info','普通回复已交给 Cloudflare 后台，页面不会再次调用 AI');
+    } finally { busy = false; queue(); }
+  }
+  return { managed, queue, sync, submitReply };
 };

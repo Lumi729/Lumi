@@ -39,6 +39,7 @@ export class LumosScheduler {
   async schedule(data) {
     const now = Date.now();
     const deadlines = Object.values(data.jobs).filter(j => j.leaseUntil > now).map(j => j.nextAt);
+    for (const pendingReply of Object.values(data.requests || {})) deadlines.push(pendingReply.nextAt);
     const pending = data.inbox.filter(r => r.pushState === 'pending' && r.pushAttempts < 3);
     if (pending.length && data.subscription) deadlines.push(now + 60000);
     if (deadlines.length) await this.state.storage.setAlarm(Math.max(now + 1000, Math.min(...deadlines)));
@@ -48,9 +49,22 @@ export class LumosScheduler {
     return this.state.blockConcurrencyWhile(async () => {
       const path = new URL(request.url).pathname, data = await this.load();
       try {
-        if (path === '/state' && request.method === 'GET') return json({ inbox: data.inbox.filter(r => !r.acked), jobs: Object.values(data.jobs).map(j => ({ charId: j.charId, convId: j.convId, nextAt: j.nextAt, leaseUntil: j.leaseUntil, error: j.error || null, daily: data.daily[j.charId] })), heartbeat: data.heartbeat, subscribed: Boolean(data.subscription) });
+        if (path === '/state' && request.method === 'GET') return json({ inbox: data.inbox.filter(r => !r.acked), jobs: Object.values(data.jobs).map(j => ({ charId: j.charId, convId: j.convId, nextAt: j.nextAt, leaseUntil: j.leaseUntil, error: j.error || null, daily: data.daily[j.charId] })), heartbeat: data.heartbeat, subscribed: Boolean(data.subscription), pendingReplies: Object.values(data.requests || {}).map(r => ({id:r.requestId,charId:r.charId,convId:r.convId,state:r.state})) });
         if (path === '/presence' && request.method === 'POST') { const presence = await request.json(); data.presence = { charId:typeof presence.charId === 'string' ? presence.charId.slice(0,100) : null, convId:typeof presence.convId === 'string' ? presence.convId.slice(0,100) : '', until:Date.now()+45000 }; }
         else if (path === '/subscription' && request.method === 'POST') { data.subscription = validateSubscription(await request.json()); }
+        else if (path === '/reply' && request.method === 'POST') {
+          const input = await request.json();
+          if (typeof input.requestId !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(input.requestId)) throw new Error('请求编号无效');
+          const requestJob = validateJob(input, Date.now());
+          data.requests ||= {};
+          if (Object.values(data.requests).some(r => r.requestId === input.requestId) || data.inbox.some(r => r.id === input.requestId)) return json({ok:true});
+          if (data.requests[input.charId]) return json({error:'上一轮普通回复仍在后台处理中，请先同步结果'},409);
+          if (data.inbox.some(r => r.charId === input.charId && !r.acked)) return json({error:'请先同步后台消息'},409);
+          requestJob.requestId = input.requestId; requestJob.nextAt = Date.now()+1000; requestJob.state = 'queued';
+          data.requests[input.charId] = requestJob;
+          // 显式回复优先，取消正在生成的旧自动回复结果，避免同轮双发。
+          if (data.jobs[input.charId]) { data.jobs[input.charId].runId = null; data.jobs[input.charId].runUntil = 0; data.jobs[input.charId].nextAt = Date.now() + requestJob.delayMinutes*60000; }
+        }
         else if (path === '/job' && request.method === 'POST') {
           const job = validateJob(await request.json(), Date.now());
           const old = data.jobs[job.charId];
@@ -93,8 +107,20 @@ export class LumosScheduler {
     await this.state.blockConcurrencyWhile(async () => {
       const data = await this.load(), now = Date.now();
       data.heartbeat = now;
+      data.requests ||= {};
+      for (const [id, request] of Object.entries(data.requests)) {
+        if (request.nextAt > now || reserved) continue;
+        if (request.state === 'running') {
+          // 进程异常后付费请求的结果未知，不重新发起同一轮。
+          data.inbox.push({id:request.requestId,charId:id,convId:request.convId,timestamp:now,segments:[],error:'后台普通回复中断，结果未知；请手动重试',isAutoReply:false,pushState:'skipped',pushAttempts:0});
+          delete data.requests[id]; continue;
+        }
+        request.state = 'running'; request.nextAt = now+120000; request.runId = request.requestId;
+        reserved = structuredClone(request); reserved.manual = true;
+      }
       for (const [id, job] of Object.entries(data.jobs)) {
         if (job.leaseUntil <= now) { delete data.jobs[id]; continue; }
+        if (data.requests[id]) { job.nextAt = Math.max(job.nextAt, data.requests[id].nextAt); continue; }
         if (job.nextAt > now || reserved || (job.runUntil || 0) > now) continue;
         if (data.inbox.filter(r => r.charId === id && !r.acked).length >= 40) { job.nextAt = nextDay(now, job.offset); job.error = '待同步消息较多，打开 Lumos 同步后继续'; continue; }
         const daily = dailyState(data.daily[id], job, now); data.daily[id] = daily;
@@ -109,22 +135,35 @@ export class LumosScheduler {
       let reply, error;
       try {
         const body = structuredClone(reserved.body);
-        body.messages = [...body.messages, { role: 'system', content: `这是服务端后台自动回复。实际当前时间：${new Date().toISOString()}。距最近消息约 ${Math.max(0, Math.floor((Date.now() - reserved.lastAt) / 60000))} 分钟；如早期快照时间描述冲突，以此为准。只输出聊天文本，用空行分段；不执行撤回、红包、蓝牙或场景切换。不想主动聊天可输出 [AUTO_SKIP] 理由。` }];
+        body.messages = [...body.messages, { role: 'system', content: `${reserved.manual ? '这是用户已明确请求的一轮普通回复，请直接回复最近用户消息，不输出 [AUTO_SKIP]。' : '这是服务端后台自动回复。'}实际当前时间：${new Date().toISOString()}。距最近消息约 ${Math.max(0, Math.floor((Date.now() - reserved.lastAt) / 60000))} 分钟；如早期快照时间描述冲突，以此为准。只输出聊天文本，用空行分段；不执行撤回、红包、蓝牙或场景切换。${reserved.manual ? '' : '不想主动聊天可输出 [AUTO_SKIP] 理由。'}` }];
         const response = await fetch(reserved.url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + reserved.key }, body: JSON.stringify(body), signal: AbortSignal.timeout(90000), redirect: 'error' });
         if (!response.ok) throw new Error('AI 接口返回 HTTP ' + response.status);
         const result = await response.json(); reply = cleanReply(result.choices?.[0]?.message?.content);
+        if (reserved.manual && reply.skipped) throw new Error('普通回复未返回聊天文本');
       } catch (e) { error = e.message.startsWith('AI 接口返回 HTTP ') ? e.message : 'AI 请求未完成；本轮不自动重试，避免重复扣费'; }
       await this.state.blockConcurrencyWhile(async () => {
-        const data = await this.load(), current = data.jobs[reserved.charId];
+        const data = await this.load(), current = reserved.manual ? data.requests?.[reserved.charId] : data.jobs[reserved.charId];
         // 新消息/关闭开关/删除任务在生成期间发生时，丢弃过期结果。
         if (!current || current.revision !== reserved.revision || current.runId !== reserved.runId) return;
+        if (reserved.manual) {
+          delete data.requests[reserved.charId];
+          if (data.jobs[reserved.charId]) data.jobs[reserved.charId].nextAt = Date.now()+current.delayMinutes*60000;
+        }
         current.runUntil = 0; current.nextAt = Date.now() + current.delayMinutes * 60000;
-        if (error) current.error = error;
+        if (error) {
+          current.error = error;
+          if (reserved.manual) data.inbox.push({id:reserved.runId,charId:reserved.charId,convId:reserved.convId,timestamp:Date.now(),segments:[],error,isAutoReply:false,pushState:'skipped',pushAttempts:0});
+        }
         else {
           const now = Date.now();
-          const item = { ...reply, id: reserved.runId, charId: reserved.charId, convId: reserved.convId, timestamp: now, pushState: reply.skipped ? 'skipped' : 'pending', pushAttempts: 0, daily: data.daily[reserved.charId] };
+          const item = { ...reply, id: reserved.runId, charId: reserved.charId, convId: reserved.convId, timestamp: now, pushState: reply.skipped ? 'skipped' : reserved.notificationsEnabled === false ? 'muted' : 'pending', pushAttempts: 0, isAutoReply:!reserved.manual, daily: data.daily[reserved.charId] };
           if (!reply.skipped && data.presence?.charId === item.charId && data.presence.convId === item.convId && data.presence.until > now) item.pushState = 'viewing';
           data.inbox.push(item);
+          if (reserved.manual && data.jobs[reserved.charId] && !reply.skipped) {
+            const autoJob = data.jobs[reserved.charId];
+            autoJob.lastAt = now; autoJob.body.messages.push({role:'assistant',content:reply.segments.join('\n\n')});
+            autoJob.body.messages = [autoJob.body.messages[0], ...autoJob.body.messages.slice(1).slice(-40)];
+          }
           if (!reply.skipped) {
             current.lastAt = now;
             // 最近上下文追加后台已发送的内容；原始系统设定不裁掉。

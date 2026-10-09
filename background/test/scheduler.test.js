@@ -80,3 +80,53 @@ test('real Web Push encryption is used; accepted push is not repeated',async()=>
   try {await scheduler.alarm();await scheduler.alarm();assert.equal(pushes,1);const item=(await call('/state')).body.inbox[0];assert.equal(item.pushState,'submitted');await call('/ack','POST',{ids:[item.id]});assert.equal((await call('/state')).body.inbox.length,0);}
   finally{globalThis.fetch=original;}
 });
+test('ordinary reply runs despite zero auto quota, takes priority, preserves explicit request id',async()=>{
+  const {scheduler,call,due}=setup();const config={...job(),dailyMin:0,dailyMax:0};
+  await call('/job','POST',config);await due();
+  const ordinary={...config,requestId:'ordinary_one',body:{model:'demo',messages:[{role:'system',content:'ordinary prompt'},{role:'user',content:'explicit question'}]}};
+  assert.equal((await call('/reply','POST',ordinary)).status,200);
+  assert.equal((await call('/reply','POST',ordinary)).status,200);
+  assert.equal((await call('/reply','POST',{...ordinary,requestId:'duplicate'})).status,409);
+  const saved=await scheduler.load();saved.requests.char_demo.nextAt=Date.now()-1;await scheduler.save(saved);
+  const original=globalThis.fetch;let calls=0;
+  globalThis.fetch=async(url,init)=>{calls++;const body=JSON.parse(init.body);assert.equal(body.messages[0].content,'ordinary prompt');assert.match(body.messages.at(-1).content,/普通回复/);return Response.json({choices:[{message:{content:'ordinary answer'}}]});};
+  try {
+    await scheduler.alarm();await scheduler.alarm();assert.equal(calls,1);
+    const remote=(await call('/state')).body;assert.equal(remote.inbox[0].id,'ordinary_one');assert.equal(remote.inbox[0].isAutoReply,false);assert.equal(remote.inbox[0].segments[0],'ordinary answer');assert.equal(remote.pendingReplies.length,0);
+    assert.equal((await call('/reply','POST',ordinary)).status,200); // same completed id is idempotent
+  } finally {globalThis.fetch=original;}
+});
+test('failed ordinary generation is saved for sync, never repeated automatically',async()=>{
+  const {scheduler,call}=setup();await call('/reply','POST',{...job(),requestId:'ordinary_error'});
+  const saved=await scheduler.load();saved.requests.char_demo.nextAt=Date.now()-1;await scheduler.save(saved);
+  const original=globalThis.fetch;let calls=0;globalThis.fetch=async()=>{calls++;return new Response('private error',{status:429});};
+  try {await scheduler.alarm();await scheduler.alarm();assert.equal(calls,1);const remote=(await call('/state')).body;assert.equal(remote.inbox[0].isAutoReply,false);assert.match(remote.inbox[0].error,/HTTP 429/);assert.equal(remote.pendingReplies.length,0);}
+  finally{globalThis.fetch=original;}
+});
+test('ordinary reply in a visible chat is synchronized without a system push',async()=>{
+  const {scheduler,call}=setup();await call('/presence','POST',{charId:'char_demo',convId:''});await call('/reply','POST',{...job(),requestId:'ordinary_visible'});
+  const saved=await scheduler.load();saved.requests.char_demo.nextAt=Date.now()-1;await scheduler.save(saved);
+  const original=globalThis.fetch;globalThis.fetch=async()=>Response.json({choices:[{message:{content:'visible answer'}}]});
+  try{await scheduler.alarm();assert.equal((await call('/state')).body.inbox[0].pushState,'viewing');}
+  finally{globalThis.fetch=original;}
+});
+test('interrupted ordinary reservation is not charged twice when alarm resumes',async()=>{
+  const {scheduler,call}=setup();await call('/reply','POST',{...job(),requestId:'interrupted'});
+  const saved=await scheduler.load();saved.requests.char_demo.state='running';saved.requests.char_demo.nextAt=Date.now()-1;await scheduler.save(saved);
+  const original=globalThis.fetch;globalThis.fetch=async()=>{throw Error('must not repeat');};
+  try{await scheduler.alarm();const remote=(await call('/state')).body;assert.match(remote.inbox[0].error,/结果未知/);assert.equal(remote.pendingReplies.length,0);}
+  finally{globalThis.fetch=original;}
+});
+test('disabling automatic schedule does not cancel an accepted ordinary reply',async()=>{
+  const {scheduler,call}=setup();await call('/job','POST',job());await call('/reply','POST',{...job(),requestId:'auto_off'});await call('/job','DELETE',{charId:'char_demo'});
+  const saved=await scheduler.load();assert.ok(saved.requests.char_demo);saved.requests.char_demo.nextAt=Date.now()-1;await scheduler.save(saved);
+  const original=globalThis.fetch;globalThis.fetch=async()=>Response.json({choices:[{message:{content:'ordinary continues'}}]});
+  try{await scheduler.alarm();assert.equal((await call('/state')).body.inbox[0].segments[0],'ordinary continues');}
+  finally{globalThis.fetch=original;}
+});
+test('ordinary reply honors notification switch while preserving inbox result',async()=>{
+  const {scheduler,call}=setup();await call('/reply','POST',{...job(),requestId:'muted',notificationsEnabled:false});const saved=await scheduler.load();saved.requests.char_demo.nextAt=Date.now()-1;await scheduler.save(saved);
+  const original=globalThis.fetch;globalThis.fetch=async()=>Response.json({choices:[{message:{content:'quiet reply'}}]});
+  try{await scheduler.alarm();const item=(await call('/state')).body.inbox[0];assert.equal(item.pushState,'muted');assert.equal(item.segments[0],'quiet reply');}
+  finally{globalThis.fetch=original;}
+});
