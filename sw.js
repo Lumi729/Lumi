@@ -1,5 +1,5 @@
-const CACHE_NAME = 'lumos-v20';
-const urlsToCache = ['/Lumi/', '/Lumi/index.html', '/Lumi/manifest.json', '/Lumi/background-client.js?v=20261009-context16', '/Lumi/月亮.png', '/Lumi/月亮512.png'];
+const CACHE_NAME = 'lumos-v21';
+const urlsToCache = ['/Lumi/', '/Lumi/index.html', '/Lumi/manifest.json', '/Lumi/background-client.js?v=20261009-avatar17', '/Lumi/月亮.png', '/Lumi/月亮512.png'];
 const staticUrls = new Set(urlsToCache.map(path => new URL(path, self.location.origin).href));
 
 // 核心资源全部就绪后启用新版。
@@ -102,6 +102,33 @@ self.addEventListener('message', event => {
 });
 
 
+// Resolve the source avatar from this device; no avatar or chat data is uploaded for push.
+async function pushAvatar(charId) {
+  const fallback = '/Lumi/月亮.png';
+  if (!charId || typeof indexedDB === 'undefined') return fallback;
+  return new Promise(resolve => {
+    let db, finished=false;
+    const finish=value=>{if(finished)return;finished=true;clearTimeout(timer);if(db)db.close();resolve(value || fallback);};
+    const timer=setTimeout(()=>finish(fallback),1500);
+    try {
+      const request=indexedDB.open('lumos_chars_v1',1);
+      request.onupgradeneeded=()=>{request.transaction.abort();};
+      request.onerror=()=>finish(fallback);
+      request.onsuccess=()=>{
+        db=request.result;if(finished){db.close();return;}
+        if(!db.objectStoreNames.contains('chars'))return finish(fallback);
+        const read=db.transaction('chars','readonly').objectStore('chars').get('main');
+        read.onerror=()=>finish(fallback);
+        read.onsuccess=()=>{
+          const character=Array.isArray(read.result) && read.result.find(c=>c.id===charId);
+          const src=character?.avatarSrc;
+          finish(character?.avatarType==='image' && typeof src==='string' && /^(https?:|data:image\/)/i.test(src) ? src : fallback);
+        };
+      };
+    } catch (_) {finish(fallback);}
+  });
+}
+
 // Real Web Push can wake this worker without an open page. It does not run a
 // permanent timer: Cloudflare generates the reply and delivers this event.
 self.addEventListener('push', event => {
@@ -111,8 +138,9 @@ self.addEventListener('push', event => {
     const notices = data && data.type === 'LUMOS_PUSH_REPLY' && Array.isArray(data.notices)
       ? data.notices.slice(0,3).filter(n => typeof n.title === 'string' && typeof n.options?.body === 'string') : [];
     if (!notices.length) notices.push({title:'Lumos', options:{body:'后台有新消息，打开后同步。'}});
-    const result = await submitNotificationBatch(notices.map(n => ({title:n.title, options:{
-      body:n.options.body, tag:n.options.tag, icon:'/Lumi/月亮.png', data:n.options.data || {}, requireInteraction:false
+    const icons = await Promise.all(notices.map(n=>pushAvatar(n.options.data?.charId)));
+    const result = await submitNotificationBatch(notices.map((n,i) => ({title:n.title, options:{
+      body:n.options.body, tag:n.options.tag, icon:icons[i], data:n.options.data || {}, requireInteraction:false
     }})));
     if (!result.sent) throw new Error('推送通知提交失败');
     const clients = await self.clients.matchAll({type:'window',includeUncontrolled:true});
