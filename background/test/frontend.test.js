@@ -9,7 +9,7 @@ const client=fs.readFileSync(new URL('background-client.js',root),'utf8');
 const source=fs.readFileSync(new URL('index.html',root),'utf8');
 const hooks=`window.__audit={
  setup(){const a=getActiveCharacter();a.name='A';a.type='single';a.activeConversationId=null;a.conversations=[];a.apiSettings={...a.apiSettings,enabled:true,url:'https://example.test/v1',key:'test-only',model:'test',notificationsEnabled:true,weatherEnabled:false,autoReplyEnabled:false,crossChatEnabled:false};a.chatMessages=[{id:'u1',role:'user',text:'hello',timestamp:Date.now()-600000}];a.messageHistory=[{role:'user',content:'hello'}];const b=structuredClone(a);b.id='test-b';b.name='B';b.chatMessages=[];b.messageHistory=[];characters.push(b);loadActiveCharToGlobals();showView('chat');return a.id;},
- avatar(src){getActiveCharacter().avatarType="image";getActiveCharacter().avatarSrc=src;loadActiveCharToGlobals();},notify:sendAutoReplyNotifications,request:()=>triggerAiReply(false),auto:()=>checkAutoReply(),view:showView,switch:()=>openCharacterChat('test-b'),data:()=>characters,
+ avatar(src){getActiveCharacter().avatarType="image";getActiveCharacter().avatarSrc=src;loadActiveCharToGlobals();},edit(id){reloadChatUI();startInlineEdit(id);},notify:sendAutoReplyNotifications,request:()=>triggerAiReply(false),auto:()=>checkAutoReply(),view:showView,switch:()=>openCharacterChat('test-b'),data:()=>characters,
  enableAuto(){apiSettings.autoReplyEnabled=true;apiSettings.autoReplyDelayMinutes=1;apiSettings.autoReplyDailyMin=1;apiSettings.autoReplyDailyMax=1;apiSettings.autoReplyTodayCount=0;saveGlobalsToActiveChar();},
  notifications(value){apiSettings.notificationsEnabled=value;saveGlobalsToActiveChar();},
  group(){getActiveCharacter().type='group';chatType='group';members=[{id:'m1',name:'Member'}];saveGlobalsToActiveChar();},
@@ -95,4 +95,26 @@ test('regression: deleted conversation inbox must not remain permanently unackno
  const archived=await new Promise((resolve,reject)=>{const r=w.indexedDB.open('lumos_chars_v1',1);r.onerror=()=>reject(r.error);r.onsuccess=()=>{const db=r.result;const q=db.transaction('chars').objectStore('chars').get('background_orphan_replies_v1');q.onsuccess=()=>{resolve(q.result);db.close();};};});
  assert.equal(archived[0].segments[0],'old reply');
  assert(!api.data().find(c=>c.id===id).chatMessages.some(m=>m.text==='old reply'));
+});
+
+ test('edited user text reaches both normal API and background snapshot',async t=>{
+ const {w,api,id,calls}=await app(t);
+ api.edit('u1');w.document.querySelector('.msg-edit-textarea').value='corrected message';w.document.querySelector('.msg-edit-save').click();
+ const snapshot=await w.__auditAdapter.snapshot(id,true);
+ assert.equal(snapshot.body.messages.find(m=>m.role==='user').content,'corrected message');
+ await api.request();
+ const sent=JSON.parse(calls[0].init.body);
+ assert.equal(sent.messages.find(m=>m.role==='user').content,'corrected message');
+ assert(!sent.messages.some(m=>m.content==='hello'));
+ });
+test('editing preserves quote and mention context and edited assistant text',async t=>{
+ const {w,api,id}=await app(t);await api.request();
+ const c=api.data().find(c=>c.id===id),u=c.chatMessages.find(m=>m.id==='u1');
+ u.quoteText='quoted words';u.quoteRole='user';u.mentionName='A';
+ api.edit('u1');w.document.querySelector('.msg-edit-textarea').value='new user words';w.document.querySelector('.msg-edit-save').click();
+ const dog=c.chatMessages.find(m=>m.role==='dog');api.edit(dog.id);w.document.querySelector('.msg-edit-textarea').value='new character words';w.document.querySelector('.msg-edit-save').click();
+ const snapshot=await w.__auditAdapter.snapshot(id,true);
+ const user=snapshot.body.messages.find(m=>m.role==='user').content;
+ assert.match(user,/\[@A\]/);assert.match(user,/quoted words/);assert.match(user,/new user words/);
+ assert(snapshot.body.messages.some(m=>m.role==='assistant'&&m.content==='new character words'));
 });
