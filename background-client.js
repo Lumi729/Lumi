@@ -71,7 +71,13 @@ window.createLumosBackground = function(adapter) {
     config.backgroundGeneration = el('bgGeneration').checked; persist();
     if (config.enabled) await sync();
   };
+  function validateConnectionToken(token) {
+    if (!token) throw new Error('请填写连接口令');
+    if (!/^[\x21-\x7e]+$/.test(token)) throw new Error('连接口令含中文、空格或不支持的特殊字符。请填写 Cloudflare 中 ACCESS_TOKEN 的完整值，不是账号密码；请勿把口令发给他人。');
+    return token;
+  }
   async function api(path, method = 'GET', body) {
+    validateConnectionToken(config.token);
     const response = await fetch(config.url + path, { method, headers: { Authorization: 'Bearer ' + config.token, ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(15000), keepalive: path === '/presence', credentials: 'omit', redirect: 'error' });
     const raw = await response.text();
     let result;
@@ -140,7 +146,7 @@ window.createLumosBackground = function(adapter) {
     if (!job || job.disabled) throw new Error('请先为当前单人角色配置 AI，并确保聊天中已有消息');
     const url = new URL(el('bgUrl').value.trim());
     if (url.protocol !== 'https:' || url.username || url.password || url.pathname !== '/' || url.search || url.hash) throw new Error('请填写 HTTPS 后台根地址，不带路径');
-    if (!el('bgToken').value.trim()) throw new Error('请填写连接口令');
+    validateConnectionToken(el('bgToken').value.trim());
     config = { url: url.origin, token: el('bgToken').value.trim(), charId: currentId, enabled: false, backgroundGeneration: el('bgGeneration').checked };
     persist();
     const settings = await api('/config');
@@ -167,7 +173,13 @@ window.createLumosBackground = function(adapter) {
     // 服务端确认删除后才恢复本地调度，网络失败时保留接管状态防止双发。
     if (busy || adapter.isBusy()) throw new Error('正在同步或回复，请稍后关闭');
     busy = true;
-    try { await api('/reset', 'DELETE'); config = {}; persist(); el('bgToken').value = ''; status('后台任务、API 密钥、上下文及待同步结果已删除；恢复本地模式。'); } finally { releaseBusy(); }
+    try {
+      await api('/reset', 'DELETE');
+      config = {url:config.url, token:config.token, enabled:false, backgroundGeneration:false};
+      schedulerPaused = true; clearTimeout(replyPollTimer);
+      persist(); el('bgConsent').checked = false;
+      status('后台任务、API 密钥、上下文及待同步结果已删除；恢复本地模式。此设备保留地址和连接口令，下次连接无需重填。');
+    } finally { releaseBusy(); }
   });
   document.addEventListener('visibilitychange', () => { if (!config.enabled) return; api('/presence','POST',adapter.presence()).catch(()=>{}); if (document.visibilityState === 'visible') sync(); else queue(); });
   navigator.serviceWorker?.addEventListener('message', e => { if (e.data?.type === 'LUMOS_BACKGROUND_CHANGED') sync(); });
