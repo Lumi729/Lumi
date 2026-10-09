@@ -832,25 +832,48 @@ async function _clearCharsIDB(){
     }
     return '';
   }
-  function sendAutoReplyNotifications(segments, targetId = activeCharacterId, enabled = apiSettings.notificationsEnabled) {
-    if (!enabled) return;
-    if (!('Notification' in window)) return;
-    if (Notification.permission !== 'granted') return;
+  async function sendAutoReplyNotifications(segments, targetId = activeCharacterId, enabled = apiSettings.notificationsEnabled) {
+    if (!enabled || !('Notification' in window) || Notification.permission !== 'granted') return;
     const title = 'TA想对你说的是...';
-    const iconUrl = getNotificationIconUrl();
-    async function showOne(body, tag) {
-        const options = { body, icon: iconUrl, tag, requireInteraction: false, data: { charId: targetId } };
-        try {
-            const n = new Notification(title, options);
-            n.onclick = () => { window.focus(); queueNotificationChat(targetId); n.close(); };
-        } catch (e) {
-            if (navigator.serviceWorker && navigator.serviceWorker.ready) {
-                try { const reg = await navigator.serviceWorker.ready; await reg.showNotification(title, options); } catch(e2) { addLog('warn','通知失败'); }
-            }
+    const icon = getNotificationIconUrl();
+    const batchId = 'auto-reply-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+    const bodies = segments.length <= 3
+      ? segments.map(seg => seg.trim().substring(0, 120))
+      : [`（共${segments.length}条新消息）${segments.slice(0,3).map(s => s.trim().substring(0,30)).join('；')}...`];
+    if (!bodies.length) return;
+    const notices = bodies.map((body, idx) => ({ title, options: {body, icon, tag: batchId + '-' + idx, requireInteraction: false, data: {charId: targetId}} }));
+    try {
+      if (navigator.serviceWorker) {
+        const reg = await navigator.serviceWorker.ready;
+        // 先确认新版后台支持整批接收，旧后台仍沿用浏览器原生通知接口。
+        const worker = reg.active;
+        const supported = worker && await new Promise(resolve => {
+          const channel = new MessageChannel();
+          const timer = setTimeout(() => { channel.port1.close(); resolve(false); }, 1500);
+          channel.port1.onmessage = e => { clearTimeout(timer); channel.port1.close(); resolve(e.data === 'LUMOS_NOTIFY_READY'); };
+          worker.postMessage({type:'LUMOS_NOTIFY_PING'}, [channel.port2]);
+        });
+        if (supported) {
+          const resultChannel = new MessageChannel();
+          const resultTimer = setTimeout(() => { resultChannel.port1.close(); addLog('warn', '通知已交给后台，尚未收到结果；不会重发以免重复'); }, 15000);
+          resultChannel.port1.onmessage = e => {
+            clearTimeout(resultTimer); resultChannel.port1.close();
+            const result = e.data || {};
+            addLog(result.failed ? 'warn' : 'info', `通知提交结果：${result.sent || 0}/${notices.length}，失败 ${result.failed || 0}（不代表手机已显示横幅）`);
+          };
+          worker.postMessage({type:'LUMOS_NOTIFY_BATCH', notices}, [resultChannel.port2]);
+          return;
         }
-    }
-    if (segments.length <= 3) { segments.forEach((seg,idx)=> showOne(seg.trim().substring(0,120), 'auto-reply-'+Date.now()+'-'+idx)); }
-    else { const previews = segments.slice(0,3).map(s=>s.trim().substring(0,30)).join('；'); showOne(`（共${segments.length}条新消息）${previews}...`, 'auto-reply-'+Date.now()); }
+        const results = await Promise.allSettled(notices.map(n => reg.showNotification(n.title, n.options)));
+        const failed = results.filter(r => r.status === 'rejected').length;
+        addLog(failed ? 'warn' : 'info', `通知提交结果：${results.length-failed}/${results.length}，失败 ${failed}`);
+      } else {
+        notices.forEach(item => {
+          const n = new Notification(item.title, item.options);
+          n.onclick = () => { window.focus(); queueNotificationChat(targetId); n.close(); };
+        });
+      }
+    } catch (error) { addLog('warn', '通知发送失败：' + (error.name || '未知错误')); }
   }
   async function requestNotificationPermission() { if (!('Notification' in window)) return false; if (Notification.permission === 'granted') return true; if (Notification.permission === 'denied') return false; const result = await Notification.requestPermission(); return result === 'granted'; }
 

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'lumos-v3';
+const CACHE_NAME = 'lumos-v4';
 const urlsToCache = ['/Lumi/', '/Lumi/index.html', '/Lumi/manifest.json', '/Lumi/月亮.png', '/Lumi/月亮512.png'];
 const staticUrls = new Set(urlsToCache.map(path => new URL(path, self.location.origin).href));
 
@@ -58,5 +58,26 @@ self.addEventListener('notificationclick', event => {
       }
     }
     await self.clients.openWindow(url.href);
+  })());
+});
+
+// 接收后由后台保活到整批通知提交结束，页面切走不再留下逐条发送任务。
+self.addEventListener('message', event => {
+  const source = event.source;
+  if (!source || !source.url) return;
+  const url = new URL(source.url);
+  if (url.origin !== self.location.origin || !url.pathname.startsWith('/Lumi/')) return;
+  const data = event.data || {};
+  const port = event.ports && event.ports[0];
+  if (data.type === 'LUMOS_NOTIFY_PING') {
+    if (port) port.postMessage('LUMOS_NOTIFY_READY');
+    return;
+  }
+  if (data.type !== 'LUMOS_NOTIFY_BATCH' || !Array.isArray(data.notices)) return;
+  const notices = data.notices.slice(0,3).filter(n => n && typeof n.title === 'string' && n.options && typeof n.options.body === 'string');
+  event.waitUntil((async () => {
+    const results = await Promise.allSettled(notices.map(n => self.registration.showNotification(n.title, n.options)));
+    const failed = results.filter(r => r.status === 'rejected').length;
+    if (port) port.postMessage({sent: results.length-failed, failed});
   })());
 });
