@@ -15,7 +15,7 @@ export default {
       const path = new URL(request.url).pathname;
       if (path === '/health') {
         const missing = ['ACCESS_TOKEN', 'STORAGE_KEY', 'VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY'].filter(name => !env[name]);
-        response = json({ service: 'Lumos background', version: 1, configured: missing.length === 0, missing });
+        response = json({ service: 'Lumos background', version: 2, configured: missing.length === 0, missing });
       }
       else if (!env.ACCESS_TOKEN || !env.STORAGE_KEY || !env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) response = json({ error: '请先完成后台密钥配置' }, 503);
       else if (!await sameToken(request.headers.get('Authorization')?.replace(/^Bearer /, ''), env.ACCESS_TOKEN)) response = json({ error: '后台连接口令不正确' }, 401);
@@ -76,6 +76,13 @@ export class LumosScheduler {
           if (data.inbox.some(r => r.charId === job.charId && !r.acked)) return json({ error: '请先同步后台消息' }, 409);
           job.nextAt = old?.revision === job.revision ? old.nextAt : Math.max(Date.now() + 1000, job.lastAt + job.delayMinutes * 60000);
           if (old?.revision === job.revision) { job.runId = old.runId; job.runUntil = old.runUntil; }
+          const previousDaily = data.daily[job.charId];
+          const daily = dailyState(previousDaily, job, Date.now());
+          data.daily[job.charId] = daily;
+          if (old && previousDaily && (previousDaily.version !== 2 || previousDaily.count >= previousDaily.quota) && daily.count < daily.quota && !(old.runUntil > Date.now())) {
+            job.nextAt = Math.max(Date.now()+1000, job.lastAt + job.delayMinutes*60000);
+          }
+          if (old?.revision === job.revision) job.error = old.error;
           data.jobs[job.charId] = job;
         }
         else if (path === '/job' && request.method === 'DELETE') { const { charId } = await request.json(); delete data.jobs[charId]; }
@@ -151,6 +158,10 @@ export class LumosScheduler {
         if (reserved.manual) {
           delete data.requests[reserved.charId];
           if (data.jobs[reserved.charId]) data.jobs[reserved.charId].nextAt = Date.now()+current.delayMinutes*60000;
+        }
+        if (!reserved.manual) {
+          const daily = data.daily[reserved.charId];
+          if (daily) { const field = error ? 'failed' : reply.skipped ? 'skipped' : 'succeeded'; daily[field] = (daily[field] || 0) + 1; }
         }
         current.runUntil = 0; current.nextAt = Date.now() + current.delayMinutes * 60000;
         if (error) {

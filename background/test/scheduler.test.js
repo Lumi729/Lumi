@@ -130,3 +130,11 @@ test('ordinary reply honors notification switch while preserving inbox result',a
   try{await scheduler.alarm();const item=(await call('/state')).body.inbox[0];assert.equal(item.pushState,'muted');assert.equal(item.segments[0],'quiet reply');}
   finally{globalThis.fetch=original;}
 });
+
+test('legacy imported 3/1 counter resumes without another reset and records success',async()=>{
+ const {scheduler,call,due}=setup();const j=job();j.dailyMin=1;j.dailyMax=3;j.todayCount=3;j.todayDate=new Date(Date.now()+8*3600000).toISOString().slice(0,10);
+ await call('/job','POST',j);const d=await scheduler.load();d.daily[j.charId]={day:j.todayDate,count:3,quota:1};d.jobs[j.charId].nextAt=Date.now()+86400000;await scheduler.save(d);
+ await call('/job','POST',j);const state=await scheduler.load();assert(state.jobs[j.charId].nextAt<Date.now()+5000);assert.equal(state.daily[j.charId].count,0);
+ const original=globalThis.fetch;globalThis.fetch=async()=>Response.json({choices:[{message:{content:'hello'}}]});
+ try {await due();await scheduler.alarm();const result=await scheduler.load();assert.equal(result.daily[j.charId].count,1);assert.equal(result.daily[j.charId].succeeded,1);}finally{globalThis.fetch=original;}
+});

@@ -32,3 +32,11 @@ test('reject unsafe endpoints, malformed jobs, and arbitrary push proxy requests
   assert.throws(()=>validateSubscription({endpoint:'https://api.example.com/',keys:{p256dh:'a',auth:'b'}}));
   assert.equal(validateJob(job(),Date.now()).delayMinutes,1);
 });
+
+test('backend uses maximum and never imports local counters into new day',()=>{
+ const now=Date.now(),j={...job(now),dailyMin:1,dailyMax:5,todayDate:dayKey(now,-480),todayCount:3};
+ const fresh=dailyState(null,j,now);assert.equal(fresh.count,0);assert.equal(fresh.quota,5);
+ const migrated=dailyState({day:j.todayDate,count:3,quota:1},j,now);assert.equal(migrated.count,0);
+ migrated.count=2;assert.equal(dailyState(migrated,j,now).count,2);
+ assert.equal(dailyState(migrated,{...j,dailyMax:8},now).quota,8);
+});

@@ -120,7 +120,7 @@ window.createLumosBackground = function(adapter) {
       if (job?.nextAt) el('bgStatus').textContent += '\n下一次检查：' + new Date(job.nextAt).toLocaleString();
       if (pending) status('后台正在生成回复，结果会自动显示在聊天中…');
       if (failedReply) status('这次回复未完成：' + failedReply.error, true);
-      if (job?.daily) adapter.updateDaily(config.charId, job.daily);
+      if (job?.daily && job.daily.version !== 2) adapter.updateDaily(config.charId, job.daily);
       if (ids.length) adapter.log('info', `后台已同步 ${ids.length} 轮结果，不重复发送本地通知`);
       if (manual) {
         const verified = await api('/state');
@@ -129,6 +129,8 @@ window.createLumosBackground = function(adapter) {
         lines.push(task ? '自动回复任务：已登记' : '自动回复任务：未登记');
         if (task?.nextAt) lines.push('下一次检查：' + new Date(task.nextAt).toLocaleString());
         if (task?.daily) lines.push('今日已尝试：' + task.daily.count + ' / ' + task.daily.quota + ' 次');
+        if (task?.daily?.version === 2) lines.push('其中已回复：' + task.daily.succeeded + '，失败：' + task.daily.failed + '，跳过：' + task.daily.skipped);
+        if (task?.daily && task.daily.count >= task.daily.quota) lines.push('今日后台次数已用完，将于次日继续。');
         if (task?.error) lines.push('任务错误：' + task.error);
         lines.push('后台最近运行：' + (verified.heartbeat ? new Date(verified.heartbeat).toLocaleString() : '尚无运行记录'));
         if (verified.pendingReplies?.some(r => r.charId === config.charId)) lines.push('普通回复：仍在后台处理中');

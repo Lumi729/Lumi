@@ -30,11 +30,14 @@ export function nextDay(now, offset) {
   const shifted = new Date(now - offset * 60000);
   return Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate() + 1) + offset * 60000;
 }
-export function dailyState(previous, job, now, random = Math.random) {
+export function dailyState(previous, job, now) {
   const day = dayKey(now, job.offset);
-  if (previous?.day === day) return previous;
-  return { day, count: Math.max(0, job.todayDate === day ? job.todayCount : 0), quota: job.dailyMin + Math.floor(random() * (job.dailyMax - job.dailyMin + 1)) };
+  if (previous?.day === day && previous.version === 2) return {...previous, quota:job.dailyMax};
+  // Legacy counters included local activity. Remove that imported baseline once.
+  const count = previous?.day === day ? Math.max(0, previous.count - (job.todayDate === day ? job.todayCount || 0 : 0)) : 0;
+  return {version:2, day, count, quota:job.dailyMax, succeeded:0, failed:0, skipped:0};
 }
+
 function bytes64(bytes) { return btoa(String.fromCharCode(...bytes)); }
 function from64(text) { return Uint8Array.from(atob(text), x => x.charCodeAt(0)); }
 async function storageKey(secret) {
