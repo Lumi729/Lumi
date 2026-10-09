@@ -13,13 +13,30 @@ export function validateSubscription(sub) {
   if (!hosts.includes(u.hostname)) throw new Error('暂不支持此浏览器的推送服务');
   return sub;
 }
-export function cleanReply(content) {
+export function cleanReply(content, job) {
   let text = String(content || '').replace(/【思考过程】\s*[\s\S]*?\s*【思考结束】/gi, '').trim();
   if (text.startsWith('[AUTO_SKIP]')) return { skipped: true, reason: text.slice(11).trim().slice(0, 500), segments: [] };
+  const actions = [];
+  if (job?.actionVersion === 1) {
+    for (const match of text.matchAll(/\[RECALL:(-?\d+)\]/g)) {
+      const n = Number(match[1]);
+      const target = n > 0 ? job.recallTargets?.[n-1] : null;
+      if (target?.id) actions.push({type:'recall',targetId:target.id});
+      else if (n <= 0) actions.push({type:'recall',segmentIndex:Math.abs(n)});
+    }
+    let balance = Number(job.walletBalance) || 0;
+    for (const match of text.matchAll(/\[红包[:：](\d+(?:\.\d+)?)(?:[:：]([^\]]*))?\]/g)) {
+      const amount = Math.round(Number(match[1])*100)/100;
+      if (Number.isFinite(amount) && amount > 0 && amount <= balance) {
+        actions.push({type:'hongbao',amount,note:(match[2]||'').slice(0,200)});
+        balance = Math.round((balance-amount)*100)/100;
+      }
+    }
+  }
   text = text.replace(/\[(?:RECALL:-?\d+|BLE[:：][^\]]*|红包[:：][^\]]*|改名[:：][^\]]*|切换[^\]]*)\]/g, '').trim();
   const segments = text.split(/\n{2,}/).map(x => x.trim()).filter(Boolean).slice(0, 5);
-  if (!segments.length) throw new Error('回复为空');
-  return { skipped: false, segments };
+  if (!segments.length && !actions.length) throw new Error('回复为空');
+  return { skipped: false, segments, ...(actions.length ? {actions} : {}) };
 }
 export function notificationBodies(segments) {
   return segments.length <= 3 ? segments.map(x => x.slice(0, 120))
@@ -79,12 +96,31 @@ export function backgroundTiming(job, now) {
   const latestAssistant = job.latestAssistant || [...timeline].reverse().find(m=>m.role==='assistant');
   const describe = m => m ? time(m.timestamp)+'；距现在 '+age(m.timestamp)+'；内容：'+m.content : '无记录';
   const waiting = latestUser && latestAssistant && latestAssistant.timestamp >= latestUser.timestamp;
+  const latest = [latestUser,latestAssistant].filter(Boolean).sort((a,b)=>b.timestamp-a.timestamp)[0];
+  const silence = latest ? age(latest.timestamp) : '时间未知';
+  const autoPrompt = '\n## 自动回复\n你们已经 '+silence+' 没有聊天了。最后一条是「'+(latest?.role==='user' ? job.userName||'用户' : job.charName||'角色')+'」发的：「'+(latest?.content||'无记录')+'」。'+(waiting ? '之后「'+(job.userName||'用户')+'」一直没回复。' : '')+'\n请以「'+(job.charName||'角色')+'」的人设判断：在这个时间点，你会主动发消息吗？\n想发 → 按正常格式回复（会标注为自动回复）\n不想发 → 输出 [AUTO_SKIP] 理由\n';
   return '## 当前聊天时间与状态（每轮更新）\n当前用户本地时间：'+time(now)+
     '\n用户最后一次发言：'+describe(latestUser)+'\n角色最后一次发言：'+describe(latestAssistant)+
     '\n上下文消息时间线：\n'+timeline.map((m,i)=>time(m.timestamp)+' '+(m.role==='user'?'用户':'角色')+'；距前一条 '+(i && Number.isFinite(m.timestamp) && Number.isFinite(timeline[i-1].timestamp)?Math.max(0,Math.floor((m.timestamp-timeline[i-1].timestamp)/1000))+' 秒':'未知')+'；'+m.content).join('\n')+
-    (job.manual ? '\n本轮是用户明确请求的普通回复。' : '\n本轮是主动发言判断，不是重新回答用户最后一句。'+(waiting?'角色已在用户最后发言后回复，用户尚未再次回应。':'')+'结合完整的已提供上下文、双方最后发言及等待间隔判断是否有必要主动说话。不要重复已经答过的问题、换句话重说上一轮或虚构用户的新回复；没有自然的新内容就输出 [AUTO_SKIP] 理由。');
+    (job.manual ? '\n本轮是用户明确请求的普通回复。' : autoPrompt+'\n本轮是主动发言判断，不是重新回答用户最后一句。'+(waiting?'角色已在用户最后发言后回复，用户尚未再次回应。':'')+'结合完整的已提供上下文、双方最后发言及等待间隔判断是否有必要主动说话。不要重复已经答过的问题、换句话重说上一轮或虚构用户的新回复；没有自然的新内容就输出 [AUTO_SKIP] 理由。');
 }
 export function appendBackgroundContext(job, segments, now) {
   const message={role:'assistant',content:segments.join('\n\n'),timestamp:now};
   job.latestAssistant=message;job.timeline=[...(job.timeline||[]),message].slice(-40);
+}
+
+export function applyReplyActionsToJob(job, reply) {
+  const recalled = new Set((reply.actions||[]).filter(a=>a.type==='recall').map(a=>a.targetId || 'bg_'+reply.id+'_'+a.segmentIndex));
+  for (const target of job.recallTargets||[]) {
+    if (!recalled.has(target.id)) continue;
+    for (let i=job.body.messages.length-1;i>=1;i--) {
+      const m=job.body.messages[i];
+      if (m.role==='assistant' && m.content.includes(target.text)) { m.content=m.content.replace(target.text,'[AI撤回了一条消息]'); break; }
+    }
+    for (const m of job.timeline||[]) if (m.content===target.text) m.content='[AI撤回了一条消息]';
+    if (job.latestAssistant?.content===target.text) job.latestAssistant.content='[AI撤回了一条消息]';
+  }
+  job.recallTargets=[...reply.segments.map((text,i)=>({id:'bg_'+reply.id+'_'+i,text})).reverse(),...(job.recallTargets||[])].filter(t=>!recalled.has(t.id)).slice(0,100);
+  const spent=(reply.actions||[]).filter(a=>a.type==='hongbao').reduce((sum,a)=>sum+a.amount,0);
+  job.walletBalance=Math.max(0,Math.round(((Number(job.walletBalance)||0)-spent)*100)/100);
 }

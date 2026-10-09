@@ -36,7 +36,7 @@ window.createLumosBackground = function(adapter) {
     <div class="setting-row"><label>后台地址</label><input id="bgUrl" type="url" placeholder="https://lumos-background.…workers.dev"></div>
     <div class="setting-row"><label>连接口令</label><input id="bgToken" type="password" autocomplete="off" placeholder="部署时生成的连接口令"></div>
     <div class="hint-text">地址和口令会保存在这台设备，下次自动填入。</div>
-    <div class="hint-text">启用会把当前角色的 API 密钥、设定和所选上下文上传到你自己的后台，加密保存用于调用 AI。7 天不打开本机页面则暂停调度；生成结果会在回来时同步。后台不执行蓝牙、红包、撤回或跨聊指令。</div>
+    <div class="hint-text">启用会把当前角色的 API 密钥、设定和所选上下文上传到你自己的后台，加密保存用于调用 AI。7 天不打开本机页面则暂停调度；生成结果会在回来时同步。后台支持撤回和红包，回到页面同步时执行；不执行蓝牙或跨聊指令。</div>
     <label class="bg-consent"><input id="bgConsent" type="checkbox"><span>我同意上传这些信息到我填写的后台</span></label>\n    <label class="bg-consent"><input id="bgGeneration" type="checkbox"><span>退出页面后继续生成回复<br><small>关闭时使用原来的聊天方式；消息通知仍由上方开关控制。</small></span></label>
     <div class="setting-row"><label for="bgDailyLimit">后台每日次数上限</label><input id="bgDailyLimit" type="number" min="0" max="20" step="1"></div>
     <div class="hint-text">仅控制后台主动回复，与本地每日次数分开。0 表示暂停后台主动回复；你主动请求的普通回复不占此次数。</div>

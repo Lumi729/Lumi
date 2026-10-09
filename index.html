@@ -616,7 +616,7 @@
   <div class="create-modal" id="createModal"><div class="create-panel"><h3>创建</h3><button id="createSingleBtn">✨ 创建角色</button><button id="createGroupBtn">👥 创建群聊</button><button class="close-create" id="closeCreateBtn">关闭</button></div></div>
   <div class="create-modal" id="groupCreateModal"><div class="create-panel"><h3>选择群聊成员</h3><div class="create-member-list" id="groupMemberList"></div><div style="display:flex;gap:8px;"><button id="confirmGroupBtn" style="flex:1;">确认创建</button><button id="createEmptyGroupBtn" style="flex:1;background:#576b95;">创建空群聊</button></div><button class="close-create" id="closeGroupCreateBtn" style="width:100%;">取消</button></div></div>
 </div>
-<script src="/Lumi/background-client.js?v=20261009-avatar17"></script>
+<script src="/Lumi/background-client.js?v=20261009-actions18"></script>
 <script>
 // === IndexedDB for characters (large chat data, no 5MB limit) ===
 const _CHARS_DB_NAME = 'lumos_chars_v1';
@@ -1548,7 +1548,7 @@ async function _clearCharsIDB(){
   function syncHistoryFromChat(){ messageHistory = chatMessages.filter(m=>m.role!=='hint').map(m=>{ if(m.role==='user' && m.recalled) return {role:'user', content:'[用户撤回了一条消息]'}; if(m.role==='dog' && m.recalled) return {role:'assistant', content:'[AI撤回了一条消息]'}; return {role: m.role==='user'?'user':'assistant', content: m.text} }); save('messageHistory',messageHistory) }
   function createTimeStampDiv(ts){ const div = document.createElement('div'); div.className='time-stamp'; div.dataset.timestamp = ts; div.textContent = formatTimeDivider(ts,Date.now()); return div }
   function addCenteredHint(text){ const div = document.createElement('div'); div.className='time-stamp'; div.textContent = text; chatArea.appendChild(div); chatArea.scrollTop = chatArea.scrollHeight; }
-  function reloadChatUI(keepScroll=false){ const savedScroll = keepScroll ? chatArea.scrollTop : -1; const children = chatArea.children; while(children.length>1) chatArea.removeChild(children[1]); let lastTs = null; chatMessages.forEach(msg=>{ ensureMsgTimestamp(msg); const ts = msg.timestamp; if(lastTs===null || (ts-lastTs)>=300000){ chatArea.appendChild(createTimeStampDiv(ts)); lastTs = ts } else { lastTs = Math.max(lastTs,ts) } if(msg.role==='hint'){ const hintDiv = document.createElement('div'); hintDiv.className='time-stamp'; hintDiv.textContent = msg.text; chatArea.appendChild(hintDiv); } else if(msg.role==='user'){ if(msg.imageDataUrl){ const wrapper = document.createElement('div'); wrapper.className='msg-wrapper msg-wrapper-right'; wrapper.id='msg-'+msg.id; const row = document.createElement('div'); row.className='message-row message-right'; row.appendChild(createAvatar('user',msg.senderId)); const body = document.createElement('div'); body.className='msg-body msg-body-right'; const bubble = document.createElement('div'); bubble.className='bubble bubble-right'; const img = document.createElement('img'); img.className='bubble-img'; img.src=msg.imageDataUrl; bubble.appendChild(img); const txtPart = msg.text && msg.text!=='[图片]' ? msg.text : ''; if(txtPart){ const mt=document.createElement('div'); mt.className='msg-text'; mt.textContent=txtPart; mt.style.marginTop='6px'; bubble.appendChild(mt); } const meta=document.createElement('div'); meta.className='msg-meta'; meta.innerHTML='<span class="read-tag">已读</span>'; bubble.appendChild(meta); body.appendChild(bubble); row.appendChild(body); wrapper.appendChild(row); chatArea.appendChild(wrapper); } else { chatArea.appendChild(createUserMsg(msg.text,msg.id,msg.quoteText,msg.quoteRole,msg.quoteId,msg.senderId,msg.recalled,msg.mentionName)); } } else chatArea.appendChild(createDogMsg(msg.text,msg.reasoning,true,msg.id,msg.quoteText,msg.quoteRole,msg.quoteId,msg.senderId,msg.recalled,msg.recalledText, msg.senderName)); }); if(savedScroll >= 0) chatArea.scrollTop = savedScroll; else chatArea.scrollTop = chatArea.scrollHeight }
+  function reloadChatUI(keepScroll=false){ const savedScroll = keepScroll ? chatArea.scrollTop : -1; const children = chatArea.children; while(children.length>1) chatArea.removeChild(children[1]); let lastTs = null; chatMessages.forEach(msg=>{ ensureMsgTimestamp(msg); const ts = msg.timestamp; if(lastTs===null || (ts-lastTs)>=300000){ chatArea.appendChild(createTimeStampDiv(ts)); lastTs = ts } else { lastTs = Math.max(lastTs,ts) } if(msg.role==='hint'){ const hintDiv = document.createElement('div'); hintDiv.className='time-stamp'; hintDiv.textContent = msg.text; chatArea.appendChild(hintDiv); } else if(msg.role==='user'){ if(msg.imageDataUrl){ const wrapper = document.createElement('div'); wrapper.className='msg-wrapper msg-wrapper-right'; wrapper.id='msg-'+msg.id; const row = document.createElement('div'); row.className='message-row message-right'; row.appendChild(createAvatar('user',msg.senderId)); const body = document.createElement('div'); body.className='msg-body msg-body-right'; const bubble = document.createElement('div'); bubble.className='bubble bubble-right'; const img = document.createElement('img'); img.className='bubble-img'; img.src=msg.imageDataUrl; bubble.appendChild(img); const txtPart = msg.text && msg.text!=='[图片]' ? msg.text : ''; if(txtPart){ const mt=document.createElement('div'); mt.className='msg-text'; mt.textContent=txtPart; mt.style.marginTop='6px'; bubble.appendChild(mt); } const meta=document.createElement('div'); meta.className='msg-meta'; meta.innerHTML='<span class="read-tag">已读</span>'; bubble.appendChild(meta); body.appendChild(bubble); row.appendChild(body); wrapper.appendChild(row); chatArea.appendChild(wrapper); } else { chatArea.appendChild(createUserMsg(msg.text,msg.id,msg.quoteText,msg.quoteRole,msg.quoteId,msg.senderId,msg.recalled,msg.mentionName)); } } else chatArea.appendChild(createDogMsg(msg.text,msg.reasoning,true,msg.id,msg.quoteText,msg.quoteRole,msg.quoteId,msg.senderId,msg.recalled,msg.recalledText, msg.senderName)); }); chatMessages.filter(m=>m.backgroundHongbao && !m.recalled).forEach(m=>{ const wrapper=document.getElementById('msg-'+m.id); const bubble=wrapper?.querySelector('.bubble-left'); if(bubble) { bubble.textContent=''; bubble.appendChild(renderHongbaoBubble(m.backgroundHongbao.amount,m.backgroundHongbao.note,remarkVal,true)); } }); if(savedScroll >= 0) chatArea.scrollTop = savedScroll; else chatArea.scrollTop = chatArea.scrollHeight }
   function updateQuoteHint(){ if(currentQuote){ const who = currentQuote.role==='user'?'我':remarkVal||'月'; quoteTextSpan.textContent = `引用 ${who}: ${currentQuote.text.substring(0,30)}`; quoteHint.style.display = 'flex' } else quoteHint.style.display = 'none' }
   function updateSendHint(){ if(pendingUserMessages.length>0){ sendHint.style.display='flex'; sendHintText.textContent = `积${pendingUserMessages.length}条·三击回复` } else { sendHint.style.display='none' } }
   clearPendingBtn.addEventListener('click',()=>{ pendingUserMessages=[]; updateSendHint(); clickCount=0; if(clickTimer) clearTimeout(clickTimer) });
@@ -2506,7 +2506,7 @@ async function _clearCharsIDB(){
     const {my, char} = walletCalcBalances(allTx, charId);
     if(walletMyBalanceEl) walletMyBalanceEl.textContent = my.toFixed(2).replace(/\.00$/,'');
     if(walletCharBalanceEl) walletCharBalanceEl.textContent = char.toFixed(2).replace(/\.00$/,'');
-    const charTx = allTx.filter(t=>t.charId===charId).sort((a,b)=>b.timestamp-a.timestamp).slice(0,30);
+    const charTx = allTx.filter(t=>t.charId===charId && t.type!=='topup' && t.type!=='background_rejected').sort((a,b)=>b.timestamp-a.timestamp).slice(0,30);
     if(!walletTxList) return;
     if(charTx.length===0){ walletTxList.innerHTML='<div class="wallet-empty">还没有记录</div>'; return; }
     walletTxList.innerHTML = charTx.map(t=>{
@@ -2579,6 +2579,24 @@ async function _clearCharsIDB(){
     }
   }
 
+  async function importBackgroundHongbao(char, reply, action, index) {
+    const db=await _openWalletDB();
+    return new Promise((resolve,reject)=>{
+      const tx=db.transaction(_WALLET_STORE,'readwrite'), store=tx.objectStore(_WALLET_STORE);
+      const id='bg_hb_'+reply.id+'_'+index; let accepted=false;
+      const req=store.getAll();
+      req.onsuccess=()=>{
+        const existing=req.result.find(t=>t.id===id);
+        if(existing) { accepted=existing.type==='hongbao'; return; }
+        const amount=Number(action.amount), balance=walletCalcBalances(req.result,char.id).char;
+        accepted=Number.isFinite(amount) && amount>0 && amount<=balance;
+        store.put({id,charId:char.id,charName:char.charSettings?.name||char.name||'角色',amount:accepted?amount:0,type:accepted?'hongbao':'background_rejected',note:action.note||'',timestamp:reply.timestamp});
+      };
+      tx.oncomplete=()=>{db.close();resolve(accepted);};
+      tx.onerror=()=>{db.close();reject(tx.error);};tx.onabort=()=>{db.close();reject(tx.error||new Error('红包保存失败'));};
+    });
+  }
+
   // 渲染红包气泡卡片
   function renderHongbaoBubble(amount, note, charName, claimed){
     const div = document.createElement('div');
@@ -2612,11 +2630,11 @@ async function _clearCharsIDB(){
     const charId = activeCharacterId;
     const {my, char} = walletCalcBalances(allTx, charId);
     const charName = characters.find(c=>c.id===charId)?.charSettings?.name || '角色';
-    const recentTx = allTx.filter(t=>t.charId===charId).sort((a,b)=>b.timestamp-a.timestamp).slice(0,5);
+    const recentTx = allTx.filter(t=>t.charId===charId && t.type!=='topup' && t.type!=='background_rejected').sort((a,b)=>b.timestamp-a.timestamp).slice(0,5);
     let snippet = `\n## 钱包系统\n用户余额：¥${my}，${charName}的余额：¥${char}\n`;
     if(recentTx.length>0){
       snippet += '最近记录：' + recentTx.map(t=>{
-        const labels = {record_expense:'支出',record_income:'收入',topup:'用户充值',hongbao:'你发红包',user_hongbao:'用户给你发红包'};
+        const labels = {record_expense:'支出',record_income:'收入',hongbao:'你发红包',user_hongbao:'用户给你发红包'};
         return `${labels[t.type]||t.type} ¥${t.amount}${t.note?' ('+t.note+')':''}`;
       }).join('；') + '\n';
     }
@@ -2715,7 +2733,7 @@ async function _clearCharsIDB(){
     const {my, char} = walletCalcBalances(allTx, charId);
     if(walletMyBalanceEl) walletMyBalanceEl.textContent = my.toFixed(2).replace(/\.00$/,'');
     if(walletCharBalanceEl) walletCharBalanceEl.textContent = char.toFixed(2).replace(/\.00$/,'');
-    const charTx = allTx.filter(t=>t.charId===charId).sort((a,b)=>b.timestamp-a.timestamp).slice(0,30);
+    const charTx = allTx.filter(t=>t.charId===charId && t.type!=='topup' && t.type!=='background_rejected').sort((a,b)=>b.timestamp-a.timestamp).slice(0,30);
     if(!walletTxList) return;
     if(charTx.length===0){ walletTxList.innerHTML='<div class="wallet-empty">还没有记录</div>'; return; }
     walletTxList.innerHTML = charTx.map(t=>{
@@ -3196,10 +3214,11 @@ async function _clearCharsIDB(){
         const identity = convId + ':' + last.id + ':' + last.timestamp;
         const payload = await triggerAiReply(true, 1, apiSettings.autoReplyMsgCount, true, false, {prepareBackground:true});
         if (id !== activeCharacterId || convId !== (activeConvId || '') || last !== chatMessages.filter(m => m.role !== 'hint').at(-1)) return null;
-        const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify({backgroundContextVersion:2, identity, url:payload.url, key:payload.key, model:payload.body.model, settings:char.charSettings, presets, worlds, enabledPresetIds, enabledWorldIds, history:messageHistory, persona:getActiveUserPersona(), notificationsEnabled:apiSettings.notificationsEnabled, delay:apiSettings.autoReplyDelayMinutes, min:apiSettings.autoReplyDailyMin, max:apiSettings.autoReplyDailyMax})));
+        const walletBalance = walletCalcBalances(await walletGetAllTx(),id).char;
+        const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify({backgroundContextVersion:3, walletBalance, identity, url:payload.url, key:payload.key, model:payload.body.model, settings:char.charSettings, presets, worlds, enabledPresetIds, enabledWorldIds, history:messageHistory, persona:getActiveUserPersona(), notificationsEnabled:apiSettings.notificationsEnabled, delay:apiSettings.autoReplyDelayMinutes, min:apiSettings.autoReplyDailyMin, max:apiSettings.autoReplyDailyMax})));
         const revision = Array.from(new Uint8Array(digest), x => x.toString(16).padStart(2,'0')).join('');
         const timeline = chatMessages.filter(m=>!m.recalled && ['user','dog','assistant'].includes(m.role)).map(m=>({role:m.role==='user'?'user':'assistant',content:String(m.text||''),timestamp:m.timestamp}));
-        return { ...payload, timeline:timeline.slice(-Math.max(2,(apiSettings.autoReplyContextLayers||5)*2)), latestUser:timeline.filter(m=>m.role==='user').at(-1), latestAssistant:timeline.filter(m=>m.role==='assistant').at(-1), charId:id, convId, revision, lastAt:last.timestamp, autoEnabled:Boolean(apiSettings.autoReplyEnabled), notificationsEnabled:Boolean(apiSettings.notificationsEnabled),
+        return { ...payload, actionVersion:1, charName:remarkVal||'角色', userName:getActiveUserPersona()?.name||'用户', walletBalance, recallTargets:chatMessages.filter(m=>m.role==='dog' && !m.recalled).slice(-100).reverse().map(m=>({id:m.id,text:m.text})), timeline:timeline.slice(-Math.max(2,(apiSettings.autoReplyContextLayers||5)*2)), latestUser:timeline.filter(m=>m.role==='user').at(-1), latestAssistant:timeline.filter(m=>m.role==='assistant').at(-1), charId:id, convId, revision, lastAt:last.timestamp, autoEnabled:Boolean(apiSettings.autoReplyEnabled), notificationsEnabled:Boolean(apiSettings.notificationsEnabled),
           delayMinutes: Math.max(1, Math.min(120, Math.floor(Number(apiSettings.autoReplyDelayMinutes) || 5))),
           dailyMin: Math.max(0, Math.min(20, Math.floor(Number(apiSettings.autoReplyDailyMin) || 0))),
           dailyMax: Math.max(0, Math.min(20, Math.floor(Number(apiSettings.autoReplyDailyMax) || 0))),
@@ -3229,6 +3248,20 @@ async function _clearCharsIDB(){
               const viewing = document.visibilityState === 'visible' && chatViewWrap.classList.contains('active') && displayedChatId === char.id && (char.activeConversationId || '') === (reply.convId || '');
               if (!viewing) { char.unreadCount = (char.unreadCount || 0) + fresh.length; if(char.apiSettings.notificationsEnabled) showIncomingBanner(char.id, fresh); }
             }
+          }
+          if (Array.isArray(reply.actions)) {
+            for (const [i, action] of reply.actions.entries()) {
+              if (action.type === 'recall') {
+                const targetId = action.targetId || 'bg_'+reply.id+'_'+action.segmentIndex;
+                const target = messages.find(m=>m.id===targetId && m.role==='dog');
+                if (target && !target.recalled) { target.recalledText=target.text; target.text=''; target.recalled=true; }
+              } else if (action.type === 'hongbao') {
+                const result = await importBackgroundHongbao(char, reply, action, i);
+                const id='bg_'+reply.id+'_hb_'+i;
+                if (!messages.some(m=>m.id===id)) messages.push({id,role:'dog',text:result ? '🧧 红包 ¥'+action.amount+(action.note?'：'+action.note:'') : '🧧 红包未发出：余额不足或金额无效',timestamp:reply.timestamp,backgroundHongbao:result ? action : null,isAutoReply:reply.isAutoReply!==false});
+              }
+            }
+            history.splice(0,history.length,...messages.filter(m=>m.role!=='hint').map(m=>({role:m.role==='user'?'user':'assistant',content:m.recalled?'[AI撤回了一条消息]':m.text})));
           }
           if (reply.error) addLog('warn','后台普通回复：'+reply.error);
           if (reply.daily) {

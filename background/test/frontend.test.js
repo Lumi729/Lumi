@@ -15,7 +15,7 @@ const hooks=`window.__audit={
  group(){getActiveCharacter().type='group';chatType='group';members=[{id:'m1',name:'Member'}];saveGlobalsToActiveChar();},
  convSetup(){saveGlobalsToActiveChar();const a=getActiveCharacter();a.conversations=[{id:'one',messages:[...a.chatMessages],history:[...a.messageHistory]},{id:'two',messages:[],history:[]}];a.activeConversationId='one';loadActiveCharToGlobals();},
  convSwitch(){saveGlobalsToActiveChar();getActiveCharacter().activeConversationId='two';loadActiveCharToGlobals();reloadChatUI();},
- busy:()=>autoReplyInProgress,read:markVisibleChatRead,time:buildTimeAwareness
+ wallet:walletGetAllTx,addTx:walletAddTx,walletPrompt:getWalletContextForPrompt,busy:()=>autoReplyInProgress,read:markVisibleChatRead,time:buildTimeAwareness
 };`;
 // Only test accessors are injected; production handlers and persistence run unchanged.
 async function app(t, handler){
@@ -55,4 +55,19 @@ test('short previews preserve full batch and hand off without ping or ready wait
  await api.notify(['a'.repeat(200),'second','third']);
  assert.equal(posted.length,1);assert.equal(posted[0].type,'LUMOS_NOTIFY_BATCH');assert.equal(posted[0].notices.length,3);assert.equal(posted[0].notices[0].options.body,'a'.repeat(24)+'…');assert.equal(posted[0].notices[1].options.body,'second');
  await api.notify(['one','two','three','four']);assert.equal(posted[1].notices.length,1);assert.match(posted[1].notices[0].options.body,/共4条/);
+});
+
+
+test('background recall and red packet stay in source role, survive repeated sync, hide topups',async t=>{
+ const {w,api,id}=await app(t);
+ await api.addTx({id:'fund',charId:id,type:'topup',amount:20,note:'PRIVATE TOPUP',timestamp:Date.now()});
+ const prompt=await api.walletPrompt();assert(!prompt.includes('PRIVATE TOPUP'));assert(!prompt.includes('用户充值'));
+ const reply={id:'actions-test',charId:id,convId:'',timestamp:Date.now(),segments:['first','second'],actions:[{type:'recall',segmentIndex:0},{type:'hongbao',amount:5,note:'hi'}]};
+ api.switch();await w.__auditAdapter.importReplies([reply]);await w.__auditAdapter.importReplies([reply]);
+ const c=api.data().find(c=>c.id===id),b=api.data().find(c=>c.id==='test-b');
+ assert(c.chatMessages.find(m=>m.id==='bg_actions-test_0').recalled);assert.equal(b.chatMessages.length,0);
+ assert.equal((await api.wallet()).filter(t=>t.type==='hongbao').length,1);
+ assert.equal(c.chatMessages.filter(m=>m.backgroundHongbao).length,1);
+ const tooMuch={...reply,id:'too-much',segments:[],actions:[{type:'hongbao',amount:30,note:'no'}]};
+ await w.__auditAdapter.importReplies([tooMuch]);assert.equal((await api.wallet()).filter(t=>t.type==='hongbao').length,1);
 });

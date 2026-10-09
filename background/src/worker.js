@@ -1,5 +1,5 @@
 import { buildPushPayload } from '@block65/webcrypto-web-push';
-import { validateJob, validateSubscription, sameToken, seal, unseal, cleanReply, notificationBodies, dailyState, nextDay, backgroundTiming, appendBackgroundContext } from './core.js';
+import { validateJob, validateSubscription, sameToken, seal, unseal, cleanReply, notificationBodies, dailyState, nextDay, backgroundTiming, appendBackgroundContext, applyReplyActionsToJob } from './core.js';
 
 const json = (data, status = 200) => Response.json(data, { status });
 const LIMIT = 250000;
@@ -15,7 +15,7 @@ export default {
       const path = new URL(request.url).pathname;
       if (path === '/health') {
         const missing = ['ACCESS_TOKEN', 'STORAGE_KEY', 'VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY'].filter(name => !env[name]);
-        response = json({ service: 'Lumos background', version: 5, configured: missing.length === 0, missing });
+        response = json({ service: 'Lumos background', version: 6, configured: missing.length === 0, missing });
       }
       else if (!env.ACCESS_TOKEN || !env.STORAGE_KEY || !env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) response = json({ error: '请先完成后台密钥配置' }, 503);
       else if (!await sameToken(request.headers.get('Authorization')?.replace(/^Bearer /, ''), env.ACCESS_TOKEN)) response = json({ error: '后台连接口令不正确' }, 401);
@@ -75,7 +75,7 @@ export class LumosScheduler {
           // 未同步的后台回复先回到手机，不能用旧页面快照覆盖后台新上下文。
           if (data.inbox.some(r => r.charId === job.charId && !r.acked)) return json({ error: '请先同步后台消息' }, 409);
           job.nextAt = old?.revision === job.revision ? old.nextAt : Math.max(Date.now() + 1000, job.lastAt + job.delayMinutes * 60000);
-          if (old?.revision === job.revision) { job.runId = old.runId; job.runUntil = old.runUntil; job.body=old.body; job.lastAt=old.lastAt; job.timeline=old.timeline; job.latestUser=old.latestUser; job.latestAssistant=old.latestAssistant; }
+          if (old?.revision === job.revision) { job.runId = old.runId; job.runUntil = old.runUntil; job.body=old.body; job.lastAt=old.lastAt; job.timeline=old.timeline; job.latestUser=old.latestUser; job.latestAssistant=old.latestAssistant; job.recallTargets=old.recallTargets; job.walletBalance=old.walletBalance; }
           const previousDaily = data.daily[job.charId];
           const daily = dailyState(previousDaily, job, Date.now());
           data.daily[job.charId] = daily;
@@ -104,7 +104,7 @@ export class LumosScheduler {
     });
   }
   async push(subscription, reply) {
-    const notices = notificationBodies(reply.segments).map((body, index) => ({ title: 'TA想对你说的是...', options: { body, tag: 'lumos-push-' + reply.id + '-' + index, data: { charId: reply.charId, replyId: reply.id } } }));
+    const notices = notificationBodies([...reply.segments.filter((_,i)=>!(reply.actions||[]).some(a=>a.type==='recall' && a.segmentIndex===i)),...(reply.actions||[]).filter(a=>a.type==='hongbao').map(a=>'🧧 发来一个红包')]).map((body, index) => ({ title: 'TA想对你说的是...', options: { body, tag: 'lumos-push-' + reply.id + '-' + index, data: { charId: reply.charId, replyId: reply.id } } }));
     const payload = await buildPushPayload({ data: JSON.stringify({ type: 'LUMOS_PUSH_REPLY', notices }), options: { ttl: 86400 } }, subscription, { subject: this.env.VAPID_SUBJECT, publicKey: this.env.VAPID_PUBLIC_KEY, privateKey: this.env.VAPID_PRIVATE_KEY });
     const response = await fetch(subscription.endpoint, { ...payload, signal: AbortSignal.timeout(15000) });
     if (response.status === 404 || response.status === 410) return 'expired';
@@ -145,7 +145,7 @@ export class LumosScheduler {
       let reply, error, stage = 'request';
       try {
         const body = structuredClone(reserved.body);
-        body.messages = [...body.messages, { role: 'system', content: backgroundTiming(reserved, Date.now()) + '\n' + `${reserved.manual ? '这是用户已明确请求的一轮普通回复，请直接回复最近用户消息，不输出 [AUTO_SKIP]。' : '这是服务端后台自动回复。'}实际当前时间：${new Date().toISOString()}。距最近消息约 ${Math.max(0, Math.floor((Date.now() - reserved.lastAt) / 60000))} 分钟；如早期快照时间描述冲突，以此为准。只输出聊天文本，用空行分段；不执行撤回、红包、蓝牙或场景切换。${reserved.manual ? '' : '不想主动聊天可输出 [AUTO_SKIP] 理由。'}` }];
+        body.messages = [...body.messages, { role: 'system', content: backgroundTiming(reserved, Date.now()) + '\n' + `${reserved.manual ? '这是用户已明确请求的一轮普通回复，请直接回复最近用户消息，不输出 [AUTO_SKIP]。' : '这是服务端后台自动回复。'}实际当前时间：${new Date().toISOString()}。距最近消息约 ${Math.max(0, Math.floor((Date.now() - reserved.lastAt) / 60000))} 分钟；如早期快照时间描述冲突，以此为准。输出聊天文本，用空行分段；允许按已有格式撤回自己的消息、在可用余额内发红包，回到页面同步时执行。不得执行蓝牙或场景切换。当前可用红包余额为 ${Number(reserved.walletBalance)||0}。${reserved.manual ? '' : '不想主动聊天可输出 [AUTO_SKIP] 理由。'}` }];
         const response = await fetch(reserved.url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + reserved.key }, body: JSON.stringify(body), signal: AbortSignal.timeout(90000), redirect: 'manual' });
         if (response.status >= 300 && response.status < 400) throw new Error('AI_REDIRECT');
         if (!response.ok) throw new Error('AI 接口返回 HTTP ' + response.status);
@@ -158,7 +158,7 @@ export class LumosScheduler {
         if (result.error) throw new Error('AI_RESPONSE_ERROR');
         const message = result.choices?.[0]?.message;
         if (!message?.content?.trim()) throw new Error(message?.reasoning_content ? 'AI_REASONING_ONLY' : 'AI_EMPTY');
-        reply = cleanReply(message.content);
+        reply = cleanReply(message.content, reserved);
         if (reserved.manual && reply.skipped) throw new Error('普通回复未返回聊天文本');
       } catch (e) {
         const reasons = {
@@ -198,18 +198,22 @@ export class LumosScheduler {
           const now = Date.now();
           const item = { ...reply, id: reserved.runId, charId: reserved.charId, convId: reserved.convId, timestamp: now, pushState: reply.skipped ? 'skipped' : reserved.notificationsEnabled === false ? 'muted' : 'pending', pushAttempts: 0, isAutoReply:!reserved.manual, daily: data.daily[reserved.charId] };
           if (!reply.skipped && data.presence?.charId === item.charId && data.presence.convId === item.convId && data.presence.until > now) item.pushState = 'viewing';
+          const contextSegments=reply.segments.map((text,i)=>(reply.actions||[]).some(a=>a.type==='recall' && a.segmentIndex===i)?'[AI撤回了一条消息]':text);
+          if ((reply.actions||[]).some(a=>a.type==='hongbao')) contextSegments.push('[本轮已发红包，等待客户端同步入账]');
           data.inbox.push(item);
           if (reserved.manual && data.jobs[reserved.charId] && !reply.skipped) {
             const autoJob = data.jobs[reserved.charId];
-            appendBackgroundContext(autoJob, reply.segments, now);
-            autoJob.lastAt = now; autoJob.body.messages.push({role:'assistant',content:reply.segments.join('\n\n')});
+            applyReplyActionsToJob(autoJob, item);
+            appendBackgroundContext(autoJob, contextSegments, now);
+            autoJob.lastAt = now; autoJob.body.messages.push({role:'assistant',content:contextSegments.join('\n\n')});
             autoJob.body.messages = [autoJob.body.messages[0], ...autoJob.body.messages.slice(1).slice(-40)];
           }
           if (!reply.skipped) {
-            appendBackgroundContext(current, reply.segments, now);
+            applyReplyActionsToJob(current, item);
+            appendBackgroundContext(current, contextSegments, now);
             current.lastAt = now;
             // 最近上下文追加后台已发送的内容；原始系统设定不裁掉。
-            current.body.messages.push({ role: 'assistant', content: reply.segments.join('\n\n') });
+            current.body.messages.push({ role: 'assistant', content: contextSegments.join('\n\n') });
             current.body.messages = [current.body.messages[0], ...current.body.messages.slice(1).slice(-40)];
           }
         }

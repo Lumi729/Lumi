@@ -46,3 +46,12 @@ test('background timing keeps user age distinct and advances role after autonomo
  appendBackgroundContext(j,['already answered'],now-120000);appendBackgroundContext(j,['new topic'],now-60000);
  const prompt=backgroundTiming(j,now);assert.match(prompt,/600 秒/);assert.match(prompt,/60 秒/);assert.match(prompt,/already answered/);assert.match(prompt,/new topic/);assert.match(prompt,/用户尚未再次回应/);assert.match(prompt,/不是重新回答用户最后一句/);
 });
+
+test('background controls are retained as actions with pinned recall IDs and capped wallet',()=>{
+ const j={actionVersion:1,walletBalance:8,recallTargets:[{id:'old',text:'old text'}]};
+ const r=cleanReply('new[RECALL:1][红包:5:给你][红包:5:超额][BLE:50]',j);
+ assert.deepEqual(r.segments,['new']);assert.deepEqual(r.actions,[{type:'recall',targetId:'old'},{type:'hongbao',amount:5,note:'给你'}]);
+ assert.equal(cleanReply('[红包:5]',j).actions[0].amount,5);
+ assert.equal(cleanReply('new[RECALL:0]',j).actions[0].segmentIndex,0);
+ assert.match(backgroundTiming({...j,offset:0,charName:'长夏',userName:'你',latestAssistant:{role:'assistant',content:'刚才说的话',timestamp:Date.now()-60000}},Date.now()),/你们已经 .*没有聊天了/);
+});
