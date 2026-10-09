@@ -4,27 +4,55 @@ window.createLumosBackground = function(adapter) {
   let config = {}; try { config = JSON.parse(localStorage.getItem(storageName) || '{}'); } catch (_) {}
   let busy = false, dirty = false, timer = null;
   const box = document.createElement('div');
-  box.style.cssText = 'border-top:1px solid #ddd;margin-top:18px;padding-top:14px';
-  box.innerHTML = `<h4 style="margin-bottom:10px">☁️ 后台自动回复</h4>
+  box.id = 'lumosBackgroundPanel';
+  box.style.cssText = 'border-top:1px solid #ddd;margin-top:24px;padding-top:20px';
+  const style = document.createElement('style');
+  style.textContent = `
+    #lumosBackgroundPanel { color:#202a26; font-size:15px; line-height:1.6; min-width:0; }
+    #lumosBackgroundPanel h4 { font-size:20px; line-height:1.4; margin:0 0 12px; }
+    #lumosBackgroundPanel .hint-text { color:#59645e; font-size:14px; line-height:1.65; margin:10px 0 16px; }
+    #lumosBackgroundPanel .setting-row { display:flex; flex-direction:column; align-items:stretch; gap:7px; margin:18px 0; }
+    #lumosBackgroundPanel .setting-row label { flex:none; width:auto; font-size:15px; font-weight:600; color:#27352c; }
+    #lumosBackgroundPanel input[type=url], #lumosBackgroundPanel input[type=password] { box-sizing:border-box; display:block; width:100%; min-width:0; height:48px; padding:12px; border:1px solid #c8d4cc; border-radius:12px; background:#f7faf8; color:#202a26; font:inherit; font-size:16px; }
+    #lumosBackgroundPanel input::placeholder { color:#69776e; opacity:1; }
+    #lumosBackgroundPanel input:focus { outline:2px solid #178751; outline-offset:2px; }
+    #lumosBackgroundPanel .bg-consent { display:flex; align-items:flex-start; gap:10px; font-size:14px; margin:18px 0; color:#34443a; }
+    #lumosBackgroundPanel input[type=checkbox] { flex:none; width:20px; height:20px; margin:3px 0 0; accent-color:#13834b; }
+    #lumosBackgroundPanel .bg-actions { display:grid; grid-template-columns:minmax(0,1fr); gap:12px; margin:20px 0; }
+    #lumosBackgroundPanel .gen-btn { position:static; display:block; box-sizing:border-box; width:100%; min-height:48px; height:auto; margin:0; padding:12px 14px; border-radius:12px; border:1px solid #178751; background:#fff; color:#176b41; font:inherit; font-weight:600; line-height:1.5; white-space:normal; }
+    #lumosBackgroundPanel #bgConnect { background:#13834b; color:#fff; }
+    #lumosBackgroundPanel #bgStop { border-color:#dac9c9; color:#904545; }
+    #lumosBackgroundPanel .gen-btn:disabled { opacity:.55; }
+    #lumosBackgroundPanel #bgStatus { clear:both; padding:14px; border:1px solid #d5e4da; border-radius:12px; background:#f0f7f2; color:#33483b; overflow-wrap:anywhere; margin:16px 0; }
+    #lumosBackgroundPanel #bgStatus[data-error=true] { background:#fff4ef; border-color:#eccdbf; color:#86452e; }
+    #lumosBackgroundPanel a { display:inline-block; font-size:14px !important; color:#176b41; padding:4px 0; }
+  `;
+  document.head.appendChild(style);
+  box.innerHTML = `<h4 style="margin-bottom:10px">☁️ 后台回复与通知</h4>
     <div class="hint-text">连接你自己的 Cloudflare 后台后，关掉页面也可继续普通回复及定时生成回复。本版支持一个单人聊天角色；群聊仍需页面运行。</div>
     <div class="setting-row"><label>后台地址</label><input id="bgUrl" type="url" placeholder="https://lumos-background.…workers.dev"></div>
     <div class="setting-row"><label>连接口令</label><input id="bgToken" type="password" autocomplete="off" placeholder="部署时生成的连接口令"></div>
     <div class="hint-text">启用会把当前角色的 API 密钥、设定和所选上下文上传到你自己的后台，加密保存用于调用 AI。7 天不打开本机页面则暂停调度；生成结果会在回来时同步。后台不执行蓝牙、红包、撤回或跨聊指令。</div>
-    <label style="display:block;font-size:12px;margin:10px 0"><input id="bgConsent" type="checkbox"> 我同意上传这些信息到我填写的后台</label>
+    <label class="bg-consent"><input id="bgConsent" type="checkbox"><span>我同意上传这些信息到我填写的后台</span></label>\n    <div class="bg-actions">
     <button id="bgConnect" class="gen-btn" type="button">为当前角色启用后台</button>
     <button id="bgTest" class="gen-btn" type="button">测试手机推送</button>
     <button id="bgSync" class="gen-btn" type="button">同步后台消息</button>
     <button id="bgStop" class="gen-btn" type="button">关闭并删除后台数据</button>
-    <div id="bgStatus" class="hint-text" role="status" style="white-space:pre-wrap"></div>
+    </div>\n    <div id="bgStatus" class="hint-text" role="status" style="white-space:pre-wrap"></div>
     <a href="https://github.com/Lumi729/Lumi/blob/main/background/README.md" target="_blank" rel="noopener" style="font-size:12px">查看部署步骤</a>`;
   document.getElementById('settingsApi').appendChild(box);
   const el = name => box.querySelector('#' + name);
   el('bgUrl').value = config.url || ''; el('bgToken').value = config.token || '';
-  function status(text) { el('bgStatus').textContent = text; }
+  function status(text, error = false) { el('bgStatus').textContent = text; el('bgStatus').dataset.error = String(error); }
   function persist() { localStorage.setItem(storageName, JSON.stringify(config)); }
   async function api(path, method = 'GET', body) {
     const response = await fetch(config.url + path, { method, headers: { Authorization: 'Bearer ' + config.token, ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(15000), keepalive: path === '/presence', credentials: 'omit', redirect: 'error' });
-    const result = await response.json(); if (!response.ok) { const error = new Error(result.error || '后台请求失败'); error.status = response.status; throw error; } return result;
+    const raw = await response.text();
+    let result;
+    try { result = JSON.parse(raw); } catch (_) {
+      throw new Error(`后台返回了网页而不是连接数据（HTTP ${response.status}）。请确认后台地址使用 workers.dev 根地址，不带 /health，并检查 Cloudflare 是否显示验证或错误页面`);
+    }
+    if (!response.ok) { const error = new Error(result.error || '后台请求失败'); error.status = response.status; throw error; } return result;
   }
   function managed(id) { return Boolean(config.enabled && config.charId === id); }
   async function sync() {
@@ -71,7 +99,7 @@ window.createLumosBackground = function(adapter) {
     if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
     await api('/subscription', 'POST', sub.toJSON());
   }
-  function button(name, action) { el(name).onclick = async () => { el(name).disabled = true; try { await action(); } catch (error) { status(error.message); } finally { el(name).disabled = false; } }; }
+  function button(name, action) { el(name).onclick = async () => { el(name).disabled = true; try { await action(); } catch (error) { status(error.message, true); } finally { el(name).disabled = false; } }; }
   button('bgConnect', async () => {
     if (!el('bgConsent').checked) throw new Error('请先勾选上传同意');
     if (config.enabled) throw new Error('已有后台角色，请先关闭并删除后台数据，再重新连接');
