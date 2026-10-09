@@ -1,0 +1,45 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {webcrypto} from 'node:crypto';
+import {JSDOM, VirtualConsole} from 'jsdom';
+import {IDBFactory, IDBKeyRange} from 'fake-indexeddb';
+const root=new URL('../../',import.meta.url);
+const client=fs.readFileSync(new URL('background-client.js',root),'utf8');
+const source=fs.readFileSync(new URL('index.html',root),'utf8');
+const hooks=`window.__audit={
+ setup(){const a=getActiveCharacter();a.name='A';a.type='single';a.activeConversationId=null;a.conversations=[];a.apiSettings={...a.apiSettings,enabled:true,url:'https://example.test/v1',key:'test-only',model:'test',notificationsEnabled:true,weatherEnabled:false,autoReplyEnabled:false,crossChatEnabled:false};a.chatMessages=[{id:'u1',role:'user',text:'hello',timestamp:Date.now()-600000}];a.messageHistory=[{role:'user',content:'hello'}];const b=structuredClone(a);b.id='test-b';b.name='B';b.chatMessages=[];b.messageHistory=[];characters.push(b);loadActiveCharToGlobals();showView('chat');return a.id;},
+ request:()=>triggerAiReply(false),auto:()=>checkAutoReply(),view:showView,switch:()=>openCharacterChat('test-b'),data:()=>characters,
+ enableAuto(){apiSettings.autoReplyEnabled=true;apiSettings.autoReplyDelayMinutes=1;apiSettings.autoReplyDailyMin=1;apiSettings.autoReplyDailyMax=1;apiSettings.autoReplyTodayCount=0;saveGlobalsToActiveChar();},
+ notifications(value){apiSettings.notificationsEnabled=value;saveGlobalsToActiveChar();},
+ group(){getActiveCharacter().type='group';chatType='group';members=[{id:'m1',name:'Member'}];saveGlobalsToActiveChar();},
+ convSetup(){saveGlobalsToActiveChar();const a=getActiveCharacter();a.conversations=[{id:'one',messages:[...a.chatMessages],history:[...a.messageHistory]},{id:'two',messages:[],history:[]}];a.activeConversationId='one';loadActiveCharToGlobals();},
+ convSwitch(){saveGlobalsToActiveChar();getActiveCharacter().activeConversationId='two';loadActiveCharToGlobals();reloadChatUI();},
+ busy:()=>autoReplyInProgress,read:markVisibleChatRead,time:buildTimeAwareness
+};`;
+// Only test accessors are injected; production handlers and persistence run unchanged.
+async function app(t, handler){
+ const html=source.replace(/<script src="\/Lumi\/background-client\.js[^"\n]*"><\/script>/,'<script>'+client.replace('window.createLumosBackground = function(adapter) {','window.createLumosBackground = function(adapter) { window.__auditAdapter=adapter;')+'</script>').replace('  function initAll(){','  '+hooks+'\n  function initAll(){');
+ const errors=[],calls=[];const vc=new VirtualConsole();vc.on('jsdomError',e=>{if(!/Not implemented/.test(e.message))errors.push(e.message)});
+ const dom=new JSDOM(html,{url:'https://lumi729.github.io/Lumi/',runScripts:'dangerously',pretendToBeVisual:true,virtualConsole:vc,beforeParse(w){w.indexedDB=new IDBFactory();w.IDBKeyRange=IDBKeyRange;w.TextEncoder=TextEncoder;w.structuredClone=structuredClone;Object.defineProperty(w.crypto,'subtle',{value:webcrypto.subtle});w.matchMedia=()=>({matches:false,addEventListener(){}});w.fetch=async(u,init)=>{if(String(u).startsWith('https://example.test/')){calls.push({url:u,init});return handler?handler(u,init):Response.json({choices:[{message:{content:'reply A'}}]});}return Response.json({});};w.Request=Request;w.AbortSignal=AbortSignal;w.alert=()=>{};w.HTMLCanvasElement.prototype.getContext=()=>null;}});
+ t.after(()=>dom.window.close());
+ for(let i=0;i<100&&!dom.window.document.querySelector('#bgConnect');i++)await new Promise(r=>setTimeout(r,10));
+ assert(dom.window.document.querySelector('#bgConnect'),'application mounted');assert.deepEqual(errors,[]);
+ const api=dom.window.__audit,id=api.setup();return {w:dom.window,api,id,calls,errors};
+}
+function deferred(){let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};}
+test('ordinary delayed reply stays in original character and shows banner',async t=>{const gate=deferred(),started=deferred();const {w,api,id}=await app(t,async()=>{started.resolve();await gate.promise;return Response.json({choices:[{message:{content:'reply A'}}]});});const p=api.request();await started.promise;api.switch();gate.resolve();await p;assert(api.data().find(c=>c.id===id).chatMessages.some(m=>m.text==='reply A'));assert.equal(api.data().find(c=>c.id==='test-b').chatMessages.length,0);assert(!w.document.querySelector('#chatArea').textContent.includes('reply A'));assert(w.document.querySelector('#lumosIncomingBanner'));assert.equal(w.document.querySelector('#sendBtn').disabled,false);});
+test('delayed reply stays in original conversation of same character',async t=>{const gate=deferred(),started=deferred();const {api,id}=await app(t,async()=>{started.resolve();await gate.promise;return Response.json({choices:[{message:{content:'reply A'}}]});});api.convSetup();const p=api.request();await started.promise;api.convSwitch();gate.resolve();await p;const c=api.data().find(c=>c.id===id);assert(c.conversations[0].messages.some(m=>m.text==='reply A'));assert.equal(c.conversations[1].messages.length,0);});
+test('API failure after switching cannot write an error into another role',async t=>{const gate=deferred(),started=deferred();const {api,id}=await app(t,async()=>{started.resolve();await gate.promise;return new Response('',{status:500});});const p=api.request();await started.promise;api.switch();gate.resolve();await p;assert(api.data().find(c=>c.id===id).chatMessages.some(m=>m.text.includes('HTTP 500')));assert.equal(api.data().find(c=>c.id==='test-b').chatMessages.length,0);});
+for(const page of ['messages','library','profile']){
+ test('ordinary reply banner on '+page,async t=>{const {w,api}=await app(t);api.view(page);await api.request();assert(w.document.querySelector('#lumosIncomingBanner'));});
+ test('automatic reply banner on '+page,async t=>{const {w,api,id}=await app(t);api.enableAuto();api.view(page);await api.auto();assert(w.document.querySelector('#lumosIncomingBanner'));assert.equal(api.data().find(c=>c.id===id).unreadCount,1);assert.equal(api.busy(),false);});
+}
+test('viewing matching chat suppresses banner and unread badge',async t=>{const {w,api,id}=await app(t);await api.request();assert.equal(w.document.querySelector('#lumosIncomingBanner'),null);assert.equal(api.data().find(c=>c.id===id).unreadCount,0);});
+test('disabled notifications suppress banner while retaining unread',async t=>{const {w,api,id}=await app(t);api.notifications(false);api.view('messages');await api.request();assert.equal(w.document.querySelector('#lumosIncomingBanner'),null);assert.equal(api.data().find(c=>c.id===id).unreadCount,1);});
+test('automatic scheduler does not overlap an ordinary request',async t=>{const gate=deferred(),started=deferred();const {api,calls}=await app(t,async()=>{started.resolve();await gate.promise;return Response.json({choices:[{message:{content:'reply A'}}]});});api.enableAuto();const p=api.request();await started.promise;const auto=api.auto();await new Promise(r=>setTimeout(r,30));const count=calls.length;gate.resolve();await Promise.all([p,auto]);assert.equal(count,1);});
+test('group auto reply releases scheduler on API failure',async t=>{const {api}=await app(t,async()=>new Response('',{status:503}));api.group();api.enableAuto();const complete=await Promise.race([api.auto().then(()=>true),new Promise(r=>setTimeout(()=>r(false),350))]);assert.equal(complete,true);assert.equal(api.busy(),false);});
+test('clicking in-app banner opens source and clears unread count',async t=>{const {w,api,id}=await app(t);api.view('library');await api.request();assert.equal(api.data().find(c=>c.id===id).unreadCount,1);w.document.querySelector('#lumosIncomingBanner').click();assert.equal(api.data().find(c=>c.id===id).unreadCount,0);assert(w.document.querySelector('#chatViewWrap').classList.contains('active'));});
+test('automatic skip produces neither banner nor unread reply',async t=>{const {w,api,id}=await app(t,async()=>Response.json({choices:[{message:{content:'[AUTO_SKIP] later'}}]}));api.enableAuto();api.view('profile');await api.auto();assert.equal(w.document.querySelector('#lumosIncomingBanner'),null);assert.equal(api.data().find(c=>c.id===id).unreadCount,0);});
+test('new user message age is separate from preceding conversation gap',async t=>{const {api}=await app(t);const now=2000000000000;const text=api.time([{role:'dog',timestamp:now-7200000},{role:'user',timestamp:now-1000}],now);assert.match(text,/距用户最近一次发言：不到 1 分钟/);assert.match(text,/距角色最近一次回复：2 小时/);assert.match(text,/用户最近一次发言与它前一条聊天消息的间隔：1 小时 59 分钟/);});
+test('background inbox import shows banner on other page and deduplicates',async t=>{const {w,api,id}=await app(t);api.view('library');const reply={id:'cloud-one',charId:id,convId:'',timestamp:Date.now(),segments:['cloud reply'],isAutoReply:true};await w.__auditAdapter.importReplies([reply]);assert(w.document.querySelector('#lumosIncomingBanner'));await w.__auditAdapter.importReplies([reply]);const c=api.data().find(c=>c.id===id);assert.equal(c.chatMessages.filter(m=>m.id==='bg_cloud-one_0').length,1);assert.equal(c.unreadCount,1);});
