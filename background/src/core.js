@@ -1,0 +1,69 @@
+export function safeApiUrl(value) {
+  const url = new URL(value);
+  if (url.protocol !== 'https:' || url.username || url.password || url.port && url.port !== '443') throw new Error('API 地址必须为公开 HTTPS 地址');
+  const host = url.hostname.toLowerCase();
+  if (!host.includes('.') || /(^|\.)localhost$|\.local$|\.internal$/.test(host) || /^[\d.]+$/.test(host) || host.includes(':') || host.startsWith('[')) throw new Error('不支持本机、内网或 IP 地址');
+  return url.href;
+}
+export function validateSubscription(sub) {
+  if (!sub || !sub.keys || typeof sub.keys.p256dh !== 'string' || typeof sub.keys.auth !== 'string') throw new Error('推送订阅无效');
+  const u = new URL(sub.endpoint);
+  if (u.protocol !== 'https:' || u.username || u.password || u.port) throw new Error('推送地址无效');
+  const hosts = ['fcm.googleapis.com', 'updates.push.services.mozilla.com', 'web.push.apple.com'];
+  if (!hosts.includes(u.hostname)) throw new Error('暂不支持此浏览器的推送服务');
+  return sub;
+}
+export function cleanReply(content) {
+  let text = String(content || '').replace(/【思考过程】\s*[\s\S]*?\s*【思考结束】/gi, '').trim();
+  if (text.startsWith('[AUTO_SKIP]')) return { skipped: true, reason: text.slice(11).trim().slice(0, 500), segments: [] };
+  text = text.replace(/\[(?:RECALL:-?\d+|BLE[:：][^\]]*|红包[:：][^\]]*|改名[:：][^\]]*|切换[^\]]*)\]/g, '').trim();
+  const segments = text.split(/\n{2,}/).map(x => x.trim()).filter(Boolean).slice(0, 5);
+  if (!segments.length) throw new Error('回复为空');
+  return { skipped: false, segments };
+}
+export function notificationBodies(segments) {
+  return segments.length <= 3 ? segments.map(x => x.slice(0, 120))
+    : [`（共${segments.length}条新消息）${segments.slice(0, 3).map(x => x.slice(0, 30)).join('；')}...`];
+}
+export function dayKey(now, offset) { return new Date(now - offset * 60000).toISOString().slice(0, 10); }
+export function nextDay(now, offset) {
+  const shifted = new Date(now - offset * 60000);
+  return Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate() + 1) + offset * 60000;
+}
+export function dailyState(previous, job, now, random = Math.random) {
+  const day = dayKey(now, job.offset);
+  if (previous?.day === day) return previous;
+  return { day, count: Math.max(0, job.todayDate === day ? job.todayCount : 0), quota: job.dailyMin + Math.floor(random() * (job.dailyMax - job.dailyMin + 1)) };
+}
+function bytes64(bytes) { return btoa(String.fromCharCode(...bytes)); }
+function from64(text) { return Uint8Array.from(atob(text), x => x.charCodeAt(0)); }
+async function storageKey(secret) {
+  const bytes = from64(secret);
+  if (bytes.length !== 32) throw new Error('加密密钥未配置');
+  return crypto.subtle.importKey('raw', bytes, 'AES-GCM', false, ['encrypt', 'decrypt']);
+}
+export async function seal(value, secret) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const data = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await storageKey(secret), new TextEncoder().encode(JSON.stringify(value)));
+  return { iv: bytes64(iv), data: bytes64(new Uint8Array(data)) };
+}
+export async function unseal(value, secret) {
+  const data = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: from64(value.iv) }, await storageKey(secret), from64(value.data));
+  return JSON.parse(new TextDecoder().decode(data));
+}
+export async function sameToken(a, b) {
+  if (!a || !b) return false;
+  const hash = async s => new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)));
+  const x = await hash(a), y = await hash(b);
+  let diff = 0; for (let i = 0; i < x.length; i++) diff |= x[i] ^ y[i]; return diff === 0;
+}
+export function validateJob(input, now) {
+  const bounded = (v, min, max) => Number.isInteger(v) && v >= min && v <= max;
+  if (!input || !/^[\w-]{1,100}$/.test(input.charId) || typeof input.revision !== 'string' || input.revision.length > 150 || typeof input.convId !== 'string' || input.convId.length > 100) throw new Error('角色信息无效');
+  if (!bounded(input.delayMinutes, 1, 120) || !bounded(input.dailyMin, 0, 20) || !bounded(input.dailyMax, input.dailyMin, 20) || !bounded(input.offset, -840, 840)) throw new Error('调度设置无效');
+  if (!Number.isFinite(input.lastAt) || input.lastAt < now - 3650 * 86400000 || input.lastAt > now + 60000) throw new Error('消息时间无效');
+  if (typeof input.key !== 'string' || input.key.length > 4096 || !input.key || typeof input.body?.model !== 'string' || !Array.isArray(input.body.messages)) throw new Error('AI 设置无效');
+  if (input.body.messages.length > 100 || JSON.stringify(input.body).length > 180000) throw new Error('上下文过大');
+  for (const m of input.body.messages) if (!['system', 'user', 'assistant'].includes(m.role) || typeof m.content !== 'string') throw new Error('上下文格式无效');
+  return { ...input, url: safeApiUrl(input.url), todayCount: Math.min(20, Math.max(0, Number(input.todayCount) || 0)), leaseUntil: now + 7 * 86400000 };
+}

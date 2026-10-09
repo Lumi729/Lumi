@@ -1,5 +1,5 @@
-const CACHE_NAME = 'lumos-v4';
-const urlsToCache = ['/Lumi/', '/Lumi/index.html', '/Lumi/manifest.json', '/Lumi/月亮.png', '/Lumi/月亮512.png'];
+const CACHE_NAME = 'lumos-v5';
+const urlsToCache = ['/Lumi/', '/Lumi/index.html', '/Lumi/manifest.json', '/Lumi/background-client.js', '/Lumi/月亮.png', '/Lumi/月亮512.png'];
 const staticUrls = new Set(urlsToCache.map(path => new URL(path, self.location.origin).href));
 
 // 核心资源全部就绪后启用新版。
@@ -79,5 +79,24 @@ self.addEventListener('message', event => {
     const results = await Promise.allSettled(notices.map(n => self.registration.showNotification(n.title, n.options)));
     const failed = results.filter(r => r.status === 'rejected').length;
     if (port) port.postMessage({sent: results.length-failed, failed});
+  })());
+});
+
+
+// Real Web Push can wake this worker without an open page. It does not run a
+// permanent timer: Cloudflare generates the reply and delivers this event.
+self.addEventListener('push', event => {
+  event.waitUntil((async () => {
+    let data;
+    try { data = event.data && event.data.json(); } catch (_) {}
+    const notices = data && data.type === 'LUMOS_PUSH_REPLY' && Array.isArray(data.notices)
+      ? data.notices.slice(0,3).filter(n => typeof n.title === 'string' && typeof n.options?.body === 'string') : [];
+    if (!notices.length) notices.push({title:'Lumos', options:{body:'后台有新消息，打开后同步。'}});
+    const results = await Promise.allSettled(notices.map(n => self.registration.showNotification(n.title, {
+      body:n.options.body, tag:n.options.tag, icon:'/Lumi/月亮.png', data:n.options.data || {}, requireInteraction:false
+    })));
+    if (results.every(r => r.status === 'rejected')) throw new Error('推送通知提交失败');
+    const clients = await self.clients.matchAll({type:'window',includeUncontrolled:true});
+    clients.forEach(client => client.postMessage({type:'LUMOS_BACKGROUND_CHANGED'}));
   })());
 });

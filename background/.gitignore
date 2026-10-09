@@ -1,0 +1,5 @@
+node_modules/
+.wrangler/
+.dev.vars
+.connection-token.txt
+dist/

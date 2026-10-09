@@ -1,0 +1,156 @@
+import { buildPushPayload } from '@block65/webcrypto-web-push';
+import { validateJob, validateSubscription, sameToken, seal, unseal, cleanReply, notificationBodies, dailyState, nextDay } from './core.js';
+
+const json = (data, status = 200) => Response.json(data, { status });
+const LIMIT = 250000;
+export default {
+  async fetch(request, env) {
+    const origin = request.headers.get('Origin');
+    const allowed = env.APP_ORIGIN;
+    const headers = { 'Access-Control-Allow-Origin': allowed, 'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type', 'Vary': 'Origin', 'Cache-Control': 'no-store' };
+    if (origin && origin !== allowed) return json({ error: '来源不允许' }, 403);
+    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers });
+    let response;
+    try {
+      const path = new URL(request.url).pathname;
+      if (path === '/health') response = json({ service: 'Lumos background', version: 1, configured: Boolean(env.ACCESS_TOKEN && env.STORAGE_KEY && env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY) });
+      else if (!env.ACCESS_TOKEN || !env.STORAGE_KEY || !env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) response = json({ error: '请先完成后台密钥配置' }, 503);
+      else if (!await sameToken(request.headers.get('Authorization')?.replace(/^Bearer /, ''), env.ACCESS_TOKEN)) response = json({ error: '后台连接口令不正确' }, 401);
+      else if (path === '/config' && request.method === 'GET') response = json({ publicKey: env.VAPID_PUBLIC_KEY });
+      else {
+        if (Number(request.headers.get('Content-Length')) > LIMIT) return new Response('请求过大', { status: 413, headers });
+        const body = await request.text();
+        if (body.length > LIMIT) return new Response('请求过大', { status: 413, headers });
+        const stub = env.SCHEDULER.get(env.SCHEDULER.idFromName('owner'));
+        response = await stub.fetch(new Request(request.url, { method: request.method, headers: { 'Content-Type': 'application/json' }, ...(body ? { body } : {}) }));
+      }
+    } catch (_) { response = json({ error: '后台请求失败，请检查配置' }, 500); }
+    const result = new Response(response.body, response); for (const [key, value] of Object.entries(headers)) result.headers.set(key, value); return result;
+  }
+};
+
+export class LumosScheduler {
+  constructor(state, env) { this.state = state; this.env = env; }
+  async load() {
+    const encrypted = await this.state.storage.get('owner');
+    return encrypted ? unseal(encrypted, this.env.STORAGE_KEY) : { jobs: {}, inbox: [], daily: {}, subscription: null, heartbeat: null };
+  }
+  async save(data) { await this.state.storage.put('owner', await seal(data, this.env.STORAGE_KEY)); }
+  async schedule(data) {
+    const now = Date.now();
+    const deadlines = Object.values(data.jobs).filter(j => j.leaseUntil > now).map(j => j.nextAt);
+    const pending = data.inbox.filter(r => r.pushState === 'pending' && r.pushAttempts < 3);
+    if (pending.length && data.subscription) deadlines.push(now + 60000);
+    if (deadlines.length) await this.state.storage.setAlarm(Math.max(now + 1000, Math.min(...deadlines)));
+    else await this.state.storage.deleteAlarm();
+  }
+  async fetch(request) {
+    return this.state.blockConcurrencyWhile(async () => {
+      const path = new URL(request.url).pathname, data = await this.load();
+      try {
+        if (path === '/state' && request.method === 'GET') return json({ inbox: data.inbox.filter(r => !r.acked), jobs: Object.values(data.jobs).map(j => ({ charId: j.charId, convId: j.convId, nextAt: j.nextAt, leaseUntil: j.leaseUntil, error: j.error || null, daily: data.daily[j.charId] })), heartbeat: data.heartbeat, subscribed: Boolean(data.subscription) });
+        if (path === '/presence' && request.method === 'POST') { const presence = await request.json(); data.presence = { charId:typeof presence.charId === 'string' ? presence.charId.slice(0,100) : null, convId:typeof presence.convId === 'string' ? presence.convId.slice(0,100) : '', until:Date.now()+45000 }; }
+        else if (path === '/subscription' && request.method === 'POST') { data.subscription = validateSubscription(await request.json()); }
+        else if (path === '/job' && request.method === 'POST') {
+          const job = validateJob(await request.json(), Date.now());
+          const old = data.jobs[job.charId];
+          if (!old && Object.keys(data.jobs).length >= 20) return json({ error: '最多启用 20 个后台角色' }, 400);
+          // 未同步的后台回复先回到手机，不能用旧页面快照覆盖后台新上下文。
+          if (data.inbox.some(r => r.charId === job.charId && !r.acked)) return json({ error: '请先同步后台消息' }, 409);
+          job.nextAt = old?.revision === job.revision ? old.nextAt : Math.max(Date.now() + 1000, job.lastAt + job.delayMinutes * 60000);
+          if (old?.revision === job.revision) { job.runId = old.runId; job.runUntil = old.runUntil; }
+          data.jobs[job.charId] = job;
+        }
+        else if (path === '/job' && request.method === 'DELETE') { const { charId } = await request.json(); delete data.jobs[charId]; }
+        else if (path === '/ack' && request.method === 'POST') {
+          const { ids } = await request.json(); if (!Array.isArray(ids) || ids.length > 100) throw new Error('同步信息无效');
+          // 同步成功也保留待推送记录，避免页面确认吞掉尚未发送的推送。
+          data.inbox = data.inbox.filter(r => !ids.includes(r.id) || r.pushState === 'pending');
+          data.inbox.forEach(r => { if (ids.includes(r.id)) r.acked = true; });
+        }
+        else if (path === '/test' && request.method === 'POST') {
+          if (!data.subscription) return json({ error: '手机尚未订阅推送' }, 400);
+          const ok = await this.push(data.subscription, { id: crypto.randomUUID(), charId: null, segments: ['Lumos 后台已连通～这是一条测试通知。'] });
+          return json({ submitted: ok });
+        }
+        else if (path === '/reset' && request.method === 'DELETE') { await this.state.storage.deleteAll(); await this.state.storage.deleteAlarm(); return json({ deleted: true }); }
+        else return json({ error: '接口不存在' }, 404);
+        await this.save(data); await this.schedule(data); return json({ ok: true });
+      } catch (error) { return json({ error: error.message }, 400); }
+    });
+  }
+  async push(subscription, reply) {
+    const notices = notificationBodies(reply.segments).map((body, index) => ({ title: 'TA想对你说的是...', options: { body, tag: 'lumos-push-' + reply.id + '-' + index, data: { charId: reply.charId, replyId: reply.id } } }));
+    const payload = await buildPushPayload({ data: JSON.stringify({ type: 'LUMOS_PUSH_REPLY', notices }), options: { ttl: 86400 } }, subscription, { subject: this.env.VAPID_SUBJECT, publicKey: this.env.VAPID_PUBLIC_KEY, privateKey: this.env.VAPID_PRIVATE_KEY });
+    const response = await fetch(subscription.endpoint, { ...payload, signal: AbortSignal.timeout(15000) });
+    if (response.status === 404 || response.status === 410) return 'expired';
+    if (!response.ok) throw new Error('推送服务未接收');
+    return true;
+  }
+  async alarm() {
+    // 每次只预约一轮请求；预约先持久化，闹钟重试不重复调用付费 AI。
+    let reserved;
+    await this.state.blockConcurrencyWhile(async () => {
+      const data = await this.load(), now = Date.now();
+      data.heartbeat = now;
+      for (const [id, job] of Object.entries(data.jobs)) {
+        if (job.leaseUntil <= now) { delete data.jobs[id]; continue; }
+        if (job.nextAt > now || reserved || (job.runUntil || 0) > now) continue;
+        if (data.inbox.filter(r => r.charId === id && !r.acked).length >= 40) { job.nextAt = nextDay(now, job.offset); job.error = '待同步消息较多，打开 Lumos 同步后继续'; continue; }
+        const daily = dailyState(data.daily[id], job, now); data.daily[id] = daily;
+        if (daily.count >= daily.quota) { job.nextAt = nextDay(now, job.offset); continue; }
+        daily.count++;
+        const runId = crypto.randomUUID(); job.runId = runId; job.runUntil = now + 120000; job.nextAt = Math.max(job.runUntil, now + job.delayMinutes * 60000); job.error = null;
+        reserved = structuredClone(job); reserved.runId = runId;
+      }
+      await this.save(data); await this.schedule(data);
+    });
+    if (reserved) {
+      let reply, error;
+      try {
+        const body = structuredClone(reserved.body);
+        body.messages = [...body.messages, { role: 'system', content: `这是服务端后台自动回复。实际当前时间：${new Date().toISOString()}。距最近消息约 ${Math.max(0, Math.floor((Date.now() - reserved.lastAt) / 60000))} 分钟；如早期快照时间描述冲突，以此为准。只输出聊天文本，用空行分段；不执行撤回、红包、蓝牙或场景切换。不想主动聊天可输出 [AUTO_SKIP] 理由。` }];
+        const response = await fetch(reserved.url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + reserved.key }, body: JSON.stringify(body), signal: AbortSignal.timeout(90000), redirect: 'error' });
+        if (!response.ok) throw new Error('AI 接口返回 HTTP ' + response.status);
+        const result = await response.json(); reply = cleanReply(result.choices?.[0]?.message?.content);
+      } catch (e) { error = e.message.startsWith('AI 接口返回 HTTP ') ? e.message : 'AI 请求未完成；本轮不自动重试，避免重复扣费'; }
+      await this.state.blockConcurrencyWhile(async () => {
+        const data = await this.load(), current = data.jobs[reserved.charId];
+        // 新消息/关闭开关/删除任务在生成期间发生时，丢弃过期结果。
+        if (!current || current.revision !== reserved.revision || current.runId !== reserved.runId) return;
+        current.runUntil = 0; current.nextAt = Date.now() + current.delayMinutes * 60000;
+        if (error) current.error = error;
+        else {
+          const now = Date.now();
+          const item = { ...reply, id: reserved.runId, charId: reserved.charId, convId: reserved.convId, timestamp: now, pushState: reply.skipped ? 'skipped' : 'pending', pushAttempts: 0, daily: data.daily[reserved.charId] };
+          if (!reply.skipped && data.presence?.charId === item.charId && data.presence.convId === item.convId && data.presence.until > now) item.pushState = 'viewing';
+          data.inbox.push(item);
+          if (!reply.skipped) {
+            current.lastAt = now;
+            // 最近上下文追加后台已发送的内容；原始系统设定不裁掉。
+            current.body.messages.push({ role: 'assistant', content: reply.segments.join('\n\n') });
+            current.body.messages = [current.body.messages[0], ...current.body.messages.slice(1).slice(-40)];
+          }
+        }
+        await this.save(data); await this.schedule(data);
+      });
+    }
+    // 记录 push 提交状态；重试使用同一个通知 tag，手机端覆盖而不是叠加。
+    const queued = await this.load();
+    for (const item of queued.inbox.filter(r => r.pushState === 'pending' && r.pushAttempts < 3)) {
+      if (!queued.subscription) break;
+      let status = 'pending';
+      try { status = await this.push(queued.subscription, item); } catch (_) {}
+      await this.state.blockConcurrencyWhile(async () => {
+        const data = await this.load(), saved = data.inbox.find(r => r.id === item.id);
+        if (!saved) return;
+        saved.pushAttempts++;
+        if (status === true) saved.pushState = 'submitted';
+        else if (status === 'expired') { data.subscription = null; saved.pushState = 'subscription-expired'; }
+        else if (saved.pushAttempts >= 3) saved.pushState = 'failed';
+        data.inbox = data.inbox.filter(r => !(r.acked && r.pushState !== 'pending'));
+        await this.save(data); await this.schedule(data);
+      });
+    }
+  }
+}

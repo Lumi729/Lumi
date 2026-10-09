@@ -1,0 +1,14 @@
+{
+  "name": "lumos-background",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-10-09",
+  "workers_dev": true,
+  "vars": {
+    "APP_ORIGIN": "https://lumi729.github.io",
+    "VAPID_SUBJECT": "https://lumi729.github.io/Lumi/"
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "SCHEDULER", "class_name": "LumosScheduler" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["LumosScheduler"] }]
+}
