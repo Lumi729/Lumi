@@ -616,7 +616,7 @@
   <div class="create-modal" id="createModal"><div class="create-panel"><h3>创建</h3><button id="createSingleBtn">✨ 创建角色</button><button id="createGroupBtn">👥 创建群聊</button><button class="close-create" id="closeCreateBtn">关闭</button></div></div>
   <div class="create-modal" id="groupCreateModal"><div class="create-panel"><h3>选择群聊成员</h3><div class="create-member-list" id="groupMemberList"></div><div style="display:flex;gap:8px;"><button id="confirmGroupBtn" style="flex:1;">确认创建</button><button id="createEmptyGroupBtn" style="flex:1;background:#576b95;">创建空群聊</button></div><button class="close-create" id="closeGroupCreateBtn" style="width:100%;">取消</button></div></div>
 </div>
-<script src="/Lumi/background-client.js?v=20261009-queue4"></script>
+<script src="/Lumi/background-client.js?v=20261009-progress5"></script>
 <script>
 // === IndexedDB for characters (large chat data, no 5MB limit) ===
 const _CHARS_DB_NAME = 'lumos_chars_v1';
@@ -3122,11 +3122,12 @@ async function _clearCharsIDB(){
       presence: () => ({ charId: document.visibilityState === 'visible' && chatViewWrap.classList.contains('active') ? displayedChatId : null, convId:activeConvId || '' }),
       name: id => characters.find(c => c.id === id)?.name || '已删除的角色',
       log: addLog,
-      pending(id, enabled) {
+      pending(id, enabled, error) {
         if (id !== activeCharacterId) return;
         chatArea.querySelectorAll('.bg-reply-pending').forEach(el => el.remove());
-        if (enabled && chatViewWrap.classList.contains('active')) {
-          const hint = document.createElement('div'); hint.className = 'recall-system-hint bg-reply-pending'; hint.textContent = '☁️ 后台回复中，切走也会继续生成'; chatArea.appendChild(hint);
+        if (enabled) chatArea.querySelectorAll('.bg-reply-error').forEach(el => el.remove());
+        if ((enabled || error) && chatViewWrap.classList.contains('active')) {
+          const hint = document.createElement('div'); hint.className = 'recall-system-hint ' + (error ? 'bg-reply-error' : 'bg-reply-pending'); hint.textContent = error ? '这次回复未完成：' + error : '☁️ 后台回复中，切走也会继续生成'; chatArea.appendChild(hint); chatArea.scrollTop = chatArea.scrollHeight;
         }
       },
       updateDaily(id, daily) {
