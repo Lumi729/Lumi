@@ -2,6 +2,7 @@
 window.createLumosBackground = function(adapter) {
   const storageName = 'lumos_background_connection_v1';
   let config = {}; try { config = JSON.parse(localStorage.getItem(storageName) || '{}'); } catch (_) {}
+  let schedulerPaused = !config.enabled;
   let busy = false, dirty = false, timer = null, replySubmission = null, replyPollTimer = null;
   const idleWaiters = [];
   function releaseBusy() { busy = false; idleWaiters.splice(0).forEach(resolve => resolve()); }
@@ -35,7 +36,8 @@ window.createLumosBackground = function(adapter) {
     <div class="setting-row"><label>后台地址</label><input id="bgUrl" type="url" placeholder="https://lumos-background.…workers.dev"></div>
     <div class="setting-row"><label>连接口令</label><input id="bgToken" type="password" autocomplete="off" placeholder="部署时生成的连接口令"></div>
     <div class="hint-text">启用会把当前角色的 API 密钥、设定和所选上下文上传到你自己的后台，加密保存用于调用 AI。7 天不打开本机页面则暂停调度；生成结果会在回来时同步。后台不执行蓝牙、红包、撤回或跨聊指令。</div>
-    <label class="bg-consent"><input id="bgConsent" type="checkbox"><span>我同意上传这些信息到我填写的后台</span></label>\n    <div class="bg-actions">
+    <label class="bg-consent"><input id="bgConsent" type="checkbox"><span>我同意上传这些信息到我填写的后台</span></label>\n    <label class="bg-consent"><input id="bgGeneration" type="checkbox"><span>退出页面后继续生成回复<br><small>关闭时使用原来的聊天方式；消息通知仍由上方开关控制。</small></span></label>
+    <div class="bg-actions">
     <button id="bgConnect" class="gen-btn" type="button">为当前角色启用后台</button>
     <button id="bgTest" class="gen-btn" type="button">测试手机推送</button>
     <button id="bgSync" class="gen-btn" type="button">同步后台消息</button>
@@ -46,7 +48,19 @@ window.createLumosBackground = function(adapter) {
   const el = name => box.querySelector('#' + name);
   el('bgUrl').value = config.url || ''; el('bgToken').value = config.token || '';
   function status(text, error = false) { el('bgStatus').textContent = text; el('bgStatus').dataset.error = String(error); }
-  function persist() { localStorage.setItem(storageName, JSON.stringify(config)); }
+  function renderConnection() {
+    el('bgConsent').checked = Boolean(config.enabled);
+    el('bgConsent').disabled = Boolean(config.enabled);
+    el('bgGeneration').checked = Boolean(config.backgroundGeneration);
+    el('bgConnect').textContent = config.enabled ? '已连接 · 同步状态' : '连接后台';
+    el('bgUrl').readOnly = el('bgToken').readOnly = Boolean(config.enabled);
+  }
+  function persist() { localStorage.setItem(storageName, JSON.stringify(config)); renderConnection(); }
+  renderConnection();
+  el('bgGeneration').onchange = async () => {
+    config.backgroundGeneration = el('bgGeneration').checked; persist();
+    if (config.enabled) await sync();
+  };
   async function api(path, method = 'GET', body) {
     const response = await fetch(config.url + path, { method, headers: { Authorization: 'Bearer ' + config.token, ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(15000), keepalive: path === '/presence', credentials: 'omit', redirect: 'error' });
     const raw = await response.text();
@@ -56,7 +70,8 @@ window.createLumosBackground = function(adapter) {
     }
     if (!response.ok) { const error = new Error(result.error || '后台请求失败'); error.status = response.status; throw error; } return result;
   }
-  function managed(id) { return Boolean(config.enabled && config.charId === id); }
+  function managed(id) { return Boolean(config.enabled && config.backgroundGeneration && config.charId === id); }
+  function managesAuto(id) { return Boolean(config.enabled && config.charId === id && (config.backgroundGeneration || !schedulerPaused)); }
   async function sync() {
     if (!config.enabled) return;
     if (replySubmission || busy || adapter.isBusy()) { dirty = true; return; }
@@ -72,10 +87,10 @@ window.createLumosBackground = function(adapter) {
       clearTimeout(replyPollTimer);
       if (pending) replyPollTimer = setTimeout(sync, 2500);
       if (ids.length) await api('/ack', 'POST', { ids });
-      const current = await adapter.snapshot(config.charId);
+      const current = config.backgroundGeneration ? await adapter.snapshot(config.charId) : {disabled:true};
       if (current?.disabled) {
-        await api('/job', 'DELETE', { charId: config.charId });
-        status('主动回复调度已暂停。普通回复仍可使用后台；请保持该角色的 AI 已启用。');
+        await api('/job', 'DELETE', { charId: config.charId }); schedulerPaused = true;
+        status(config.backgroundGeneration ? '后台已连接，自动回复未开启。普通回复可在后台继续。' : '后台已连接。退出后生成已关闭，普通聊天使用原来的方式；消息通知保持独立。');
       } else if (current) {
         try { await api('/job', 'POST', current); } catch (error) { if (error.status === 409) { dirty = true; } else throw error; }
         status(`已连接：${adapter.name(config.charId)}。后台会继续普通回复并独立调度主动回复，回来时同步消息。\n手机推送仍受系统权限、网络与省电影响。`);
@@ -108,15 +123,15 @@ window.createLumosBackground = function(adapter) {
   }
   function button(name, action) { el(name).onclick = async () => { el(name).disabled = true; try { await action(); } catch (error) { status(error.message, true); } finally { el(name).disabled = false; } }; }
   button('bgConnect', async () => {
-    if (!el('bgConsent').checked) throw new Error('请先勾选上传同意');
-    if (config.enabled) throw new Error('已有后台角色，请先关闭并删除后台数据，再重新连接');
+    if (!config.enabled && !el('bgConsent').checked) throw new Error('请先勾选上传同意');
+    if (config.enabled) { await sync(); return; }
     if (adapter.isBusy()) throw new Error('请等这一轮回复完成再连接');
     const currentId = adapter.activeId(), job = await adapter.snapshot(currentId, true);
     if (!job || job.disabled) throw new Error('请先为当前单人角色配置 AI，并确保聊天中已有消息');
     const url = new URL(el('bgUrl').value.trim());
     if (url.protocol !== 'https:' || url.username || url.password || url.pathname !== '/' || url.search || url.hash) throw new Error('请填写 HTTPS 后台根地址，不带路径');
     if (!el('bgToken').value.trim()) throw new Error('请填写连接口令');
-    config = { url: url.origin, token: el('bgToken').value.trim(), charId: currentId, enabled: false };
+    config = { url: url.origin, token: el('bgToken').value.trim(), charId: currentId, enabled: false, backgroundGeneration: el('bgGeneration').checked };
     const settings = await api('/config');
     // 先更新后台脚本，再启用 push；不清理聊天数据。
     const reg = await navigator.serviceWorker.ready; await reg.update();
@@ -131,8 +146,8 @@ window.createLumosBackground = function(adapter) {
     });
     await subscribe(settings.publicKey);
     config.enabled = true; persist();
-    try { if (job.autoEnabled) await api('/job', 'POST', job); else await api('/job', 'DELETE', { charId: currentId }); } catch (error) { config.enabled = false; persist(); throw error; }
-    status('后台已启用，普通回复可以在切走后继续。自动回复按角色开关单独控制。请点击“测试手机推送”检查通知。'); adapter.log('info', '已启用 Cloudflare 后台自动回复');
+    try { if (config.backgroundGeneration && job.autoEnabled) await api('/job', 'POST', job); else await api('/job', 'DELETE', { charId: currentId }); } catch (error) { config.enabled = false; persist(); throw error; }
+    status('后台已连接。是否在退出后继续生成，由独立开关控制；消息通知仍按上方设置。'); adapter.log('info', '已启用 Cloudflare 后台自动回复');
   });
   button('bgTest', async () => { if (!config.enabled) throw new Error('请先启用后台'); const r = await api('/test', 'POST', {}); status(r.submitted === true ? '测试推送已被推送服务接收，请检查通知栏。' : '手机推送订阅已失效，请重新连接。'); });
   button('bgSync', sync);
@@ -175,5 +190,5 @@ window.createLumosBackground = function(adapter) {
       adapter.log('info','普通回复已交给 Cloudflare 后台，页面不会再次调用 AI');
     } finally { releaseBusy(); queue(); }
   }
-  return { managed, queue, sync, submitReply };
+  return { managed, managesAuto, queue, sync, submitReply };
 };
