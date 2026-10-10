@@ -217,3 +217,11 @@ test('BLE tags are stripped even when disabled; two-digit channel parsed',async 
  const {api}=await app(t);api.bleOn(false);let r=api.ble('a[BLE:30:12]b');assert.equal(r.cleaned,'ab');assert.equal(r.bleMatches.length,0);
  api.bleOn(true);r=api.ble('[BLE:30:12]hi');assert.equal(r.cleaned,'hi');assert.deepEqual(JSON.parse(JSON.stringify(r.bleMatches)),[{val:30,ch:12}]);
 });
+test('export includes API keys only when the checkbox is ticked and confirmed',async t=>{
+ const {w,api}=await app(t);const blobs=[];w.URL.createObjectURL=b=>{blobs.push(b);return 'blob:x';};w.HTMLAnchorElement.prototype.click=()=>{};
+ const box=w.document.querySelector('#exportIncludeKey');assert(box);assert.equal(box.checked,false,'default off');
+ const keysOf=async()=>JSON.parse(await blobs.at(-1).text()).dogchat_multi_characters.map(c=>c.apiSettings?.key);
+ w.document.querySelector('#globalExportBtn').click();assert(!(await keysOf()).includes('test-only'));
+ box.checked=true;w.confirm=()=>false;w.document.querySelector('#globalExportBtn').click();assert.equal(blobs.length,1,'cancelled → nothing exported');
+ w.confirm=()=>true;w.document.querySelector('#globalExportBtn').click();assert((await keysOf()).includes('test-only'));
+});

@@ -25,4 +25,4 @@ test('online navigation goes to the network; other paths are left alone',async()
  assert.equal(await open(fetchHandler,'https://lumi729.github.io/other/'),null);
  assert.equal(await open(fetchHandler,'https://lumi729.github.io/Lumi/api/x','cors'),null);
 });
-test('cache version bumped',()=>{assert.match(source,/CACHE_NAME = 'lumos-v26'/);});
+test('cache version bumped',()=>{assert.match(source,/CACHE_NAME = 'lumos-v27'/);});

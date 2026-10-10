@@ -1,4 +1,4 @@
-const CACHE_NAME = 'lumos-v26';
+const CACHE_NAME = 'lumos-v27';
 const urlsToCache = ['/Lumi/', '/Lumi/index.html', '/Lumi/manifest.json', '/Lumi/background-client.js?v=20261010-range-reasoning', '/Lumi/月亮.png', '/Lumi/月亮512.png'];
 const staticUrls = new Set(urlsToCache.map(path => new URL(path, self.location.origin).href));
 
