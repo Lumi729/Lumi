@@ -628,15 +628,18 @@ function _openCharsDB(){
     r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);
   });
 }
+// 读取失败和"没有数据"必须分开：失败时返回这个标记，启动流程绝不能把它当成新用户去覆盖数据
+const _IDB_READ_FAILED = { idbReadFailed: true };
 async function _loadCharsFromIDB(){
   try{
     const db=await _openCharsDB();
-    return new Promise((res,rej)=>{
+    // return await：get()/transaction() 同步抛错或 onerror 也会进 catch，不会绕过去导致白屏
+    return await new Promise((res,rej)=>{
       const tx=db.transaction(_CHARS_STORE_NAME,'readonly');
       const req=tx.objectStore(_CHARS_STORE_NAME).get('main');
       req.onsuccess=()=>res(req.result||null); req.onerror=()=>rej(req.error);
     });
-  }catch(e){return null;}
+  }catch(e){console.error('读取 IndexedDB 角色数据失败',e);return _IDB_READ_FAILED;}
 }
 let _charsReady = false; // IDB 初始加载完成前禁止写入，防止启动竞态把真实数据覆盖成默认角色
 async function _saveCharsToIDB(chars){
@@ -704,8 +707,10 @@ async function _clearCharsIDB(){
   let _saveQuotaWarned = false;
   function save(k,v) { try{ localStorage.setItem('dogchat_multi_'+k, JSON.stringify(v)) } catch(e){ if(!_saveQuotaWarned && (e.name==='QuotaExceededError'||e.name==='NS_ERROR_DOM_QUOTA_REACHED'||e.code===22)){ _saveQuotaWarned=true; setTimeout(()=>{ alert('⚠️ 存储空间不足！数据未能保存。\n建议：立即导出全局备份，然后删除部分历史对话或旧角色释放空间。'); _saveQuotaWarned=false; },0); } } }
   function load(k,def) { try{ const r = localStorage.getItem('dogchat_multi_'+k); return r !== null ? JSON.parse(r) : def } catch(e){ return def } }
-  function getAllSettingsData() { const data = {}; for(let i=0;i<localStorage.length;i++){ const key = localStorage.key(i); if(key && key.startsWith('dogchat_multi_')){ try{ data[key] = JSON.parse(localStorage.getItem(key)) } catch(e){ data[key] = localStorage.getItem(key) } } } try{ if(typeof characters !== 'undefined' && characters.length > 0) data['dogchat_multi_characters'] = characters; } catch(e){} return data }
-  async function restoreAllSettingsData(data) { const keysToRemove = []; for(let i=0;i<localStorage.length;i++){ const key = localStorage.key(i); if(key && key.startsWith('dogchat_multi_')) keysToRemove.push(key) } keysToRemove.forEach(k => localStorage.removeItem(k)); if(data['dogchat_multi_characters'] && Array.isArray(data['dogchat_multi_characters'])){ await _saveCharsToIDB(data['dogchat_multi_characters']); } for(const [key,value] of Object.entries(data)){ if(key === 'dogchat_multi_characters') continue; if(key.startsWith('dogchat_multi_')){ try{ localStorage.setItem(key, JSON.stringify(value)) } catch(e){} } } }
+  // 导出 / 自动备份不带明文 API Key：任何 apiSettings 里的 key 都清空（复制一份，不动内存里的数据）
+  function stripApiKeys(value){ if(Array.isArray(value)) return value.map(stripApiKeys); if(!value || typeof value !== 'object') return value; const out = {}; for(const [k,v] of Object.entries(value)){ out[k] = (k==='apiSettings' && v && typeof v==='object') ? {...stripApiKeys(v), key:''} : stripApiKeys(v); } return out; }
+  function getAllSettingsData() { const data = {}; for(let i=0;i<localStorage.length;i++){ const key = localStorage.key(i); if(key && key.startsWith('dogchat_multi_')){ try{ data[key] = JSON.parse(localStorage.getItem(key)) } catch(e){ data[key] = localStorage.getItem(key) } } } try{ if(typeof characters !== 'undefined' && characters.length > 0) data['dogchat_multi_characters'] = characters; } catch(e){} return stripApiKeys(data) }
+  async function restoreAllSettingsData(data) { const keysToRemove = []; for(let i=0;i<localStorage.length;i++){ const key = localStorage.key(i); if(key && key.startsWith('dogchat_multi_')) keysToRemove.push(key) } keysToRemove.forEach(k => localStorage.removeItem(k)); if(data['dogchat_multi_characters'] && Array.isArray(data['dogchat_multi_characters'])){ /* 备份里没有 API Key：同一个角色在本机已经填过的 Key 保留下来 */ const _restored = data['dogchat_multi_characters']; try{ _restored.forEach(rc=>{ const old = (typeof characters!=='undefined') ? characters.find(c=>c.id===rc.id) : null; if(rc && rc.apiSettings && !rc.apiSettings.key && old?.apiSettings?.key) rc.apiSettings.key = old.apiSettings.key; }); }catch(e){} await _saveCharsToIDB(_restored); } for(const [key,value] of Object.entries(data)){ if(key === 'dogchat_multi_characters') continue; if(key.startsWith('dogchat_multi_')){ try{ localStorage.setItem(key, JSON.stringify(value)) } catch(e){} } } }
   function clearAllSettings() { const keysToRemove = []; for(let i=0;i<localStorage.length;i++){ const key = localStorage.key(i); if(key && key.startsWith('dogchat_multi_')) keysToRemove.push(key) } keysToRemove.forEach(k => localStorage.removeItem(k)) }
   const statusTimeEl = document.getElementById('statusTime'), statusBattery = document.getElementById('statusBattery');
   function updateStatusTime() { const now = new Date(); statusTimeEl.textContent = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}` }
@@ -952,6 +957,7 @@ async function _clearCharsIDB(){
     unreadCount = ac.unreadCount || 0; fetchedCityName = apiSettings.autoWeatherCity || '';
     autoSkipReason = ac.autoSkipReason || null;
     summaries = ac.summaries || [];
+    if(!activeConvId) ac._liveSummaries = summaries; // 「当前聊天」自己的总结，看历史对话时不能被它们的总结替换
     remarkVal = ac.name || '月'; signatureVal = ac.signature || '月夜雪纷纷';
     avatarState.dog = { type: ac.avatarType==='image'?'image':'text', text: ac.avatarEmoji||'🌙', src: ac.avatarSrc||'' };
     activeUserPersonaId = ac.activePersonaId !== undefined ? ac.activePersonaId : (userPersonas.length>0 ? userPersonas[0].id : null);
@@ -974,6 +980,7 @@ async function _clearCharsIDB(){
     ac.unreadCount = unreadCount; ac.lastActive = new Date().toISOString();
     ac.autoSkipReason = autoSkipReason;
     ac.summaries = summaries;
+    if(!activeConvId) ac._liveSummaries = summaries; // 只在「当前聊天」时记下，返回当前聊天用它
     ac.activePersonaId = activeUserPersonaId;
     saveAllData();
     const activePersona = getActiveUserPersona(); if(activePersona){ activePersona.avatar = {...avatarState.user}; saveUserPersonas() }
@@ -1048,6 +1055,8 @@ async function _clearCharsIDB(){
     const lastSumIdx = summaries.length>0 ? (summaries[0].toIdx||0) : 0;
     const msgsToSummarize = chatMessages.filter(m=>m.role!=='hint').slice(lastSumIdx);
     if(msgsToSummarize.length < 3){ if(manual) alert('消息太少，无法生成总结'); return; }
+    // await 期间可能切换对话 / 角色：先记下这次总结属于哪里，回来写回原处
+    const sumTarget = summaries, sumCharId = activeCharacterId, sumConvId = activeConvId || null, sumToIdx = lastSumIdx + msgsToSummarize.length;
     const charName = remarkVal||'角色', userName = getActiveUserPersona()?.name||'用户';
     let histStr = ''; msgsToSummarize.forEach(m=>{
       let sender = m.role==='user' ? userName : charName;
@@ -1065,11 +1074,27 @@ async function _clearCharsIDB(){
       if(!res.ok) throw new Error('HTTP '+res.status);
       const data = await res.json(); const content = data.choices?.[0]?.message?.content?.trim();
       if(!content) throw new Error('返回为空');
-      const newSummary = { id:'sum_'+Date.now().toString(36), timestamp:Date.now(), content, fromIdx:lastSumIdx, toIdx:chatMessages.filter(m=>m.role!=='hint').length, msgCount:msgsToSummarize.length };
-      summaries.unshift(newSummary); saveGlobalsToActiveChar(); saveAllData();
+      const newSummary = { id:'sum_'+Date.now().toString(36), timestamp:Date.now(), content, fromIdx:lastSumIdx, toIdx:sumToIdx, msgCount:msgsToSummarize.length };
+      storeSummary(newSummary, sumTarget, sumCharId, sumConvId);
       if(manual){ renderSummaryList(); const btn = document.getElementById('triggerSummaryBtn'); btn.textContent='立即生成总结'; btn.disabled=false; }
       addLog('info',`大总结已生成，覆盖${newSummary.msgCount}条消息`);
     } catch(e){ addLog('error','大总结生成失败: '+e.message); if(manual){ alert('生成失败: '+e.message); const btn = document.getElementById('triggerSummaryBtn'); btn.textContent='立即生成总结'; btn.disabled=false; } }
+  }
+  // 把总结写回它所属的对话（即使生成期间切走了）；同一个数组可能被多处引用，按 id 去重
+  function storeSummary(sum, target, charId, convId){
+    const add = arr => { if(Array.isArray(arr) && !arr.some(x=>x.id===sum.id)) arr.unshift(sum); };
+    if(activeCharacterId===charId && (activeConvId||null)===convId){ add(summaries); if(target!==summaries) add(target); saveGlobalsToActiveChar(); saveAllData(); return; }
+    const ch = characters.find(c=>c.id===charId); if(!ch){ addLog('warn','大总结生成完时角色已删除，未保存'); return; }
+    add(target);
+    if(convId){
+      const cv = (ch.conversations||[]).find(c=>c.id===convId); if(!cv){ addLog('warn','大总结生成完时对话已删除，未保存'); return; }
+      if(!Array.isArray(cv.summaries)) cv.summaries = []; add(cv.summaries);
+      if((ch.activeConversationId||null)===convId){ if(!Array.isArray(ch.summaries)) ch.summaries = []; add(ch.summaries); }
+    } else {
+      if(!Array.isArray(ch._liveSummaries)) ch._liveSummaries = []; add(ch._liveSummaries);
+      if(!ch.activeConversationId){ if(!Array.isArray(ch.summaries)) ch.summaries = []; add(ch.summaries); }
+    }
+    saveAllData();
   }
   async function checkSummaryTrigger(){
     if(!apiSettings.summaryEnabled) return;
@@ -1323,7 +1348,7 @@ async function _clearCharsIDB(){
   closePersonaSelectBtn.addEventListener('click',()=> personaSelectModal.classList.remove('show'));
   personaSelectModal.addEventListener('click',e=>{ if(e.target===personaSelectModal) personaSelectModal.classList.remove('show') });
   selectPersonaBtn.addEventListener('click',openPersonaSelectModal);
-  globalExportBtn.addEventListener('click',()=>{ saveGlobalsToActiveChar(); const allData = getAllSettingsData(); const blob = new Blob([JSON.stringify(allData,null,2)],{type:'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'dogchat_full_backup_'+new Date().toISOString().slice(0,10)+'.json'; a.click(); alert('全部设置已导出！'); addLog('info','全局设置已导出') });
+  globalExportBtn.addEventListener('click',()=>{ saveGlobalsToActiveChar(); const allData = getAllSettingsData(); const blob = new Blob([JSON.stringify(allData,null,2)],{type:'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'dogchat_full_backup_'+new Date().toISOString().slice(0,10)+'.json'; a.click(); alert('全部设置已导出！\n为了安全，备份文件里不含 API Key；恢复时会保留本机已填的 Key，换设备恢复后需要重新填写。'); addLog('info','全局设置已导出（不含 API Key）') });
   globalImportBtn.addEventListener('click',()=>{ globalImportFile.value=''; globalImportFile.click() });
   globalImportFile.addEventListener('change',async function(e){ const file = e.target.files[0]; if(!file) return; const ok = await showConfirmDialog('导入将覆盖所有现有设置，确定吗？'); if(!ok){ this.value=''; return } const reader = new FileReader(); reader.onload = async function(ev){ try{ const data = JSON.parse(ev.target.result); if(typeof data!=='object' || Object.keys(data).length===0){ alert('文件格式不正确'); return } await restoreAllSettingsData(data); location.reload() } catch(err){ alert('导入失败：'+err.message) } }; reader.readAsText(file); this.value = '' });
   globalResetBtn.addEventListener('click',async()=>{ const ok = await showConfirmDialog('确定要恢复默认设置吗？将清除所有数据，建议先导出备份。'); if(!ok) return; clearAllSettings(); await _clearCharsIDB(); location.reload() });
@@ -1545,12 +1570,18 @@ async function _clearCharsIDB(){
     return wrapper;
   }
   function saveChatHistory(){ saveGlobalsToActiveChar() }
-  function syncHistoryFromChat(){ messageHistory = chatMessages.filter(m=>m.role!=='hint').map(m=>{ if(m.role==='user' && m.recalled) return {role:'user', content:'[用户撤回了一条消息]'}; if(m.role==='dog' && m.recalled) return {role:'assistant', content:'[AI撤回了一条消息]'}; let content = m.text;
+  // 由聊天记录重建发给模型的历史：保留引用、@、图片（多模态格式），撤回分用户 / AI。
+  // 历史只存在角色数据（IndexedDB）里，不写 localStorage（启动时已删掉那个键，长聊天会撑爆配额）。
+  function buildHistoryFromMessages(msgs, charName){ return msgs.filter(m=>m.role!=='hint').map(m=>{ if(m.role==='user' && m.recalled) return {role:'user', content:'[用户撤回了一条消息]'}; if(m.role!=='user' && m.recalled) return {role:'assistant', content:'[AI撤回了一条消息]'}; let content = m.text;
       if(m.role==='user') {
-        if(m.quoteText) { const who=m.quoteRole==='user'?'我':remarkVal||'月'; content=`[用户引用了来自"${who}"的消息：\n"${m.quoteText}"\n---]\n${content}`; }
+        const hasImage = typeof m.imageDataUrl === 'string' && m.imageDataUrl;
+        if(hasImage && (!content || content==='[图片]')) content = '[用户发送了一张图片，请描述你看到了什么，并做出回应]';
+        else if(m.quoteText) { const who=m.quoteRole==='user'?'我':charName||'月'; content=`[用户引用了来自"${who}"的消息：\n"${m.quoteText}"\n---]\n${content}`; }
         if(m.mentionName) content=`[@${m.mentionName}] ${content}`;
+        if(hasImage) return {role:'user', content:[{type:'image_url', image_url:{url:m.imageDataUrl}}, {type:'text', text:content}]};
       }
-      return {role: m.role==='user'?'user':'assistant', content} }); save('messageHistory',messageHistory) }
+      return {role: m.role==='user'?'user':'assistant', content} }); }
+  function syncHistoryFromChat(){ messageHistory = buildHistoryFromMessages(chatMessages, remarkVal); }
   function createTimeStampDiv(ts){ const div = document.createElement('div'); div.className='time-stamp'; div.dataset.timestamp = ts; div.textContent = formatTimeDivider(ts,Date.now()); return div }
   function addCenteredHint(text){ const div = document.createElement('div'); div.className='time-stamp'; div.textContent = text; chatArea.appendChild(div); chatArea.scrollTop = chatArea.scrollHeight; }
   function reloadChatUI(keepScroll=false){ const savedScroll = keepScroll ? chatArea.scrollTop : -1; const children = chatArea.children; while(children.length>1) chatArea.removeChild(children[1]); let lastTs = null; chatMessages.forEach(msg=>{ ensureMsgTimestamp(msg); const ts = msg.timestamp; if(lastTs===null || (ts-lastTs)>=300000){ chatArea.appendChild(createTimeStampDiv(ts)); lastTs = ts } else { lastTs = Math.max(lastTs,ts) } if(msg.role==='hint'){ const hintDiv = document.createElement('div'); hintDiv.className='time-stamp'; hintDiv.textContent = msg.text; chatArea.appendChild(hintDiv); } else if(msg.role==='user'){ if(msg.imageDataUrl){ const wrapper = document.createElement('div'); wrapper.className='msg-wrapper msg-wrapper-right'; wrapper.id='msg-'+msg.id; const row = document.createElement('div'); row.className='message-row message-right'; row.appendChild(createAvatar('user',msg.senderId)); const body = document.createElement('div'); body.className='msg-body msg-body-right'; const bubble = document.createElement('div'); bubble.className='bubble bubble-right'; const img = document.createElement('img'); img.className='bubble-img'; img.src=msg.imageDataUrl; bubble.appendChild(img); const txtPart = msg.text && msg.text!=='[图片]' ? msg.text : ''; if(txtPart){ const mt=document.createElement('div'); mt.className='msg-text'; mt.textContent=txtPart; mt.style.marginTop='6px'; bubble.appendChild(mt); } const meta=document.createElement('div'); meta.className='msg-meta'; meta.innerHTML='<span class="read-tag">已读</span>'; bubble.appendChild(meta); body.appendChild(bubble); row.appendChild(body); wrapper.appendChild(row); chatArea.appendChild(wrapper); } else { chatArea.appendChild(createUserMsg(msg.text,msg.id,msg.quoteText,msg.quoteRole,msg.quoteId,msg.senderId,msg.recalled,msg.mentionName)); } } else chatArea.appendChild(createDogMsg(msg.text,msg.reasoning,true,msg.id,msg.quoteText,msg.quoteRole,msg.quoteId,msg.senderId,msg.recalled,msg.recalledText, msg.senderName)); }); chatMessages.filter(m=>m.backgroundHongbao && !m.recalled).forEach(m=>{ const wrapper=document.getElementById('msg-'+m.id); const bubble=wrapper?.querySelector('.bubble-left'); if(bubble) { bubble.textContent=''; bubble.appendChild(renderHongbaoBubble(m.backgroundHongbao.amount,m.backgroundHongbao.note,remarkVal,true)); } }); if(savedScroll >= 0) chatArea.scrollTop = savedScroll; else chatArea.scrollTop = chatArea.scrollHeight }
@@ -1716,8 +1747,15 @@ async function _clearCharsIDB(){
     document.body.appendChild(banner); setTimeout(()=>banner.remove(),6500);
   }
 
+  // 用户发起的一轮：入口检查通过就立刻占住 waiting，读天气 / 钱包的等待期间不会再进来第二轮；不论怎么结束都会复位
   async function triggerAiReply(isAutoReply=false, overrideMinMsgs=null, overrideMaxMsgs=null, skipUI=false, isActiveChat=false, options={}){
     if(!isAutoReply && waiting) return;
+    const claimed = !isAutoReply && !options.prepareBackground;
+    if(claimed) waiting = true;
+    try { return await runAiReply(isAutoReply, overrideMinMsgs, overrideMaxMsgs, skipUI, isActiveChat, options); }
+    finally { if(claimed) waiting = false; }
+  }
+  async function runAiReply(isAutoReply=false, overrideMinMsgs=null, overrideMaxMsgs=null, skipUI=false, isActiveChat=false, options={}){
     const replySource = captureReplySource();
     let {chatMessages, messageHistory, apiSettings, chatType, members, remarkVal, avatarState} = replySource;
     function saveChatHistory() { persistReplySource(replySource); }
@@ -2017,7 +2055,15 @@ async function _clearCharsIDB(){
           cleanedForSeg = cleanedForSeg.replace(/\[改名[：:].+?\]/g,'').replace(/\[切换[到]?[：:]?(?:私聊|见面|群聊)[：:].+?\]/g,'').trim();
         }
         if(isReplySourceActive(replySource)) await sendExtractedBleCommands(bleExtraction.bleMatches);
-        if(isReplySourceActive(replySource) && hongbaoExtraction.hongbaoList.length > 0) await processHongbao(hongbaoExtraction.hongbaoList);
+        // 红包：和后台一样先查角色余额，够才扣；结果存成聊天消息（刷新也在），余额不够就写明没发出
+        const hongbaoMsgs = [];
+        if(hongbaoExtraction.hongbaoList.length > 0){
+          const hbChar = characters.find(c=>c.id===replyTargetId);
+          for(const [hbi, hb] of hongbaoExtraction.hongbaoList.entries()){
+            let ok = false; try { ok = hbChar ? await sendFrontHongbao(hbChar, hb) : false; } catch(e){ console.warn('红包保存失败', e); }
+            hongbaoMsgs.push({id:'msg_hb_'+Date.now().toString(36)+hbi+Math.random().toString(36).substr(2,4), role:'dog', text: ok ? '🧧 红包 ¥'+hb.amount+(hb.note?'：'+hb.note:'') : '🧧 红包未发出：余额不足或金额无效', reasoning:null, timestamp:Date.now(), isAutoReply:isAutoReply||false, senderId:null, senderName:null, recalled:false, recalledText:'', backgroundHongbao: ok ? {amount:hb.amount, note:hb.note||''} : null});
+          }
+        }
         if(!isReplySourceActive(replySource)) { skipUI = true; loadingWrapper?.remove(); }
         let segmentsRaw = cleanedForSeg.split(/\n{2,}/).filter(s=>s.trim()!==''); if(segmentsRaw.length===0 && cleanedForSeg) segmentsRaw = [cleanedForSeg];
         let newSegments = [];
@@ -2025,7 +2071,7 @@ async function _clearCharsIDB(){
         if(chatType==='group'){
           const parsedSegments = parseGroupResponse(cleanedForSeg, members);
           parsedSegments.forEach(seg => {
-            seg.text = seg.text.replace(/\[BLE[:：]\d+(?:[:：]\d)?\]/g,'').replace(/\[红包[:：]\d+(?:\.\d+)?(?:[:：].+?)?\]/g,'').replace(/\[切换[到]?[：:]?(?:私聊|见面|群聊)[：:].+?\]/g,'').replace(/\[改名[：:].+?\]/g,'').trim();
+            seg.text = seg.text.replace(/\[BLE[:：]\d+(?:[:：][^\]]*)?\]/g,'').replace(/\[红包[:：]\d+(?:\.\d+)?(?:[:：].+?)?\]/g,'').replace(/\[切换[到]?[：:]?(?:私聊|见面|群聊)[：:].+?\]/g,'').replace(/\[改名[：:].+?\]/g,'').trim();
             if(seg.text.startsWith('[AUTO_SKIP]')){
               let reason = seg.text.replace('[AUTO_SKIP]','').trim() || '未提供具体理由';
               reason = reason.replace(/^(理由[：:]?\s*)/, '').trim();
@@ -2045,7 +2091,7 @@ async function _clearCharsIDB(){
               });
             }
           });
-          if(newSegments.length === 0 && skipReasons.length > 0 && !isAutoReply && !skipUI){
+          if(newSegments.length === 0 && skipReasons.length > 0 && hongbaoMsgs.length === 0 && !isAutoReply && !skipUI){
             if(loadingWrapper) loadingWrapper.remove();
             chatMessages.push({id:'msg_'+Date.now().toString(36)+Math.random().toString(36).substr(2,5), role:'hint', text:'这次冷场王是我自己！', timestamp:Date.now()});
             addCenteredHint('这次冷场王是我自己！');
@@ -2070,7 +2116,7 @@ async function _clearCharsIDB(){
         }
         const recallSenderId = options.allowedMemberIds?.length===1 ? options.allowedMemberIds[0] : null;
         const { recalledIds } = isReplySourceActive(replySource) ? processAiRecall(finalContent, newSegments, recallSenderId) : {recalledIds:[]}; if (recalledIds.length > 0) showRecallHint(recalledIds);
-        if(newSegments.length === 0 && skipReasons.length === 0){
+        if(newSegments.length === 0 && skipReasons.length === 0 && hongbaoMsgs.length === 0){
           if(!skipUI && loadingWrapper) loadingWrapper.remove();
           if(!skipUI) addCenteredHint('AI 本轮没有输出有效消息');
           waiting=false; if(!skipUI){ sendBtn.disabled=false; retryBtn.disabled=false; }
@@ -2098,17 +2144,19 @@ async function _clearCharsIDB(){
         if (skipReasons.length > 0) {
           showAutoSkipHint(skipReasons.join('；'));
         }
-        if(newSegments.length === 0 && !skipUI){
+        if(newSegments.length === 0 && hongbaoMsgs.length === 0 && !skipUI){
           const hintMsg = '（AI 本轮未产生有效回复）';
           const hintId = 'msg_'+Date.now().toString(36)+Math.random().toString(36).substr(2,5);
           chatMessages.push({id:hintId, role:'hint', text:hintMsg, timestamp:Date.now()});
           if(fragment) { const hintDiv = document.createElement('div'); hintDiv.className='time-stamp'; hintDiv.textContent=hintMsg; fragment.appendChild(hintDiv); }
         }
-        // 渲染红包气泡
-        if(!skipUI && hongbaoExtraction.hongbaoList.length > 0 && fragment){
-          const hbCharName = characters.find(c=>c.id===activeCharacterId)?.charSettings?.name || remarkVal || '角色';
-          hongbaoExtraction.hongbaoList.forEach(hb=>{
-            const wrapper = document.createElement('div');
+        // 红包消息：存进聊天记录，再渲染（没发出的就是一句普通文字）
+        const hbCharName = characters.find(c=>c.id===replyTargetId)?.charSettings?.name || remarkVal || '角色';
+        hongbaoMsgs.forEach((hm, hi)=>{ hm.timestamp = now + newSegments.length + hi; chatMessages.push(hm); });
+        if(!skipUI && fragment) hongbaoMsgs.forEach(hm=>{
+            if(!hm.backgroundHongbao){ fragment.appendChild(createDogMsg(hm.text, null, false, hm.id, null, null, null, null, false, '', null)); return; }
+            const hb = hm.backgroundHongbao;
+            const wrapper = document.createElement('div'); wrapper.id = 'msg-'+hm.id;
             wrapper.className = 'msg-wrapper msg-wrapper-left';
             const row = document.createElement('div');
             row.className = 'message-row message-left';
@@ -2119,13 +2167,12 @@ async function _clearCharsIDB(){
             row.appendChild(renderHongbaoBubble(hb.amount, hb.note, hbCharName, false));
             wrapper.appendChild(row);
             fragment.appendChild(wrapper);
-          });
-        }
+        });
         messageHistory.push({role:'assistant',content:finalContent||''}); saveChatHistory();
         if (!skipUI && loadingWrapper) { loadingWrapper.replaceWith(fragment); } else if (loadingWrapper) { loadingWrapper.remove(); }
         if(needsRenameReload) reloadChatUI(true);
         if(currentAutoReplyLog){ currentAutoReplyLog.response = finalContent; currentAutoReplyLog.skipped = false; currentAutoReplyLog = null; }
-        notifyIncomingReply(newSegments);
+        notifyIncomingReply([...newSegments, ...hongbaoMsgs]);
         if(window._pendingBleHints && window._pendingBleHints.length > 0){
           const bleTs = Date.now();
           window._pendingBleHints.forEach((label,i)=>{
@@ -2152,14 +2199,14 @@ async function _clearCharsIDB(){
   retryBtn.addEventListener('click',retryLastAiReply);
   chatArea.addEventListener('click',function(e){ const target = e.target; if(!target.classList.contains('action-edit')&&!target.classList.contains('action-copy')&&!target.classList.contains('action-quote')&&!target.classList.contains('action-regenerate')&&!target.classList.contains('action-recall')&&!target.classList.contains('action-delete')&&!target.classList.contains('action-branch')&&!target.classList.contains('action-mention')) return; e.stopPropagation(); const msgId = target.dataset.msgId; const msg = chatMessages.find(m=>m.id===msgId); if(!msg||msg.recalled) return; if(target.classList.contains('action-mention')){ const name = msg.senderName || (msg.role==='user' ? (getActiveUserPersona()?.name||'用户') : remarkVal); const id = msg.senderId || null; setMention(name, id); messageInput.focus(); } else if(target.classList.contains('action-edit')){ startInlineEdit(msgId) } else if(target.classList.contains('action-copy')){ navigator.clipboard.writeText(msg.text).then(()=>alert('已复制')).catch(()=>alert('复制失败')) } else if(target.classList.contains('action-quote')){ currentQuote = {id:msg.id,text:msg.text,role:msg.role}; updateQuoteHint() } else if(target.classList.contains('action-regenerate')){ const index = chatMessages.findIndex(m=>m.id===msgId); if(index===-1||chatMessages[index].role!=='dog') return; let lastUserIdx=-1; for(let i=index-1;i>=0;i--){ if(chatMessages[i].role==='user'&&!chatMessages[i].recalled){ lastUserIdx=i; break } } if(lastUserIdx===-1){ alert('前面没有用户消息'); return } if(!confirm('重说将重新生成这一轮AI回复，确定吗？')) return; chatMessages = chatMessages.slice(0,lastUserIdx+1); syncHistoryFromChat(); saveChatHistory(); reloadChatUI(); pendingUserMessages=[]; updateSendHint(); triggerAiReply(false) } else if(target.classList.contains('action-recall')){ const index = chatMessages.findIndex(m=>m.id===msgId); if(index===-1||chatMessages[index].role!=='user'||chatMessages[index].recalled) return; if(!confirm('确定要撤回这条消息吗？')) return; chatMessages[index].text = '你撤回了一条消息'; chatMessages[index].recalled = true; syncHistoryFromChat(); saveChatHistory(); reloadChatUI() } else if(target.classList.contains('action-branch')){ branchConversation(msgId) } else if(target.classList.contains('action-delete')){ openDeleteModal() } });
   chatArea.addEventListener('click',function(e){ const bubble = e.target.closest('.bubble-left, .bubble-right'); if(!bubble || bubble.classList.contains('recalled-bubble') || e.target.closest('.message-actions') || e.target.closest('.reasoning-btn')) return; document.querySelectorAll('.bubble-left.show-actions, .bubble-right.show-actions').forEach(b=>{ if(b!==bubble) b.classList.remove('show-actions') }); bubble.classList.toggle('show-actions') });
-  function branchConversation(msgId){ const index = chatMessages.findIndex(m=>m.id===msgId); if(index===-1) return; if(!confirm('分支将当前完整对话存档，并从此处截断，后续消息将被移除。确定分支吗？')) return; const timestamp = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19); const newConv = {id:Date.now().toString(36)+Math.random().toString(36).substr(2,5),name:`分支 ${timestamp}`,timestamp:new Date().toISOString(),messages:chatMessages.slice(),history:messageHistory.slice()}; conversations.push(newConv); chatMessages = chatMessages.slice(0,index+1); const newHistory = []; for(const msg of chatMessages){ if(msg.recalled) newHistory.push({role:msg.role==='user'?'user':'assistant',content:`[${msg.role==='user'?'用户':'AI'}撤回了一条消息]`}); else newHistory.push({role:msg.role==='user'?'user':'assistant',content:msg.text}) } messageHistory = newHistory; pendingUserMessages=[]; updateSendHint(); saveChatHistory(); reloadChatUI(); if(manageModal.classList.contains('show')) renderConversations(); alert(`分支"${newConv.name}"已创建。`); setTimeout(()=>{ chatArea.scrollTop=chatArea.scrollHeight; },50); }
+  function branchConversation(msgId){ const index = chatMessages.findIndex(m=>m.id===msgId); if(index===-1) return; if(!confirm('分支将当前完整对话存档，并从此处截断，后续消息将被移除。确定分支吗？')) return; const timestamp = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19); const newConv = {id:Date.now().toString(36)+Math.random().toString(36).substr(2,5),name:`分支 ${timestamp}`,timestamp:new Date().toISOString(),messages:chatMessages.slice(),history:messageHistory.slice(),summaries:summaries.slice()}; conversations.push(newConv); chatMessages = chatMessages.slice(0,index+1); messageHistory = buildHistoryFromMessages(chatMessages, remarkVal); const _keptCount = chatMessages.filter(m=>m.role!=='hint').length; summaries = summaries.filter(sm=>(sm.toIdx||0) <= _keptCount); /* 截断后只留下完全在保留范围内的总结，toIdx 不会指到被删掉的消息 */ pendingUserMessages=[]; updateSendHint(); saveChatHistory(); reloadChatUI(); if(manageModal.classList.contains('show')) renderConversations(); alert(`分支"${newConv.name}"已创建。`); setTimeout(()=>{ chatArea.scrollTop=chatArea.scrollHeight; },50); }
   function saveCurrentConversation(){ if(chatMessages.length===0&&!activeConvId) return; const now = new Date().toISOString(); const conv = conversations.find(c=>c.id===activeConvId); if(conv){ conv.timestamp=now; conv.messages=chatMessages.slice(); conv.history=messageHistory.slice(); conv.summaries=summaries.slice() } else if(activeConvId){ conversations.push({id:activeConvId,name:remarkVal||'未命名',timestamp:now,messages:chatMessages.slice(),history:messageHistory.slice(),summaries:summaries.slice()}) } else { const convId = Date.now().toString(36)+Math.random().toString(36).substr(2,5); conversations.push({id:convId,name:remarkVal||'未命名',timestamp:now,messages:chatMessages.slice(),history:messageHistory.slice(),summaries:summaries.slice()}); activeConvId = convId } saveGlobalsToActiveChar() }
   function archiveCurrentConversation(){ if(chatMessages.length===0) return; const timestamp = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19); const newConv = {id:Date.now().toString(36)+Math.random().toString(36).substr(2,5),name:`自动存档 ${timestamp}`,timestamp:new Date().toISOString(),messages:chatMessages.slice(),history:messageHistory.slice(),summaries:summaries.slice()}; conversations.push(newConv); saveGlobalsToActiveChar() }
   function saveAsNewConversation(){ if(chatMessages.length===0){ alert('当前没有消息'); return } const timestamp = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19); const newConv = {id:Date.now().toString(36)+Math.random().toString(36).substr(2,5),name:`手动存档 ${timestamp}`,timestamp:new Date().toISOString(),messages:chatMessages.slice(),history:messageHistory.slice(),summaries:summaries.slice()}; conversations.push(newConv); saveGlobalsToActiveChar(); renderConversations(); alert('已保存到历史聊天') }
   function switchConversation(id){ if(activeConvId===id) return; if(chatMessages.length>0||activeConvId) saveCurrentConversation(); const conv = conversations.find(c=>c.id===id); if(!conv) return; chatMessages = conv.messages.slice(); messageHistory = conv.history.slice(); summaries = conv.summaries ? conv.summaries.slice() : []; activeConvId = id; chatMessages.forEach(ensureMsgId); chatMessages.forEach(ensureMsgTimestamp); saveGlobalsToActiveChar(); pendingUserMessages=[]; updateSendHint(); reloadChatUI(); manageModal.classList.remove('show') }
-  function deleteConversation(id){ if(!confirm('确定要删除这个对话吗？')) return; conversations = conversations.filter(c=>c.id!==id); if(activeConvId===id){ const _liveAc=getActiveCharacter(); chatMessages=_liveAc?(_liveAc.chatMessages||[]).slice():[]; messageHistory=_liveAc?(_liveAc.messageHistory||[]).slice():[]; chatMessages.forEach(ensureMsgId); chatMessages.forEach(ensureMsgTimestamp); activeConvId=null; saveGlobalsToActiveChar(); pendingUserMessages=[]; updateSendHint(); reloadChatUI() } saveGlobalsToActiveChar(); renderConversations() }
+  function deleteConversation(id){ if(!confirm('确定要删除这个对话吗？')) return; conversations = conversations.filter(c=>c.id!==id); if(activeConvId===id){ const _liveAc=getActiveCharacter(); chatMessages=_liveAc?(_liveAc.chatMessages||[]).slice():[]; messageHistory=_liveAc?(_liveAc.messageHistory||[]).slice():[]; summaries=_liveAc?(_liveAc._liveSummaries||[]).slice():[]; /* 删掉正在看的对话：回到当前聊天，总结也换回当前聊天的 */ chatMessages.forEach(ensureMsgId); chatMessages.forEach(ensureMsgTimestamp); activeConvId=null; saveGlobalsToActiveChar(); pendingUserMessages=[]; updateSendHint(); reloadChatUI() } saveGlobalsToActiveChar(); renderConversations() }
   function startRenameConversation(id){ const container = document.getElementById('historyList'); const item = container.querySelector(`[data-conv-id="${id}"]`); if(!item) return; const nameSpan = item.querySelector('.item-name'), editGroup = item.querySelector('.edit-name-group'), input = editGroup.querySelector('input'); const conv = conversations.find(c=>c.id===id); input.value = conv.name; nameSpan.style.display='none'; editGroup.style.display='flex'; input.focus(); const saveAndClose = ()=>{ const n = input.value.trim(); if(n){ conv.name = n; nameSpan.textContent = n; saveGlobalsToActiveChar() } nameSpan.style.display=''; editGroup.style.display='none' }; const confirmBtn = editGroup.querySelector('.cancel-name-btn'); if(confirmBtn){ confirmBtn.textContent='确认'; confirmBtn.onclick = saveAndClose } const saveBtn = editGroup.querySelector('.save-name-btn'); if(saveBtn) saveBtn.style.display='none'; input.onkeydown = e=>{ if(e.key==='Enter') saveAndClose(); if(e.key==='Escape'){ nameSpan.style.display=''; editGroup.style.display='none' } } }
-  function returnToLiveChat(){ const ac = getActiveCharacter(); if(!ac) return; const liveMessages = ac.chatMessages || []; if(liveMessages.length===0 && !activeConvId){ alert('当前没有可返回的聊天'); return; } if(activeConvId) saveCurrentConversation(); activeConvId=null; chatMessages = liveMessages.slice(); messageHistory = (ac.messageHistory||[]).slice(); summaries = (ac._liveSummaries || ac.summaries || []).slice(); chatMessages.forEach(ensureMsgId); chatMessages.forEach(ensureMsgTimestamp); saveGlobalsToActiveChar(); pendingUserMessages=[]; updateSendHint(); reloadChatUI(); manageModal.classList.remove('show'); }
+  function returnToLiveChat(){ const ac = getActiveCharacter(); if(!ac) return; const liveMessages = ac.chatMessages || []; if(liveMessages.length===0 && !activeConvId){ alert('当前没有可返回的聊天'); return; } if(activeConvId) saveCurrentConversation(); activeConvId=null; chatMessages = liveMessages.slice(); messageHistory = (ac.messageHistory||[]).slice(); summaries = (ac._liveSummaries || []).slice(); chatMessages.forEach(ensureMsgId); chatMessages.forEach(ensureMsgTimestamp); saveGlobalsToActiveChar(); pendingUserMessages=[]; updateSendHint(); reloadChatUI(); manageModal.classList.remove('show'); }
   function renderConversations(){ const container = document.getElementById('historyList'); if(!container) return; const ac = getActiveCharacter(); const liveMessages = ac ? (ac.chatMessages||[]) : []; const showReturnBtn = activeConvId && liveMessages.length > 0; let html = ''; if(showReturnBtn){ html += `<div class="history-item" style="background:rgba(149,236,105,.15);border-left:3px solid #95ec69;" id="returnToLiveChatItem"><div class="item-info" style="cursor:pointer;"><div class="item-name">↩ 返回当前聊天</div><div class="item-time">共 ${liveMessages.length} 条消息</div></div></div>`; } if(conversations.length===0){ html += '<div style="text-align:center;color:#999;padding:10px;">暂无历史对话</div>'; } else { html += conversations.map(c=>`<div class="history-item" data-conv-id="${escapeHtml(c.id)}"><div class="item-info" data-id="${escapeHtml(c.id)}"><div class="item-name">${escapeHtml(c.name)}</div><div class="item-time">${new Date(c.timestamp).toLocaleString()}</div><div class="edit-name-group"><input type="text" /><button class="save-name-btn">保存</button><button class="cancel-name-btn">取消</button></div></div><div class="item-actions"><button class="item-rename" data-id="${escapeHtml(c.id)}">✎</button><button class="item-delete" data-id="${escapeHtml(c.id)}">✕</button></div></div>`).join(''); } container.innerHTML = html; if(showReturnBtn){ document.getElementById('returnToLiveChatItem')?.querySelector('.item-info')?.addEventListener('click', returnToLiveChat); } container.querySelectorAll('.item-info').forEach(el=> el.addEventListener('click',function(e){ if(e.target.closest('.edit-name-group')||e.target.closest('.item-rename')) return; switchConversation(this.dataset.id) })); container.querySelectorAll('.item-rename').forEach(btn=> btn.addEventListener('click',function(e){ e.stopPropagation(); startRenameConversation(this.dataset.id) })); container.querySelectorAll('.item-delete').forEach(btn=> btn.addEventListener('click',function(e){ e.stopPropagation(); deleteConversation(this.dataset.id) })) }
   function renderSkipLogs(){ if(!skipLogList) return; const logs = apiSettings.autoSkipLogs || []; if(logs.length === 0){ skipLogList.innerHTML = '<div style="color:#999;padding:5px;font-size:12px;">暂无拒绝记录</div>'; return; } skipLogList.innerHTML = logs.map(log=>{ const time = new Date(log.time).toLocaleString(); return `<div class="skip-log-item"><div class="skip-time">${time}</div><div class="skip-reason">屏幕那端传来了消息，是TA憋在心里的...：${escapeHtml(log.reason)}</div></div>`; }).join(''); }
   if (changeBgBtn) { changeBgBtn.addEventListener('click', () => { if (bgFileInput) bgFileInput.click(); }); }
@@ -2568,20 +2615,20 @@ async function _clearCharsIDB(){
     return {cleaned: cleaned.trim(), hongbaoList: matches};
   }
 
-  async function processHongbao(hongbaoList){
-    for(const hb of hongbaoList){
-      const txData = {
-        id: 'wtx_'+Date.now().toString(36)+Math.random().toString(36).substr(2,5),
-        charId: activeCharacterId,
-        charName: characters.find(c=>c.id===activeCharacterId)?.charSettings?.name || '角色',
-        amount: hb.amount,
-        type: 'hongbao',
-        category: '',
-        note: hb.note,
-        timestamp: Date.now()
+  // 前台红包：同一个事务里查余额再扣（和 importBackgroundHongbao 一样），余额不够或金额无效就不记账，返回是否发出
+  async function sendFrontHongbao(char, hb){
+    const db=await _openWalletDB();
+    return new Promise((resolve,reject)=>{
+      const tx=db.transaction(_WALLET_STORE,'readwrite'), store=tx.objectStore(_WALLET_STORE); let accepted=false;
+      const req=store.getAll();
+      req.onsuccess=()=>{
+        const amount=Number(hb.amount), balance=walletCalcBalances(req.result,char.id).char;
+        accepted=Number.isFinite(amount) && amount>0 && amount<=balance;
+        if(accepted) store.put({id:'wtx_'+Date.now().toString(36)+Math.random().toString(36).substr(2,5),charId:char.id,charName:char.charSettings?.name||char.name||'角色',amount,type:'hongbao',category:'',note:hb.note||'',timestamp:Date.now()});
       };
-      await walletAddTx(txData);
-    }
+      tx.oncomplete=()=>{db.close();resolve(accepted);};
+      tx.onerror=()=>{db.close();reject(tx.error);};tx.onabort=()=>{db.close();reject(tx.error||new Error('红包保存失败'));};
+    });
   }
 
   async function importBackgroundHongbao(char, reply, action, index) {
@@ -2846,7 +2893,8 @@ async function _clearCharsIDB(){
     const msgData = {id:userMsgId, role:'user', text:displayText, timestamp:ts, isAutoReply:false, senderId:senderId, senderName:null,
       quoteText:quote?.text, quoteRole:quote?.role, quoteId:quote?.id,
       mentionName:mention?.name||null, mentionId:mention?.id||null};
-    if(hasImage) msgData.imageDataUrl = pendingImage.dataUrl;
+    const imageUrl = hasImage ? pendingImage.dataUrl : null; // 发送后 pendingImage 会被清空，点击放大要用这份
+    if(hasImage) msgData.imageDataUrl = imageUrl;
     chatMessages.push(msgData);
 
     // messageHistory：带图片的话用 multimodal content 格式
@@ -2879,7 +2927,7 @@ async function _clearCharsIDB(){
       const body = document.createElement('div'); body.className='msg-body msg-body-right';
       const bubble = document.createElement('div'); bubble.className='bubble bubble-right';
       const img = document.createElement('img'); img.className='bubble-img'; img.src=pendingImage.dataUrl;
-      img.addEventListener('click',()=>{ imgFullscreenImg.src=pendingImage.dataUrl; imgFullscreen.classList.add('show'); });
+      img.addEventListener('click',()=>{ imgFullscreenImg.src=imageUrl; imgFullscreen.classList.add('show'); });
       bubble.appendChild(img);
       if(text){ const mt = document.createElement('div'); mt.className='msg-text'; mt.textContent=text; mt.style.marginTop='6px'; bubble.appendChild(mt); }
       const meta = document.createElement('div'); meta.className='msg-meta'; meta.innerHTML='<span class="read-tag">已读</span>'; bubble.appendChild(meta);
@@ -2908,11 +2956,12 @@ async function _clearCharsIDB(){
     }
   });
 
+  // 蓝牙开关关着也要把 [BLE:..] 标签去掉（只是不发指令）；通道支持两位数
   function extractBleCommands(content){
-    if(!apiSettings.bleControlEnabled) return {cleaned: content, bleMatches: []};
+    const enabled = !!apiSettings.bleControlEnabled;
     const bleMatches = [];
-    const cleaned = content.replace(/\[BLE[:：](\d+)(?:[:：](\d))?\]/g, (m, val, ch)=>{
-      bleMatches.push({val: parseInt(val)||1, ch: parseInt(ch)||1});
+    const cleaned = content.replace(/\[BLE[:：](\d+)(?:[:：]([^\]]*))?\]/g, (m, val, ch)=>{
+      if(enabled) bleMatches.push({val: parseInt(val)||1, ch: parseInt(ch)||1});
       return '';
     });
     return {cleaned: cleaned.trim(), bleMatches};
@@ -3266,7 +3315,7 @@ async function _clearCharsIDB(){
                 if (!messages.some(m=>m.id===id)) messages.push({id,role:'dog',text:result ? '🧧 红包 ¥'+action.amount+(action.note?'：'+action.note:'') : '🧧 红包未发出：余额不足或金额无效',timestamp:reply.timestamp,backgroundHongbao:result ? action : null,isAutoReply:reply.isAutoReply!==false});
               }
             }
-            history.splice(0,history.length,...messages.filter(m=>m.role!=='hint').map(m=>({role:m.role==='user'?'user':'assistant',content:m.recalled?'[AI撤回了一条消息]':m.text})));
+            history.splice(0,history.length,...buildHistoryFromMessages(messages, char.name)); // 和 syncHistoryFromChat 同一套：保留引用、@、图片，用户撤回写用户撤回
           }
           if (reply.error) addLog('warn','后台普通回复：'+reply.error);
           if (reply.daily && reply.daily.version !== 2) {
@@ -3348,6 +3397,15 @@ async function _clearCharsIDB(){
     ].forEach(k=>{ try{ localStorage.removeItem(k); }catch(e){} });
 
     const _idbChars = await _loadCharsFromIDB();
+    if(_idbChars === _IDB_READ_FAILED){
+      // 读取失败 ≠ 新用户：不设 _charsReady（写入保持锁定）、不建默认角色、不写库，只提示刷新
+      const box=document.createElement('div');box.id='idbLoadFailed';
+      box.style.cssText='position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:rgba(0,0,0,.72);color:#fff;font-size:16px;text-align:center;padding:24px';
+      box.innerHTML='<div>数据读取失败，请刷新</div><div style="font-size:13px;opacity:.8">你的聊天数据没有被改动，刷新后会重新读取。</div>';
+      const btn=document.createElement('button');btn.textContent='刷新';btn.style.cssText='padding:10px 28px;border-radius:20px;border:none;font-size:15px';btn.onclick=()=>location.reload();
+      box.appendChild(btn);document.body.appendChild(box);
+      return;
+    }
     if(_idbChars && Array.isArray(_idbChars) && _idbChars.length > 0){
       // IDB 有数据则优先使用（无容量限制）
       characters = _idbChars;

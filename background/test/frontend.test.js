@@ -15,7 +15,10 @@ const hooks=`window.__audit={
  group(){getActiveCharacter().type='group';chatType='group';members=[{id:'m1',name:'Member'}];saveGlobalsToActiveChar();},
  convSetup(){saveGlobalsToActiveChar();const a=getActiveCharacter();a.conversations=[{id:'one',messages:[...a.chatMessages],history:[...a.messageHistory]},{id:'two',messages:[],history:[]}];a.activeConversationId='one';loadActiveCharToGlobals();},
  convSwitch(){saveGlobalsToActiveChar();getActiveCharacter().activeConversationId='two';loadActiveCharToGlobals();reloadChatUI();},
- wallet:walletGetAllTx,addTx:walletAddTx,walletPrompt:getWalletContextForPrompt,busy:()=>autoReplyInProgress,read:markVisibleChatRead,time:buildTimeAwareness
+ wallet:walletGetAllTx,addTx:walletAddTx,walletPrompt:getWalletContextForPrompt,busy:()=>autoReplyInProgress,read:markVisibleChatRead,time:buildTimeAwareness,
+ sync(){syncHistoryFromChat();return messageHistory;},msgs:()=>chatMessages,sums:()=>summaries,setSums(a){summaries=a;saveGlobalsToActiveChar();},
+ setConvs(l){saveGlobalsToActiveChar();getActiveCharacter().conversations=l;loadActiveCharToGlobals();},switchConv:switchConversation,live:returnToLiveChat,delConv:deleteConversation,summary:m=>generateSummary(m),
+ ble:t=>extractBleCommands(t),bleOn(v){apiSettings.bleControlEnabled=v;},exportData:getAllSettingsData,waiting:()=>waiting
 };`;
 // Only test accessors are injected; production handlers and persistence run unchanged.
 async function app(t, handler){
@@ -129,4 +132,88 @@ test('background range prompt and reasoning bubbles for ordinary and automatic r
   const first=w.document.getElementById('msg-bg_'+reply.id+'_0');first.querySelector('.reasoning-btn').click();assert.equal(first.querySelector('.reasoning-box').textContent,'saved thought');
   assert.equal(w.document.getElementById('msg-bg_'+reply.id+'_1').querySelector('.reasoning-btn'),null);
  }
+});
+
+// ---- 2026-10-10 bug fixes (Claude) ----
+test('IndexedDB read failure is not treated as a new user and never overwrites data',async t=>{
+ const idb=new IDBFactory();
+ await new Promise((res,rej)=>{const r=idb.open('lumos_chars_v1',1);r.onupgradeneeded=()=>r.result.createObjectStore('chars');r.onerror=()=>rej(r.error);r.onsuccess=()=>{const db=r.result;const tx=db.transaction('chars','readwrite');tx.objectStore('chars').put([{id:'keep',name:'KEEP',type:'single',chatMessages:[],messageHistory:[]}],'main');tx.oncomplete=()=>{db.close();res();};};});
+ const errors=[];const vc=new VirtualConsole();vc.on('jsdomError',e=>{if(!/Not implemented/.test(e.message))errors.push(e.message)});
+ const dom=new JSDOM(source.replace(/<script src="\/Lumi\/background-client\.js[^"\n]*"><\/script>/,'<script>'+client+'</script>'),{url:'https://lumi729.github.io/Lumi/',runScripts:'dangerously',pretendToBeVisual:true,virtualConsole:vc,beforeParse(w){
+  w.indexedDB=idb;w.IDBKeyRange=IDBKeyRange;w.TextEncoder=TextEncoder;w.structuredClone=structuredClone;Object.defineProperty(w.crypto,'subtle',{value:webcrypto.subtle});w.matchMedia=()=>({matches:false,addEventListener(){}});w.fetch=async()=>Response.json({});w.Request=Request;w.alert=()=>{};w.HTMLCanvasElement.prototype.getContext=()=>null;
+ }});
+ t.after(()=>dom.window.close());
+ // Make the store's get() throw synchronously, the case that used to bypass the catch.
+ const {IDBObjectStore}=await import('fake-indexeddb');const orig=IDBObjectStore.prototype.get;IDBObjectStore.prototype.get=function(...a){if(this.name==='chars')throw new Error('read broken');return orig.apply(this,a);};t.after(()=>{IDBObjectStore.prototype.get=orig;});
+ for(let i=0;i<100&&!dom.window.document.querySelector('#idbLoadFailed')&&!dom.window.document.querySelector('#bgConnect');i++)await new Promise(r=>setTimeout(r,10));
+ assert(dom.window.document.querySelector('#idbLoadFailed'),'shows read-failure prompt');
+ assert.match(dom.window.document.querySelector('#idbLoadFailed').textContent,/数据读取失败，请刷新/);
+ IDBObjectStore.prototype.get=orig;await new Promise(r=>setTimeout(r,50));
+ const stored=await new Promise(res=>{const r=idb.open('lumos_chars_v1',1);r.onsuccess=()=>{const g=r.result.transaction('chars').objectStore('chars').get('main');g.onsuccess=()=>{r.result.close();res(g.result);};};});
+ assert.deepEqual(stored.map(c=>c.name),['KEEP'],'stored characters untouched, no default 月 written');
+});
+test('history rebuild keeps images, quotes, mentions and recall roles; nothing written to localStorage',async t=>{
+ const {w,api}=await app(t);const m=api.msgs();m.length=0;
+ m.push({id:'i1',role:'user',text:'[图片]',imageDataUrl:'data:image/png;base64,AA',timestamp:1});
+ m.push({id:'q1',role:'user',text:'看这个',imageDataUrl:'data:image/png;base64,BB',quoteText:'原话',quoteRole:'dog',mentionName:'小月',timestamp:2});
+ m.push({id:'r1',role:'user',text:'',recalled:true,timestamp:3},{id:'r2',role:'dog',text:'',recalled:true,timestamp:4},{id:'h1',role:'hint',text:'x',timestamp:5});
+ const h=JSON.parse(JSON.stringify(api.sync())); // 跨窗口对象先转成普通对象再比较
+ assert.equal(h.length,4);
+ assert.deepEqual(h[0].content[0],{type:'image_url',image_url:{url:'data:image/png;base64,AA'}});
+ assert.match(h[0].content[1].text,/用户发送了一张图片/);
+ assert.equal(h[1].content[0].image_url.url,'data:image/png;base64,BB');assert.match(h[1].content[1].text,/^\[@小月\] \[用户引用了来自"A"的消息/);assert.match(h[1].content[1].text,/看这个$/);
+ assert.deepEqual(h[2],{role:'user',content:'[用户撤回了一条消息]'});assert.deepEqual(h[3],{role:'assistant',content:'[AI撤回了一条消息]'});
+ assert.equal(w.localStorage.getItem('dogchat_multi_messageHistory'),null);
+});
+test('background import with recall rebuilds history with images and user recall text',async t=>{
+ const {w,api,id}=await app(t);const c=api.data().find(c=>c.id===id);
+ c.chatMessages.push({id:'img',role:'user',text:'[图片]',imageDataUrl:'data:image/png;base64,CC',timestamp:Date.now()-500},{id:'gone',role:'user',text:'',recalled:true,timestamp:Date.now()-400});
+ await w.__auditAdapter.importReplies([{id:'r9',charId:id,convId:'',timestamp:Date.now(),segments:['hi'],actions:[{type:'recall',segmentIndex:0}],isAutoReply:true}]);
+ const h=api.data().find(c=>c.id===id).messageHistory;
+ assert(h.some(x=>Array.isArray(x.content)&&x.content[0].image_url.url==='data:image/png;base64,CC'));
+ assert(h.some(x=>x.role==='user'&&x.content==='[用户撤回了一条消息]'));
+ assert(h.some(x=>x.role==='assistant'&&x.content==='[AI撤回了一条消息]'));
+});
+test('returning to live chat restores live summaries, deleting the open conversation too',async t=>{
+ const {w,api,id}=await app(t);w.confirm=()=>true;const c=api.data().find(c=>c.id===id);
+ api.setSums([{id:'L',content:'live',toIdx:1}]);
+ api.setConvs([{id:'two',name:'two',timestamp:'',messages:[{id:'x',role:'user',text:'old',timestamp:1}],history:[],summaries:[{id:'C',content:'conv',toIdx:1}]}]);
+ api.switchConv('two');assert.deepEqual(api.sums().map(s=>s.id),['C']);
+ api.live();assert.deepEqual(api.sums().map(s=>s.id),['L']);
+ api.switchConv('two');api.delConv('two');assert.deepEqual(api.sums().map(s=>s.id),['L']);
+});
+test('summary finished after switching conversation is stored in the original chat',async t=>{
+ const gate=deferred(),started=deferred();
+ const {w,api,id}=await app(t,async(u,init)=>{if(String(init.body).includes('叙事总结专家')){started.resolve();await gate.promise;return Response.json({choices:[{message:{content:'总结内容'}}]});}return Response.json({choices:[{message:{content:'reply'}}]});});
+ w.confirm=()=>true;const c=api.data().find(c=>c.id===id);
+ const m=api.msgs();for(let i=0;i<4;i++)m.push({id:'s'+i,role:i%2?'dog':'user',text:'m'+i,timestamp:Date.now()+i});
+ api.setConvs([{id:'other',name:'o',timestamp:'',messages:[],history:[],summaries:[]}]);
+ const p=api.summary(false);await started.promise;api.switchConv('other');gate.resolve();await p;
+ assert.equal(api.sums().length,0,'not written into the conversation now open');
+ assert.equal(api.data().find(c=>c.id===id).conversations.find(v=>v.id==='other').summaries?.length||0,0);
+ api.live();assert.deepEqual(JSON.parse(JSON.stringify(api.sums().map(s=>s.content))),['总结内容']);assert.equal(api.sums()[0].toIdx,5);
+});
+test('red packet only reply: checks balance, is stored as a message and survives reload',async t=>{
+ const {w,api,id}=await app(t,async()=>Response.json({choices:[{message:{content:'[红包:5:生日快乐]'}}]}));
+ await api.request();
+ let c=api.data().find(c=>c.id===id);assert(c.chatMessages.some(m=>m.text.includes('红包未发出')),'no balance → not sent, but shown');
+ assert(!(await api.wallet()).some(t=>t.type==='hongbao'));
+ await api.addTx({id:'top',charId:id,type:'topup',amount:10,timestamp:Date.now()});
+ await api.request();c=api.data().find(c=>c.id===id);
+ const hb=c.chatMessages.find(m=>m.backgroundHongbao);assert(hb);assert.equal(hb.backgroundHongbao.amount,5);assert.equal(hb.backgroundHongbao.note,'生日快乐');
+ assert.equal((await api.wallet()).filter(t=>t.type==='hongbao').length,1);
+ assert(!w.document.querySelector('#chatArea').textContent.includes('没有输出有效消息'));
+ assert(w.document.querySelector('#msg-'+hb.id+' .hongbao-bubble'));
+});
+test('two quick ordinary requests only call the API once',async t=>{
+ const {api,calls}=await app(t);await Promise.all([api.request(),api.request()]);assert.equal(calls.length,1);assert.equal(api.waiting(),false);
+});
+test('backup export strips API keys without touching memory',async t=>{
+ const {api,id}=await app(t);const data=api.exportData();
+ assert(data.dogchat_multi_characters.every(c=>!c.apiSettings||c.apiSettings.key===''));
+ assert.equal(api.data().find(c=>c.id===id).apiSettings.key,'test-only');
+});
+test('BLE tags are stripped even when disabled; two-digit channel parsed',async t=>{
+ const {api}=await app(t);api.bleOn(false);let r=api.ble('a[BLE:30:12]b');assert.equal(r.cleaned,'ab');assert.equal(r.bleMatches.length,0);
+ api.bleOn(true);r=api.ble('[BLE:30:12]hi');assert.equal(r.cleaned,'hi');assert.deepEqual(JSON.parse(JSON.stringify(r.bleMatches)),[{val:30,ch:12}]);
 });

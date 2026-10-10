@@ -1,4 +1,4 @@
-const CACHE_NAME = 'lumos-v25';
+const CACHE_NAME = 'lumos-v26';
 const urlsToCache = ['/Lumi/', '/Lumi/index.html', '/Lumi/manifest.json', '/Lumi/background-client.js?v=20261010-range-reasoning', '/Lumi/月亮.png', '/Lumi/月亮512.png'];
 const staticUrls = new Set(urlsToCache.map(path => new URL(path, self.location.origin).href));
 
@@ -24,6 +24,21 @@ self.addEventListener('activate', event => {
 // 仅缓存已知静态资源；联网获取新版，断网回退。聊天/API 请求不缓存。
 self.addEventListener('fetch', event => {
   const request = event.request;
+  // 打开 /Lumi/ 下的页面（包括点通知带 ?notificationChat=）：先联网，断网就回退到缓存的 /Lumi/，离线也能打开
+  if (request.method === 'GET' && request.mode === 'navigate' && !staticUrls.has(request.url)) {
+    const url = new URL(request.url);
+    if (url.origin !== self.location.origin || !url.pathname.startsWith('/Lumi/')) return;
+    event.respondWith((async () => {
+      try { return await fetch(request); }
+      catch (error) {
+        const cache = await caches.open(CACHE_NAME);
+        const cached = (await cache.match(new URL('/Lumi/', self.location.origin).href)) || (await cache.match(new URL('/Lumi/index.html', self.location.origin).href));
+        if (cached) return cached;
+        throw error;
+      }
+    })());
+    return;
+  }
   if (request.method !== 'GET' || !staticUrls.has(request.url)) return;
   event.respondWith((async () => {
     const cache = await caches.open(CACHE_NAME);
